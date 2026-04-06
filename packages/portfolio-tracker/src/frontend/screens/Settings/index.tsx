@@ -19,7 +19,7 @@ import type { GetExchangesResponse } from "@/types/api"
 
 export function Settings() {
   const queryClient = useQueryClient()
-  
+
   const { data: exchangesData } = useQuery({
     queryKey: ["exchanges"],
     queryFn: () => fetchJson<GetExchangesResponse>("/api/exchanges"),

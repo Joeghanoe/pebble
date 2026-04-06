@@ -4,7 +4,9 @@ export function formatEur(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: "EUR",
-  }).format(amount).replaceAll(/\s+/g, "")
+  })
+    .format(amount)
+    .replaceAll(/\s+/g, "")
 }
 
 /** For unit prices: up to 8 significant decimal places when < €0.01 */
@@ -16,7 +18,9 @@ export function formatEurPrice(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: "EUR",
-  }).format(amount).replaceAll(/\s+/g, "")
+  })
+    .format(amount)
+    .replaceAll(/\s+/g, "")
 }
 
 export function formatUsdPrice(amount: number): string {
@@ -45,5 +49,7 @@ export function formatUnits(n: number): string {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 8,
-  }).format(n).replaceAll(',', ".")
+  })
+    .format(n)
+    .replaceAll(",", ".")
 }

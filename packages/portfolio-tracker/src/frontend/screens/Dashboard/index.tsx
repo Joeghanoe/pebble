@@ -46,14 +46,20 @@ export function Dashboard() {
     0
   )
   const totalValue = positions.reduce((sum, p) => sum + p.currentValueEur, 0)
-  const totalValueBtc = btcEurPrice && btcEurPrice > 0 ? totalValue / btcEurPrice : null
+  const totalValueBtc =
+    btcEurPrice && btcEurPrice > 0 ? totalValue / btcEurPrice : null
   const overallPnl =
     totalInvested > 0 ? ((totalValue - totalInvested) / totalInvested) * 100 : 0
 
   return (
     <>
       <SiteHeader name="Dashboard" />
-      <div className={cn("space-y-2 p-6 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card transition-opacity duration-500", positionsLoading || netWorthLoading ? "opacity-0" : "opacity-100")}>
+      <div
+        className={cn(
+          "space-y-2 p-6 transition-opacity duration-500 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card",
+          positionsLoading || netWorthLoading ? "opacity-0" : "opacity-100"
+        )}
+      >
         <TotalValueHeader
           totalValue={totalValue}
           totalValueBtc={totalValueBtc}
@@ -75,8 +81,12 @@ export function Dashboard() {
             </CardHeader>
             <CardContent className="cn-item-group group/item-group flex w-full flex-col space-y-2 px-4">
               {positions.map((pos) => {
-                const valueBtc = btcEurPrice && btcEurPrice > 0 ? pos.currentValueEur / btcEurPrice : null
-                const valueBtcLabel = valueBtc === null ? "N/A BTC" : `${formatUnits(valueBtc)} BTC`
+                const valueBtc =
+                  btcEurPrice && btcEurPrice > 0
+                    ? pos.currentValueEur / btcEurPrice
+                    : null
+                const valueBtcLabel =
+                  valueBtc === null ? "N/A BTC" : `${formatUnits(valueBtc)} BTC`
                 let pnlClass = ""
                 if (pos.pnlPct > 0) {
                   pnlClass = "text-green-600"
@@ -85,57 +95,63 @@ export function Dashboard() {
                 }
 
                 return (
-                <Link to="/position/$assetId" params={{ assetId: String(pos.asset.id) }} key={pos.asset.id} className="cn-item group/item cn-item-variant-muted cn-item-size-default flex w-full cursor-pointer flex-wrap items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 transition-colors duration-100 outline-none hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent [a]:transition-colors" preload="intent">
-                  <div
-                    data-slot="item-media"
-                    data-variant="default"
-                    className="cn-item-media [&amp;_svg]:pointer-events-none cn-item-media-variant-default flex shrink-0 items-center justify-center"
-                  >
-                    <div className="flex size-12 items-center justify-center rounded-lg border text-sm font-semibold">
-                      {pos.asset.symbol.slice(0, 3)}
-                    </div>
-                  </div>
-                  <div
-                    data-slot="item-content"
-                    className="cn-item-content [&amp;+[data-slot=item-content]]:flex-none flex flex-1 flex-col"
+                  <Link
+                    to="/position/$assetId"
+                    params={{ assetId: String(pos.asset.id) }}
+                    key={pos.asset.id}
+                    className="cn-item group/item cn-item-variant-muted cn-item-size-default flex w-full cursor-pointer flex-wrap items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 transition-colors duration-100 outline-none hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent [a]:transition-colors"
+                    preload="intent"
                   >
                     <div
-                      data-slot="item-title"
-                      className="cn-item-title cn-font-heading line-clamp-1 flex w-fit items-center"
+                      data-slot="item-media"
+                      data-variant="default"
+                      className="cn-item-media [&amp;_svg]:pointer-events-none cn-item-media-variant-default flex shrink-0 items-center justify-center"
                     >
-                      {pos.asset.name}
+                      <div className="flex size-12 items-center justify-center rounded-lg border text-sm font-semibold">
+                        {pos.asset.symbol.slice(0, 3)}
+                      </div>
                     </div>
-                    <p
-                      data-slot="item-description"
-                      className="cn-item-description [&amp;&gt;a]:underline [&amp;&gt;a]:underline-offset-4 [&amp;&gt;a:hover]:text-primary line-clamp-2 text-xs font-normal tracking-wider uppercase font-number"
+                    <div
+                      data-slot="item-content"
+                      className="cn-item-content [&amp;+[data-slot=item-content]]:flex-none flex flex-1 flex-col"
                     >
-                      {pos.unitsHeld} Shares &middot; P&L:{" "}
-                      <span className={pnlClass}>
-                        {formatPct(pos.pnlPct)}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-6">
-                    <span
-                      data-slot="badge"
-                      data-variant="outline"
-                      className="cn-badge group/badge [&amp;&gt;svg]:pointer-events-none cn-badge-variant-outline inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap uppercase focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40"
-                    >
-                      {pos.asset.type}
-                    </span>
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span className="text-xs tracking-wider text-muted-foreground uppercase">
-                        Value
-                      </span>
-                      <span className="font-medium tabular-nums font-number">
-                        {formatEur(pos.currentValueEur)}
-                      </span>
-                      <span className="text-xs tabular-nums text-muted-foreground font-number uppercase">
-                        {valueBtcLabel}
-                      </span>
+                      <div
+                        data-slot="item-title"
+                        className="cn-item-title cn-font-heading line-clamp-1 flex w-fit items-center"
+                      >
+                        {pos.asset.name}
+                      </div>
+                      <p
+                        data-slot="item-description"
+                        className="cn-item-description [&amp;&gt;a]:underline [&amp;&gt;a]:underline-offset-4 [&amp;&gt;a:hover]:text-primary line-clamp-2 font-number text-xs font-normal tracking-wider uppercase"
+                      >
+                        {pos.unitsHeld} Shares &middot; P&L:{" "}
+                        <span className={pnlClass}>
+                          {formatPct(pos.pnlPct)}
+                        </span>
+                      </p>
                     </div>
-                  </div>
-                </Link>
+                    <div className="flex shrink-0 items-center gap-6">
+                      <span
+                        data-slot="badge"
+                        data-variant="outline"
+                        className="cn-badge group/badge [&amp;&gt;svg]:pointer-events-none cn-badge-variant-outline inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap uppercase focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40"
+                      >
+                        {pos.asset.type}
+                      </span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-xs tracking-wider text-muted-foreground uppercase">
+                          Value
+                        </span>
+                        <span className="font-number font-medium tabular-nums">
+                          {formatEur(pos.currentValueEur)}
+                        </span>
+                        <span className="font-number text-xs text-muted-foreground uppercase tabular-nums">
+                          {valueBtcLabel}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
                 )
               })}
             </CardContent>

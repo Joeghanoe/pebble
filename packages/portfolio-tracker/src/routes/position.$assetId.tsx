@@ -15,7 +15,8 @@ export const positionRoute = createRoute({
     })
     void queryClient.prefetchQuery({
       queryKey: ["transactions", id],
-      queryFn: () => fetchJson<GetTransactionsResponse>(`/api/transactions/${id}`),
+      queryFn: () =>
+        fetchJson<GetTransactionsResponse>(`/api/transactions/${id}`),
     })
   },
   component: PositionDetail,

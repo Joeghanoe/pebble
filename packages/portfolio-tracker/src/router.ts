@@ -4,7 +4,11 @@ import { indexRoute } from "./routes/index"
 import { positionRoute } from "./routes/position.$assetId"
 import { settingsRoute } from "./routes/settings"
 
-const routeTree = rootRoute.addChildren([indexRoute, positionRoute, settingsRoute])
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  positionRoute,
+  settingsRoute,
+])
 
 const hashHistory = createHashHistory()
 

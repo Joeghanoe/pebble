@@ -15,7 +15,9 @@ function formatEur(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: "EUR",
-  }).format(amount).replaceAll(/\s+/g, "")
+  })
+    .format(amount)
+    .replaceAll(/\s+/g, "")
 }
 
 function formatPct(pct: number): string {
@@ -63,7 +65,8 @@ export function TotalValueHeader({
   isRefreshing,
 }: Readonly<Props>) {
   const pnlEur = totalValue - totalInvested
-  const totalValueBtcLabel = totalValueBtc === null ? "N/A BTC" : `${totalValueBtc.toFixed(8)} BTC`
+  const totalValueBtcLabel =
+    totalValueBtc === null ? "N/A BTC" : `${totalValueBtc.toFixed(8)} BTC`
   const lastSnapshot = chartData.at(-1)
   const lastUpdatedLabel = lastSnapshot ? formatDate(lastSnapshot.date) : "N/A"
 
@@ -110,7 +113,12 @@ export function TotalValueHeader({
             tickMargin={8}
             tickFormatter={(value: string) => formatDate(value).slice(0, 5)}
           />
-          <YAxis hide domain={["dataMin - 50", "dataMax + 50"]} axisLine={false} tickLine={false} />
+          <YAxis
+            hide
+            domain={["dataMin - 50", "dataMax + 50"]}
+            axisLine={false}
+            tickLine={false}
+          />
           <ChartTooltip
             cursor={false}
             content={
@@ -146,17 +154,27 @@ export function TotalValueHeader({
   }
 
   return (
-    <div className="grid grid-cols-4 h-28">
+    <div className="grid h-28 grid-cols-4">
       {/* Contains the total value of the portfolio and P&L */}
-      <div className={cn("col-span-1 flex flex-col transition-opacity duration-300", positionsLoading ? "opacity-0" : "opacity-100")}>
-        <h1 className="text-base text-muted-foreground mb-1">Total Worth</h1>
-        <span className="text-2xl font-number">{formatEur(totalValue)}</span>
-        <span className="text-xs font-number text-muted-foreground uppercase">
+      <div
+        className={cn(
+          "col-span-1 flex flex-col transition-opacity duration-300",
+          positionsLoading ? "opacity-0" : "opacity-100"
+        )}
+      >
+        <h1 className="mb-1 text-base text-muted-foreground">Total Worth</h1>
+        <span className="font-number text-2xl">{formatEur(totalValue)}</span>
+        <span className="font-number text-xs text-muted-foreground uppercase">
           {totalValueBtcLabel}
         </span>
         <div className="mt-1">
-          <span className={cn(getPnlColor(), "font-number")}>{formatEur(pnlEur)}</span>
-          <Badge variant="outline" className={cn("ml-2 font-number", getPnlColor())}>
+          <span className={cn(getPnlColor(), "font-number")}>
+            {formatEur(pnlEur)}
+          </span>
+          <Badge
+            variant="outline"
+            className={cn("ml-2 font-number", getPnlColor())}
+          >
             {formatPct(overallPnl)}
           </Badge>
         </div>
@@ -166,7 +184,7 @@ export function TotalValueHeader({
       <div className="col-span-2">{chartContent}</div>
 
       {/* Contains Sync Button (to refresh data) */}
-      <div className="col-span-1 flex items-center justify-center gap-2 flex-col">
+      <div className="col-span-1 flex flex-col items-center justify-center gap-2">
         <Button
           variant="outline"
           size="lg"

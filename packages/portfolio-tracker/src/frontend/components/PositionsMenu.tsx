@@ -52,10 +52,7 @@ export function PositionsMenu({ isPositionActive }: Props) {
     >
       <SidebarMenuItem>
         <CollapsibleTrigger asChild>
-          <SidebarMenuButton
-            isActive={isPositionActive}
-            tooltip="Positions"
-          >
+          <SidebarMenuButton isActive={isPositionActive} tooltip="Positions">
             <TrendingUp size={16} />
             <span>Positions</span>
             <ChevronRight
@@ -100,7 +97,7 @@ export function PositionsMenu({ isPositionActive }: Props) {
                     <span className="flex-1 truncate">{pos.asset.symbol}</span>
                     <span
                       className={cn(
-                        "text-[10px] font-medium tabular-nums font-number",
+                        "font-number text-[10px] font-medium tabular-nums",
                         pos.pnlPct > 0
                           ? "text-green-600"
                           : pos.pnlPct < 0

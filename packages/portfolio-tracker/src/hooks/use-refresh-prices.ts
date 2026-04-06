@@ -33,7 +33,7 @@ export function useRefreshPrices(assetId?: number) {
     if (Date.now() - last < COOLDOWN_MS) return
     lastRefreshAtRef.current.set(key, Date.now())
     mutation.mutate()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assetId])
 
   function refresh() {

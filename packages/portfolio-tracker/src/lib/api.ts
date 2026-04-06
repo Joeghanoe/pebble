@@ -57,13 +57,16 @@ export const api = {
     notes?: string
   }) => mutateJson<unknown>("POST", "/api/transactions", body),
 
-  updateTransaction: (id: number, body: {
-    date?: string
-    type?: "buy" | "sell"
-    units?: number
-    eurAmount?: number
-    notes?: string
-  }) => mutateJson<unknown>("PUT", `/api/transactions/${id}/update`, body),
+  updateTransaction: (
+    id: number,
+    body: {
+      date?: string
+      type?: "buy" | "sell"
+      units?: number
+      eurAmount?: number
+      notes?: string
+    }
+  ) => mutateJson<unknown>("PUT", `/api/transactions/${id}/update`, body),
 
   deleteTransaction: (id: number) =>
     mutateJson<unknown>("DELETE", `/api/transactions/${id}/delete`),
@@ -77,16 +80,20 @@ export const api = {
     coingeckoId?: string
   }) => mutateJson<unknown>("POST", "/api/assets", body),
 
-  updateAsset: (id: number, body: {
-    symbol?: string
-    name?: string
-    type?: "crypto" | "etf" | "cash"
-    exchangeId?: number
-    yahooTicker?: string | null
-    coingeckoId?: string | null
-  }) => mutateJson<unknown>("PUT", `/api/assets/${id}`, body),
+  updateAsset: (
+    id: number,
+    body: {
+      symbol?: string
+      name?: string
+      type?: "crypto" | "etf" | "cash"
+      exchangeId?: number
+      yahooTicker?: string | null
+      coingeckoId?: string | null
+    }
+  ) => mutateJson<unknown>("PUT", `/api/assets/${id}`, body),
 
-  refreshPrices: () => mutateJson<RefreshPricesResponse>("POST", "/api/prices/refresh"),
+  refreshPrices: () =>
+    mutateJson<RefreshPricesResponse>("POST", "/api/prices/refresh"),
 
   setSecret: (name: string, value: string) =>
     mutateJson<unknown>("POST", `/api/secrets/${name}`, { value }),

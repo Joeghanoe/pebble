@@ -62,21 +62,28 @@ export function getOpenBuyTransactions(
   return buyTxs.filter((t) => !closedBuyIds.has(t.id))
 }
 
-export function buildPnlChartData(openBuyTxs: EnrichedTransaction[]): PnlChartPoint[] {
+export function buildPnlChartData(
+  openBuyTxs: EnrichedTransaction[]
+): PnlChartPoint[] {
   return openBuyTxs.map((t) => ({
     date: t.date,
     pnl: t.pct === null ? 0 : Number.parseFloat(t.pct.toFixed(2)),
   }))
 }
 
-export function buildValueChartData(openBuyTxs: EnrichedTransaction[]): ValueChartPoint[] {
+export function buildValueChartData(
+  openBuyTxs: EnrichedTransaction[]
+): ValueChartPoint[] {
   return openBuyTxs.map((t) => ({
     date: t.date,
-    value: t.currentVal === null ? 0 : Number.parseFloat(t.currentVal.toFixed(2)),
+    value:
+      t.currentVal === null ? 0 : Number.parseFloat(t.currentVal.toFixed(2)),
   }))
 }
 
-export function buildFrequencyData(buyTxs: EnrichedTransaction[]): FrequencyPoint[] {
+export function buildFrequencyData(
+  buyTxs: EnrichedTransaction[]
+): FrequencyPoint[] {
   return buyTxs.map((t, i) => ({
     index: i + 1,
     date: t.date,
