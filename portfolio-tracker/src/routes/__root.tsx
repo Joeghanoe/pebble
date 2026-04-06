@@ -1,38 +1,35 @@
+import { createRootRouteWithContext, Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
 import { QueryClientProvider } from "@tanstack/react-query"
+import type { QueryClient } from "@tanstack/react-query"
 import { LayoutDashboard, Settings2, TrendingUp } from "lucide-react"
-import { Dashboard } from "@/frontend/screens/Dashboard"
-import { PositionDetail } from "@/frontend/screens/PositionDetail"
-import { Settings } from "@/frontend/screens/Settings"
 import { PositionsMenu } from "@/frontend/components/PositionsMenu"
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
+  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel,
+  SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { useRoute } from "@/hooks/use-route"
-import { queryClient } from "@/lib/queryClient"
 
-export function App() {
-  const { route, navigate } = useRoute()
+export interface RouterContext {
+  queryClient: QueryClient
+}
+
+export const rootRoute = createRootRouteWithContext<RouterContext>()({
+  component: RootLayout,
+})
+
+function RootLayout() {
+  const { queryClient } = rootRoute.useRouteContext()
+  const navigate = useNavigate()
+  const routerState = useRouterState()
+  const pathname = routerState.location.pathname
+
+  const isDashboard = pathname === "/"
+  const isSettings = pathname === "/settings"
+  const isPosition = pathname.startsWith("/position/")
 
   const topNavItems = [
-    {
-      label: "Dashboard",
-      path: "/",
-      icon: LayoutDashboard,
-      active: route.name === "dashboard",
-    },
+    { label: "Dashboard", path: "/", icon: LayoutDashboard, active: isDashboard },
   ]
-
-  const currentAssetId = route.name === "position" ? route.id : null
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -43,14 +40,10 @@ export function App() {
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
                 <TrendingUp size={14} />
               </div>
-              <span className="text-sm text-sidebar-foreground">
-                Portfolio Tracker
-              </span>
+              <span className="text-sm text-sidebar-foreground">Portfolio Tracker</span>
             </div>
           </SidebarHeader>
-
           <SidebarContent>
-            {/* Top-level pages */}
             <SidebarGroup>
               <SidebarGroupLabel>Overview</SidebarGroupLabel>
               <SidebarMenu>
@@ -58,7 +51,7 @@ export function App() {
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={item.active}
-                      onClick={() => navigate(item.path)}
+                      onClick={() => void navigate({ to: item.path })}
                     >
                       <item.icon size={16} />
                       <span>{item.label}</span>
@@ -67,25 +60,19 @@ export function App() {
                 ))}
               </SidebarMenu>
             </SidebarGroup>
-
-            {/* Collapsible positions list */}
             <SidebarGroup>
               <SidebarGroupLabel>Positions</SidebarGroupLabel>
               <SidebarMenu>
-                <PositionsMenu
-                  currentAssetId={currentAssetId}
-                  onNavigate={navigate}
-                />
+                <PositionsMenu isPositionActive={isPosition} />
               </SidebarMenu>
             </SidebarGroup>
           </SidebarContent>
-
           <SidebarFooter className="border-sidebar-border pb-4">
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  isActive={route.name === "settings"}
-                  onClick={() => navigate("/settings")}
+                  isActive={isSettings}
+                  onClick={() => void navigate({ to: "/settings" })}
                 >
                   <Settings2 size={16} />
                   <span>Settings</span>
@@ -94,17 +81,10 @@ export function App() {
             </SidebarMenu>
           </SidebarFooter>
         </Sidebar>
-
         <SidebarInset>
-          {route.name === "dashboard" && <Dashboard onNavigate={navigate} />}
-          {route.name === "position" && (
-            <PositionDetail assetId={route.id} onBack={() => navigate("/")} />
-          )}
-          {route.name === "settings" && <Settings />}
+          <Outlet />
         </SidebarInset>
       </SidebarProvider>
     </QueryClientProvider>
   )
 }
-
-export default App

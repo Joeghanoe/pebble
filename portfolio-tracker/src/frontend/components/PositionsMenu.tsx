@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { ChevronRight, TrendingUp, Plus } from "lucide-react"
+import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import {
   Collapsible,
@@ -19,12 +20,16 @@ import { fetchJson } from "@/lib/queryClient"
 import type { GetPositionsResponse, GetExchangesResponse } from "@/types/api"
 
 interface Props {
-  currentAssetId: number | null
-  onNavigate: (path: string) => void
+  isPositionActive: boolean
 }
 
-export function PositionsMenu({ currentAssetId, onNavigate }: Props) {
+export function PositionsMenu({ isPositionActive }: Props) {
   const [open, setOpen] = useState(true)
+  const navigate = useNavigate()
+  const routerState = useRouterState()
+  const pathname = routerState.location.pathname
+  const positionMatch = /^\/position\/(\d+)$/.exec(pathname)
+  const currentAssetId = positionMatch ? Number(positionMatch[1]) : null
 
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
@@ -49,7 +54,7 @@ export function PositionsMenu({ currentAssetId, onNavigate }: Props) {
       <SidebarMenuItem>
         <CollapsibleTrigger asChild>
           <SidebarMenuButton
-            isActive={currentAssetId !== null}
+            isActive={isPositionActive}
             tooltip="Positions"
           >
             <TrendingUp size={16} />
@@ -85,7 +90,7 @@ export function PositionsMenu({ currentAssetId, onNavigate }: Props) {
               <SidebarMenuSubItem key={pos.asset.id}>
                 <SidebarMenuSubButton
                   isActive={currentAssetId === pos.asset.id}
-                  onClick={() => onNavigate(`/position/${pos.asset.id}`)}
+                  onClick={() => void navigate({ to: "/position/$assetId", params: { assetId: String(pos.asset.id) } })}
                 >
                   <span className="size-2 shrink-0 rounded-full bg-primary" />
                   <span className="flex-1 truncate">{pos.asset.symbol}</span>
