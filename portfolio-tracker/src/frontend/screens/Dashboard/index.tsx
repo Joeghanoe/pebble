@@ -1,20 +1,10 @@
-import { Calendar, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useNavigate } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
-import { Skeleton } from "@/components/ui/skeleton"
 import { fetchJson } from "@/lib/queryClient"
 import { formatEur, formatPct } from "@/lib/format"
 import { useRefreshPrices } from "@/hooks/use-refresh-prices"
 import type { GetPositionsResponse, GetNetWorthResponse } from "@/types/api"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { SiteHeader } from "@/components/site-header"
 import { TotalValueHeader } from "./total-value-header"
