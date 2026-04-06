@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import { useNavigate } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { fetchJson } from "@/lib/queryClient"
 import { formatEur, formatPct } from "@/lib/format"
@@ -12,7 +12,7 @@ import { TotalValueHeader } from "./total-value-header"
 export function Dashboard() {
   const navigate = useNavigate()
   const { refresh: refreshPrices, isPending: isRefreshing } = useRefreshPrices()
-  
+
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
     queryFn: () => fetchJson<GetPositionsResponse>("/api/positions"),
@@ -64,15 +64,7 @@ export function Dashboard() {
             </CardHeader>
             <CardContent className="cn-item-group group/item-group flex w-full flex-col space-y-2 px-4">
               {positions.map((pos) => (
-                <div
-                  key={pos.asset.id}
-                  data-slot="item"
-                  data-variant="muted"
-                  data-size="default"
-                  role="button"
-                  onClick={() => void navigate({ to: "/position/$assetId", params: { assetId: String(pos.asset.id) } })}
-                  className="cn-item group/item cn-item-variant-muted cn-item-size-default flex w-full cursor-pointer flex-wrap items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 transition-colors duration-100 outline-none hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent [a]:transition-colors"
-                >
+                <Link to={`/position/${pos.asset.id}`} key={pos.asset.id} className="cn-item group/item cn-item-variant-muted cn-item-size-default flex w-full cursor-pointer flex-wrap items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 transition-colors duration-100 outline-none hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent [a]:transition-colors" preload="intent">
                   <div
                     data-slot="item-media"
                     data-variant="default"
@@ -127,7 +119,7 @@ export function Dashboard() {
                       </span>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </CardContent>
           </Card>
