@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { ChevronRight, TrendingUp, Plus } from "lucide-react"
-import { useNavigate, useRouterState } from "@tanstack/react-router"
+import { Link, useRouterState } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import {
   Collapsible,
@@ -25,7 +25,6 @@ interface Props {
 
 export function PositionsMenu({ isPositionActive }: Props) {
   const [open, setOpen] = useState(true)
-  const navigate = useNavigate()
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
   const positionMatch = /^\/position\/(\d+)$/.exec(pathname)
@@ -89,24 +88,30 @@ export function PositionsMenu({ isPositionActive }: Props) {
             {positions.map((pos) => (
               <SidebarMenuSubItem key={pos.asset.id}>
                 <SidebarMenuSubButton
+                  asChild
                   isActive={currentAssetId === pos.asset.id}
-                  onClick={() => void navigate({ to: "/position/$assetId", params: { assetId: String(pos.asset.id) } })}
                 >
-                  <span className="size-2 shrink-0 rounded-full bg-primary" />
-                  <span className="flex-1 truncate">{pos.asset.symbol}</span>
-                  <span
-                    className={cn(
-                      "text-[10px] font-medium tabular-nums",
-                      pos.pnlPct > 0
-                        ? "text-green-600"
-                        : pos.pnlPct < 0
-                          ? "text-red-500"
-                          : "text-muted-foreground"
-                    )}
+                  <Link
+                    to="/position/$assetId"
+                    params={{ assetId: String(pos.asset.id) }}
+                    preload="intent"
                   >
-                    {pos.pnlPct > 0 ? "+" : ""}
-                    {pos.pnlPct.toFixed(1)}%
-                  </span>
+                    <span className="size-2 shrink-0 rounded-full bg-primary" />
+                    <span className="flex-1 truncate">{pos.asset.symbol}</span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium tabular-nums",
+                        pos.pnlPct > 0
+                          ? "text-green-600"
+                          : pos.pnlPct < 0
+                            ? "text-red-500"
+                            : "text-muted-foreground"
+                      )}
+                    >
+                      {pos.pnlPct > 0 ? "+" : ""}
+                      {pos.pnlPct.toFixed(1)}%
+                    </span>
+                  </Link>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
             ))}
