@@ -105,3 +105,33 @@ export function getSellsForAsset(assetId: number): Array<{ id: number; date: str
     )
     .all(assetId);
 }
+
+export interface TransactionSummary {
+  totalInvested: number;
+  unitsBought: number;
+  unitsSold: number;
+  realizedPnl: number;
+}
+
+export function getTransactionSummaryByAsset(assetId: number): TransactionSummary {
+  const row = db.query<{
+    total_invested: number;
+    units_bought: number;
+    units_sold: number;
+    realized_pnl: number;
+  }, [number]>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'buy' THEN ABS(eur_amount) ELSE 0 END), 0)
+       - COALESCE(SUM(CASE WHEN type = 'sell' THEN ABS(eur_amount) ELSE 0 END), 0) as total_invested,
+       COALESCE(SUM(CASE WHEN type = 'buy' THEN ABS(units) ELSE 0 END), 0) as units_bought,
+       COALESCE(SUM(CASE WHEN type = 'sell' THEN ABS(units) ELSE 0 END), 0) as units_sold,
+       COALESCE(SUM(CASE WHEN type = 'sell' THEN COALESCE(realized_pnl, 0) ELSE 0 END), 0) as realized_pnl
+     FROM transactions WHERE asset_id = ? AND deleted_at IS NULL`
+  ).get(assetId);
+  return {
+    totalInvested: row?.total_invested ?? 0,
+    unitsBought: row?.units_bought ?? 0,
+    unitsSold: row?.units_sold ?? 0,
+    realizedPnl: row?.realized_pnl ?? 0,
+  };
+}

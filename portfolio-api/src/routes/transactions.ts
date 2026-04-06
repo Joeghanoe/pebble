@@ -1,19 +1,23 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { listTransactionsByAsset, createTransaction, updateTransaction, softDeleteTransaction, getTransactionById } from "../db/queries/transactions";
 import { recalculateFifoForAsset } from "../services/fifo-recalc";
-import type { CreateTransactionRequest, UpdateTransactionRequest } from "../types/api";
 
 export const transactionPlugin = new Elysia({ prefix: "/api/transactions" })
   .post("/", ({ body, set }) => {
-    const data = body as CreateTransactionRequest;
-    if (!data.assetId || !data.date || !data.type || !data.units || !data.eurAmount) {
-      set.status = 400;
-      return { error: "assetId, date, type, units, eurAmount required" };
-    }
-    const tx = createTransaction(data.assetId, data.date, data.type, Math.abs(data.units), Math.abs(data.eurAmount), data.notes ?? null);
-    recalculateFifoForAsset(data.assetId);
+    const { assetId, date, type, units, eurAmount, notes } = body;
+    const tx = createTransaction(assetId, date, type, Math.abs(units), Math.abs(eurAmount), notes ?? null);
+    recalculateFifoForAsset(assetId);
     set.status = 201;
     return { transaction: tx };
+  }, {
+    body: t.Object({
+      assetId: t.Number({ minimum: 1 }),
+      date: t.String({ minLength: 1 }),
+      type: t.Union([t.Literal("buy"), t.Literal("sell")]),
+      units: t.Number({ minimum: 0 }),
+      eurAmount: t.Number({ minimum: 0 }),
+      notes: t.Optional(t.String()),
+    })
   })
   .get("/:assetId", ({ params, set }) => {
     const assetId = parseInt(params.assetId);
@@ -23,18 +27,25 @@ export const transactionPlugin = new Elysia({ prefix: "/api/transactions" })
   .put("/:id/update", ({ params, body, set }) => {
     const id = parseInt(params.id);
     if (isNaN(id)) { set.status = 400; return { error: "Invalid id" }; }
-    const data = body as UpdateTransactionRequest;
     const existing = getTransactionById(id);
     if (!existing) { set.status = 404; return { error: "Not found" }; }
     updateTransaction(id, {
-      date: data.date,
-      type: data.type,
-      units: data.units !== undefined ? Math.abs(data.units) : undefined,
-      eur_amount: data.eurAmount !== undefined ? Math.abs(data.eurAmount) : undefined,
-      notes: data.notes,
+      date: body.date,
+      type: body.type,
+      units: body.units !== undefined ? Math.abs(body.units) : undefined,
+      eur_amount: body.eurAmount !== undefined ? Math.abs(body.eurAmount) : undefined,
+      notes: body.notes,
     });
     recalculateFifoForAsset(existing.asset_id);
     return { ok: true };
+  }, {
+    body: t.Object({
+      date: t.Optional(t.String({ minLength: 1 })),
+      type: t.Optional(t.Union([t.Literal("buy"), t.Literal("sell")])),
+      units: t.Optional(t.Number({ minimum: 0 })),
+      eurAmount: t.Optional(t.Number({ minimum: 0 })),
+      notes: t.Optional(t.String()),
+    })
   })
   .delete("/:id/delete", ({ params, set }) => {
     const id = parseInt(params.id);

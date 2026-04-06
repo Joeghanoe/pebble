@@ -1,7 +1,7 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts"
 import { ArrowLeft, RefreshCw, X } from "lucide-react"
-import { useEffect } from "react"
-import { useQuery, useMutation } from "@tanstack/react-query"
+import { useEffect, useRef } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
@@ -12,8 +12,8 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { queryClient, fetchJson } from "@/lib/queryClient"
-import { apiUrl } from "@/lib/api"
+import { fetchJson } from "@/lib/queryClient"
+import { api } from "@/lib/api"
 import { AddTransactionModal } from "@/frontend/components/AddTransactionModal"
 import { EditPositionModal } from "@/frontend/components/EditPositionModal"
 import type {
@@ -45,8 +45,6 @@ const frequencyChartConfig = {
   timestamp: { label: "Date", color: "var(--primary)" },
 } satisfies ChartConfig
 
-// Per-asset cooldown so navigating back and forth doesn't re-fetch within 15 min
-const lastRefreshAt = new Map<number, number>()
 const COOLDOWN_MS = 15 * 60 * 1000
 
 function formatEur(amount: number): string {
@@ -93,7 +91,10 @@ interface Props {
   onBack: () => void
 }
 
-export function PositionDetail({ assetId, onBack }: Props) {
+export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
+  const queryClient = useQueryClient()
+  const lastRefreshAtRef = useRef<Map<number, number>>(new Map())
+  
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
     queryFn: () => fetchJson<GetPositionsResponse>("/api/positions"),
@@ -111,15 +112,14 @@ export function PositionDetail({ assetId, onBack }: Props) {
   })
 
   const refreshPrices = useMutation({
-    mutationFn: () => fetch(apiUrl("/api/prices/refresh"), { method: "POST" }),
+    mutationFn: () => api.refreshPrices(),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["positions"] })
     },
   })
 
   const deleteTx = useMutation({
-    mutationFn: (id: number) =>
-      fetch(apiUrl(`/api/transactions/${id}/delete`), { method: "DELETE" }),
+    mutationFn: (id: number) => api.deleteTransaction(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["transactions", assetId],
@@ -129,9 +129,9 @@ export function PositionDetail({ assetId, onBack }: Props) {
   })
 
   useEffect(() => {
-    const last = lastRefreshAt.get(assetId) ?? 0
+    const last = lastRefreshAtRef.current.get(assetId) ?? 0
     if (Date.now() - last < COOLDOWN_MS) return
-    lastRefreshAt.set(assetId, Date.now())
+    lastRefreshAtRef.current.set(assetId, Date.now())
     refreshPrices.mutate()
   }, [assetId])
 
@@ -145,7 +145,7 @@ export function PositionDetail({ assetId, onBack }: Props) {
   }
 
   function handleRefreshPrice() {
-    lastRefreshAt.set(assetId, Date.now())
+    lastRefreshAtRef.current.set(assetId, Date.now())
     refreshPrices.mutate()
   }
 

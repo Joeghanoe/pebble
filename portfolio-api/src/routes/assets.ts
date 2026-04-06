@@ -1,18 +1,22 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { listAssets, getAssetById, createAsset, updateAsset } from "../db/queries/assets";
-import type { CreateAssetRequest, UpdateAssetRequest } from "../types/api";
 
 export const assetPlugin = new Elysia({ prefix: "/api/assets" })
   .get("/", () => ({ assets: listAssets() }))
   .post("/", ({ body, set }) => {
-    const data = body as CreateAssetRequest;
-    if (!data.symbol || !data.name || !data.type || !data.exchangeId) {
-      set.status = 400;
-      return { error: "symbol, name, type, exchangeId required" };
-    }
-    const asset = createAsset(data.symbol, data.name, data.type, data.exchangeId, data.yahooTicker ?? null, data.coingeckoId ?? null);
+    const { symbol, name, type, exchangeId, yahooTicker, coingeckoId } = body;
+    const asset = createAsset(symbol, name, type, exchangeId, yahooTicker ?? null, coingeckoId ?? null);
     set.status = 201;
     return { asset };
+  }, {
+    body: t.Object({
+      symbol: t.String({ minLength: 1 }),
+      name: t.String({ minLength: 1 }),
+      type: t.Union([t.Literal("crypto"), t.Literal("etf"), t.Literal("cash")]),
+      exchangeId: t.Number({ minimum: 1 }),
+      yahooTicker: t.Optional(t.String()),
+      coingeckoId: t.Optional(t.String()),
+    })
   })
   .get("/:id", ({ params, set }) => {
     const id = parseInt(params.id);
@@ -24,15 +28,23 @@ export const assetPlugin = new Elysia({ prefix: "/api/assets" })
   .put("/:id", ({ params, body, set }) => {
     const id = parseInt(params.id);
     if (isNaN(id)) { set.status = 400; return { error: "Invalid id" }; }
-    const data = body as UpdateAssetRequest;
     updateAsset(id, {
-      symbol: data.symbol,
-      name: data.name,
-      type: data.type,
-      exchange_id: data.exchangeId,
-      yahoo_ticker: data.yahooTicker,
-      coingecko_id: data.coingeckoId,
+      symbol: body.symbol,
+      name: body.name,
+      type: body.type,
+      exchange_id: body.exchangeId,
+      yahoo_ticker: body.yahooTicker,
+      coingecko_id: body.coingeckoId,
     });
     const asset = getAssetById(id);
     return { asset };
+  }, {
+    body: t.Object({
+      symbol: t.Optional(t.String({ minLength: 1 })),
+      name: t.Optional(t.String({ minLength: 1 })),
+      type: t.Optional(t.Union([t.Literal("crypto"), t.Literal("etf"), t.Literal("cash")])),
+      exchangeId: t.Optional(t.Number({ minimum: 1 })),
+      yahooTicker: t.Optional(t.Nullable(t.String())),
+      coingeckoId: t.Optional(t.Nullable(t.String())),
+    })
   });

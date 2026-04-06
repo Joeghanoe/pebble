@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react"
 import type React from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import * as Dialog from "@radix-ui/react-dialog"
 import { Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { queryClient } from "@/lib/queryClient"
-import { apiUrl } from "@/lib/api"
+import { api } from "@/lib/api"
 import type { Asset, Exchange } from "@/types/db"
 
 interface Props {
@@ -16,6 +15,7 @@ interface Props {
 }
 
 export function EditPositionModal({ asset, exchanges }: Props) {
+  const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [symbol, setSymbol] = useState(asset.symbol)
   const [name, setName] = useState(asset.name)
@@ -39,18 +39,8 @@ export function EditPositionModal({ asset, exchanges }: Props) {
   }, [open, asset])
 
   const updatePosition = useMutation({
-    mutationFn: async (body: object) => {
-      const res = await fetch(apiUrl(`/api/assets/${asset.id}`), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const err = (await res.json()) as { error: string }
-        throw new Error(err.error)
-      }
-      return res.json()
-    },
+    mutationFn: (body: Parameters<typeof api.updateAsset>[1]) =>
+      api.updateAsset(asset.id, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["positions"] })
       setOpen(false)

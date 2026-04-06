@@ -1,4 +1,5 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
+import { resetPriceService } from "../services/price-service-factory";
 
 const SERVICE = "com.portfolio-tracker.desktop";
 
@@ -13,23 +14,32 @@ async function keytarDelete(name: string): Promise<void> {
 }
 
 export const secretPlugin = new Elysia({ prefix: "/api/secrets" })
-  .post("/:name", async ({ params, body, set }) => {
+  .post("/:name", async ({ params, body }) => {
     const name = params.name;
-    const data = body as { value?: unknown };
-    if (typeof data.value !== "string") { set.status = 400; return { error: "value must be a string" }; }
+    const { value } = body;
     try {
-      await keytarSet(name, data.value);
+      await keytarSet(name, value);
     } catch {
       // Fallback: keytar not available in plain dev mode
     }
-    process.env[`SECRET_${name.toUpperCase().replace(/-/g, "_")}`] = data.value;
-    if (name === "coingecko-api-key") process.env["COINGECKO_API_KEY"] = data.value;
+    process.env[`SECRET_${name.toUpperCase().replace(/-/g, "_")}`] = value;
+    if (name === "coingecko-api-key") {
+      process.env["COINGECKO_API_KEY"] = value;
+      resetPriceService();
+    }
     return { ok: true };
+  }, {
+    body: t.Object({
+      value: t.String(),
+    })
   })
   .delete("/:name", async ({ params }) => {
     const name = params.name;
     try { await keytarDelete(name); } catch { /* ignore */ }
     delete process.env[`SECRET_${name.toUpperCase().replace(/-/g, "_")}`];
-    if (name === "coingecko-api-key") delete process.env["COINGECKO_API_KEY"];
+    if (name === "coingecko-api-key") {
+      delete process.env["COINGECKO_API_KEY"];
+      resetPriceService();
+    }
     return { ok: true };
   });

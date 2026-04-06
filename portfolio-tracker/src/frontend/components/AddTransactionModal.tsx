@@ -1,18 +1,18 @@
 import { useState } from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import * as Dialog from "@radix-ui/react-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { queryClient } from "@/lib/queryClient"
-import { apiUrl } from "@/lib/api"
+import { api } from "@/lib/api"
 
 interface Props {
   assetId: number
   trigger?: React.ReactNode
 }
 
-export function AddTransactionModal({ assetId, trigger }: Props) {
+export function AddTransactionModal({ assetId, trigger }: Readonly<Props>) {
+  const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [type, setType] = useState<"buy" | "sell">("buy")
@@ -22,18 +22,8 @@ export function AddTransactionModal({ assetId, trigger }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const createTx = useMutation({
-    mutationFn: async (body: object) => {
-      const res = await fetch(apiUrl("/api/transactions"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const err = (await res.json()) as { error: string }
-        throw new Error(err.error)
-      }
-      return res.json()
-    },
+    mutationFn: (body: Parameters<typeof api.createTransaction>[0]) =>
+      api.createTransaction(body),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["transactions", assetId],

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useQuery, useMutation } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,8 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { queryClient, fetchJson } from "@/lib/queryClient"
-import { apiUrl } from "@/lib/api"
+import { fetchJson } from "@/lib/queryClient"
+import { api, apiUrl } from "@/lib/api"
 import type { GetExchangesResponse } from "@/types/api"
 
 interface ApiKeyInputProps {
@@ -30,18 +30,10 @@ function ApiKeyInput({ label, secretName }: ApiKeyInputProps) {
   async function handleSave() {
     setStatus("saving")
     try {
-      const res = await fetch(apiUrl(`/api/secrets/${secretName}`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value }),
-      })
-      if (res.ok) {
-        setStatus("saved")
-        setValue("")
-        setTimeout(() => setStatus("idle"), 2000)
-      } else {
-        setStatus("error")
-      }
+      await api.setSecret(secretName, value)
+      setStatus("saved")
+      setValue("")
+      setTimeout(() => setStatus("idle"), 2000)
     } catch {
       setStatus("error")
     }
@@ -75,6 +67,8 @@ function ApiKeyInput({ label, secretName }: ApiKeyInputProps) {
 }
 
 export function Settings() {
+  const queryClient = useQueryClient()
+  
   const { data: exchangesData } = useQuery({
     queryKey: ["exchanges"],
     queryFn: () => fetchJson<GetExchangesResponse>("/api/exchanges"),
@@ -87,11 +81,7 @@ export function Settings() {
 
   const addExchange = useMutation({
     mutationFn: (body: { name: string; type: string }) =>
-      fetch(apiUrl("/api/exchanges"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }),
+      api.createExchange(body),
     onSuccess: () => {
       setNewExchangeName("")
       void queryClient.invalidateQueries({ queryKey: ["exchanges"] })
@@ -99,8 +89,7 @@ export function Settings() {
   })
 
   const deleteExchange = useMutation({
-    mutationFn: (id: number) =>
-      fetch(apiUrl(`/api/exchanges/${id}`), { method: "DELETE" }),
+    mutationFn: (id: number) => api.deleteExchange(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["exchanges"] })
     },

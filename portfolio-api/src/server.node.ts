@@ -8,7 +8,7 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { readFile, access } from "node:fs/promises";
 import { runMigrations } from "./db/runner";
 import { runSnapshotBackfill } from "./services/snapshots";
-import { listExchanges, createExchange, deleteExchange, getExchangeById } from "./db/queries/exchanges";
+import { listExchanges, createExchange, deleteExchange } from "./db/queries/exchanges";
 import { listAssets, getAssetById, createAsset, updateAsset } from "./db/queries/assets";
 import {
   listTransactionsByAsset,
@@ -17,12 +17,11 @@ import {
   softDeleteTransaction,
   getTransactionById,
 } from "./db/queries/transactions";
-import { getLatestPrice } from "./db/queries/prices";
 import { listSnapshots } from "./db/queries/snapshots";
-import { getPriceService } from "./services/price-service-factory";
+import { getPriceService, resetPriceService } from "./services/price-service-factory";
 import { recalculateFifoForAsset } from "./services/fifo-recalc";
-import { db } from "./db/runner";
-import type { PositionRow, CreateAssetRequest, UpdateAssetRequest, CreateExchangeRequest, CreateTransactionRequest, UpdateTransactionRequest, RefreshPricesResponse } from "./types/api";
+import { buildPositions } from "./services/positions";
+import type { CreateAssetRequest, UpdateAssetRequest, CreateExchangeRequest, CreateTransactionRequest, UpdateTransactionRequest, RefreshPricesResponse } from "./types/api";
 
 const DB_PATH = process.env["DB_PATH"] ?? "./portfolio.db";
 const SERVICE = "com.portfolio-tracker.desktop";
@@ -116,31 +115,8 @@ const routes: Array<{ pattern: string; handlers: Methods }> = [
   }},
   { pattern: "/api/positions", handlers: {
     GET: () => {
-      const assets = listAssets();
-      const today = new Date().toISOString().slice(0, 10);
-      const positions: PositionRow[] = [];
-      for (const asset of assets) {
-        const exchange = getExchangeById(asset.exchange_id);
-        if (!exchange) continue;
-        const summary = db.query<{ total_invested: number; units_bought: number; units_sold: number; realized_pnl: number }, [number]>(
-          `SELECT COALESCE(SUM(CASE WHEN type='buy' THEN ABS(eur_amount) ELSE 0 END),0)-COALESCE(SUM(CASE WHEN type='sell' THEN ABS(eur_amount) ELSE 0 END),0) as total_invested,COALESCE(SUM(CASE WHEN type='buy' THEN ABS(units) ELSE 0 END),0) as units_bought,COALESCE(SUM(CASE WHEN type='sell' THEN ABS(units) ELSE 0 END),0) as units_sold,COALESCE(SUM(CASE WHEN type='sell' THEN COALESCE(realized_pnl,0) ELSE 0 END),0) as realized_pnl FROM transactions WHERE asset_id=? AND deleted_at IS NULL`
-        ).get(asset.id);
-        const unitsBought = summary?.units_bought ?? 0;
-        const unitsHeld = unitsBought - (summary?.units_sold ?? 0);
-        const totalInvested = summary?.total_invested ?? 0;
-        const realizedPnl = summary?.realized_pnl ?? 0;
-        if ((unitsBought > 0 || totalInvested > 0) && unitsHeld <= 0) continue;
-        const latestPrice = getLatestPrice(asset.id);
-        let priceResult: PositionRow["priceResult"];
-        let currentValueEur = 0;
-        if (!latestPrice) { priceResult = { status: "unavailable" }; }
-        else if (latestPrice.date === today) { priceResult = { status: "ok", priceEur: latestPrice.price_eur, date: latestPrice.date, exchangeRate: latestPrice.exchange_rate }; currentValueEur = unitsHeld * latestPrice.price_eur; }
-        else { priceResult = { status: "stale", priceEur: latestPrice.price_eur, lastKnownDate: latestPrice.date, exchangeRate: latestPrice.exchange_rate }; currentValueEur = unitsHeld * latestPrice.price_eur; }
-        const pnlPct = totalInvested > 0 ? ((currentValueEur - totalInvested) / totalInvested) * 100 : 0;
-        positions.push({ asset, exchange, unitsHeld, totalInvestedEur: totalInvested, currentValueEur, pnlPct, realizedPnl, priceResult });
-      }
-      const lastUpdatedRow = db.query<{ date: string }, []>("SELECT MAX(date) as date FROM price_cache").get();
-      return Response.json({ positions, lastUpdated: lastUpdatedRow?.date ?? null });
+      const { positions, lastUpdated } = buildPositions();
+      return Response.json({ positions, lastUpdated });
     },
   }},
   { pattern: "/api/prices/refresh", handlers: {
@@ -156,10 +132,7 @@ const routes: Array<{ pattern: string; handlers: Methods }> = [
     },
   }},
   { pattern: "/api/net-worth", handlers: {
-    GET: async () => {
-      await runSnapshotBackfill();
-      return Response.json({ snapshots: listSnapshots() });
-    },
+    GET: () => Response.json({ snapshots: listSnapshots() }),
   }},
   { pattern: "/api/export", handlers: {
     GET: async () => {
@@ -178,7 +151,10 @@ const routes: Array<{ pattern: string; handlers: Methods }> = [
         await keytar.setPassword(SERVICE, name, data.value);
       } catch { /* ignore in dev */ }
       process.env[`SECRET_${name.toUpperCase().replace(/-/g,"_")}`] = data.value;
-      if (name === "coingecko-api-key") process.env["COINGECKO_API_KEY"] = data.value;
+      if (name === "coingecko-api-key") {
+        process.env["COINGECKO_API_KEY"] = data.value;
+        resetPriceService();
+      }
       return Response.json({ ok: true });
     },
     DELETE: async (req) => {
@@ -188,7 +164,10 @@ const routes: Array<{ pattern: string; handlers: Methods }> = [
         await keytar.deletePassword(SERVICE, name);
       } catch { /* ignore */ }
       delete process.env[`SECRET_${name.toUpperCase().replace(/-/g,"_")}`];
-      if (name === "coingecko-api-key") delete process.env["COINGECKO_API_KEY"];
+      if (name === "coingecko-api-key") {
+        delete process.env["COINGECKO_API_KEY"];
+        resetPriceService();
+      }
       return Response.json({ ok: true });
     },
   }},

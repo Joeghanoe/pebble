@@ -1,9 +1,9 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { Calendar, DollarSign } from "lucide-react"
-import { useQuery, useMutation } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Skeleton } from "@/components/ui/skeleton"
-import { queryClient, fetchJson } from "@/lib/queryClient"
-import { apiUrl } from "@/lib/api"
+import { fetchJson } from "@/lib/queryClient"
+import { api } from "@/lib/api"
 import type { GetPositionsResponse, GetNetWorthResponse } from "@/types/api"
 import {
   Table,
@@ -18,7 +18,6 @@ import { SiteHeader } from "@/components/site-header"
 import { TotalValueHeader } from "./total-value-header"
 
 const COOLDOWN_MS = 15 * 60 * 1000
-let lastDashboardRefresh = 0
 
 function formatEur(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
@@ -37,6 +36,9 @@ interface Props {
 }
 
 export function Dashboard({ onNavigate }: Readonly<Props>) {
+  const lastDashboardRefreshRef = useRef(0)
+  const queryClient = useQueryClient()
+  
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
     queryFn: () => fetchJson<GetPositionsResponse>("/api/positions"),
@@ -54,7 +56,7 @@ export function Dashboard({ onNavigate }: Readonly<Props>) {
   })
 
   const refreshPrices = useMutation({
-    mutationFn: () => fetch(apiUrl("/api/prices/refresh"), { method: "POST" }),
+    mutationFn: () => api.refreshPrices(),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["positions"] })
       void queryClient.invalidateQueries({ queryKey: ["net-worth"] })
@@ -63,8 +65,8 @@ export function Dashboard({ onNavigate }: Readonly<Props>) {
 
   // Auto-refresh prices + net worth on mount with 15-min cooldown
   useEffect(() => {
-    if (Date.now() - lastDashboardRefresh < COOLDOWN_MS) return
-    lastDashboardRefresh = Date.now()
+    if (Date.now() - lastDashboardRefreshRef.current < COOLDOWN_MS) return
+    lastDashboardRefreshRef.current = Date.now()
     refreshPrices.mutate()
   }, [refreshPrices])
 
