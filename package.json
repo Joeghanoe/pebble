@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "build": "bun run --filter '*' build",
-    "format": "bun run --filter '*' format"
+    "format": "bun run --filter '*' format",
+    "lint": "bun run --filter '*' lint"
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import type React from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import * as Dialog from "@radix-ui/react-dialog"
@@ -25,9 +25,8 @@ export function EditPositionModal({ asset, exchanges }: Props) {
   const [coingeckoId, setCoingeckoId] = useState(asset.coingecko_id ?? "")
   const [error, setError] = useState<string | null>(null)
 
-  // Sync form fields whenever the modal opens with fresh asset data
-  useEffect(() => {
-    if (open) {
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
       setSymbol(asset.symbol)
       setName(asset.name)
       setType(asset.type)
@@ -36,7 +35,8 @@ export function EditPositionModal({ asset, exchanges }: Props) {
       setCoingeckoId(asset.coingecko_id ?? "")
       setError(null)
     }
-  }, [open, asset])
+    setOpen(nextOpen)
+  }
 
   const updatePosition = useMutation({
     mutationFn: (body: Parameters<typeof api.updateAsset>[1]) =>
@@ -67,7 +67,7 @@ export function EditPositionModal({ asset, exchanges }: Props) {
       : exchanges.filter((e) => e.type === "broker" || e.type === "manual")
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger asChild>
         <Button
           variant="ghost"
