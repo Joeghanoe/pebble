@@ -1,0 +1,24 @@
+{
+  "name": "portfolio-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "build:server-node": "cd ../portfolio-tracker-electron && bun run build.electron.ts"
+  },
+  "dependencies": {
+    "elysia": "latest",
+    "@elysiajs/cors": "latest",
+    "date-fns": "^4.1.0",
+    "zod": "^4.3.6",
+    "better-sqlite3-multiple-ciphers": "^12.8.0",
+    "keytar": "^7.9.0"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "@types/better-sqlite3": "^7.6.13",
+    "esbuild": "^0.28.0"
+  },
+  "trustedDependencies": ["better-sqlite3-multiple-ciphers"]
+}
