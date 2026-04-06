@@ -41,6 +41,7 @@ const netWorthChartConfig = {
 
 interface Props {
   totalValue: number
+  totalValueBtc: number | null
   totalInvested: number
   overallPnl: number
   positionsLoading: boolean
@@ -52,6 +53,7 @@ interface Props {
 
 export function TotalValueHeader({
   totalValue,
+  totalValueBtc,
   totalInvested,
   overallPnl,
   positionsLoading,
@@ -61,6 +63,9 @@ export function TotalValueHeader({
   isRefreshing,
 }: Readonly<Props>) {
   const pnlEur = totalValue - totalInvested
+  const totalValueBtcLabel = totalValueBtc === null ? "N/A BTC" : `${totalValueBtc.toFixed(8)} BTC`
+  const lastSnapshot = chartData.at(-1)
+  const lastUpdatedLabel = lastSnapshot ? formatDate(lastSnapshot.date) : "N/A"
 
   const getPnlColor = () => {
     if (positionsLoading) {
@@ -143,10 +148,13 @@ export function TotalValueHeader({
   return (
     <div className="grid grid-cols-4 h-28">
       {/* Contains the total value of the portfolio and P&L */}
-      <div className={cn("col-span-1 flex flex-col gap-1 transition-opacity duration-300", positionsLoading ? "opacity-0" : "opacity-100")}>
-        <h1 className="text-base text-muted-foreground">Total Worth</h1>
+      <div className={cn("col-span-1 flex flex-col transition-opacity duration-300", positionsLoading ? "opacity-0" : "opacity-100")}>
+        <h1 className="text-base text-muted-foreground mb-1">Total Worth</h1>
         <span className="text-2xl font-number">{formatEur(totalValue)}</span>
-        <div>
+        <span className="text-xs font-number text-muted-foreground uppercase">
+          {totalValueBtcLabel}
+        </span>
+        <div className="mt-1">
           <span className={cn(getPnlColor(), "font-number")}>{formatEur(pnlEur)}</span>
           <Badge variant="outline" className={cn("ml-2 font-number", getPnlColor())}>
             {formatPct(overallPnl)}
@@ -170,12 +178,7 @@ export function TotalValueHeader({
         </Button>
         {/* Last updated x minutes,hours ago in that exact format */}
         <div className="ml-4 text-sm text-muted-foreground">
-          {isRefreshing
-            ? "Syncing..."
-            : `Last updated ${chartData.length > 0
-              ? formatDate(chartData[chartData.length - 1].date)
-              : "N/A"
-            }`}
+          {isRefreshing ? "Syncing..." : `Last updated ${lastUpdatedLabel}`}
         </div>
       </div>
     </div>
