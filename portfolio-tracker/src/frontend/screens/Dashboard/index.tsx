@@ -1,9 +1,9 @@
-import { useEffect, useRef } from "react"
 import { Calendar, DollarSign } from "lucide-react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fetchJson } from "@/lib/queryClient"
-import { api } from "@/lib/api"
+import { formatEur, formatPct } from "@/lib/format"
+import { useRefreshPrices } from "@/hooks/use-refresh-prices"
 import type { GetPositionsResponse, GetNetWorthResponse } from "@/types/api"
 import {
   Table,
@@ -17,27 +17,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { SiteHeader } from "@/components/site-header"
 import { TotalValueHeader } from "./total-value-header"
 
-const COOLDOWN_MS = 15 * 60 * 1000
-
-function formatEur(amount: number): string {
-  return new Intl.NumberFormat("nl-NL", {
-    style: "currency",
-    currency: "EUR",
-  }).format(amount)
-}
-
-function formatPct(pct: number): string {
-  const sign = pct >= 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
-}
-
 interface Props {
   onNavigate: (path: string) => void
 }
 
 export function Dashboard({ onNavigate }: Readonly<Props>) {
-  const lastDashboardRefreshRef = useRef(0)
-  const queryClient = useQueryClient()
+  const { refresh: refreshPrices, isPending: isRefreshing } = useRefreshPrices()
   
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
@@ -54,21 +39,6 @@ export function Dashboard({ onNavigate }: Readonly<Props>) {
     queryKey: ["net-worth"],
     queryFn: () => fetchJson<GetNetWorthResponse>("/api/net-worth"),
   })
-
-  const refreshPrices = useMutation({
-    mutationFn: () => api.refreshPrices(),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["positions"] })
-      void queryClient.invalidateQueries({ queryKey: ["net-worth"] })
-    },
-  })
-
-  // Auto-refresh prices + net worth on mount with 15-min cooldown
-  useEffect(() => {
-    if (Date.now() - lastDashboardRefreshRef.current < COOLDOWN_MS) return
-    lastDashboardRefreshRef.current = Date.now()
-    refreshPrices.mutate()
-  }, [refreshPrices])
 
   const positions = positionsData?.positions ?? []
   const snapshots = netWorthData?.snapshots ?? []
@@ -92,8 +62,8 @@ export function Dashboard({ onNavigate }: Readonly<Props>) {
           positionsLoading={positionsLoading}
           netWorthLoading={netWorthLoading}
           chartData={snapshots}
-          onRefresh={() => refreshPrices.mutate()}
-          isRefreshing={refreshPrices.isPending}
+          onRefresh={refreshPrices}
+          isRefreshing={isRefreshing}
         />
 
         {/* Main two-column layout */}

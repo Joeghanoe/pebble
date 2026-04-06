@@ -1,0 +1,11 @@
+{
+  "upstreams": [
+    {
+      "name": "squad",
+      "type": "local",
+      "source": "/Users/joeghanoe/Library/Application Support/squad",
+      "added_at": "2026-04-01T09:06:29.677Z",
+      "last_synced": "2026-04-01T09:06:48.467Z"
+    }
+  ]
+}

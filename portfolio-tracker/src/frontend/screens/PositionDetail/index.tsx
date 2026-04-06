@@ -1,6 +1,5 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts"
 import { ArrowLeft, RefreshCw, X } from "lucide-react"
-import { useEffect, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -14,6 +13,23 @@ import {
 } from "@/components/ui/chart"
 import { fetchJson } from "@/lib/queryClient"
 import { api } from "@/lib/api"
+import {
+  formatEur,
+  formatEurPrice,
+  formatUsdPrice,
+  formatPct,
+  formatUnits,
+} from "@/lib/format"
+import { useRefreshPrices } from "@/hooks/use-refresh-prices"
+import {
+  enrichTransactions,
+  getOpenBuyTransactions,
+  buildPnlChartData,
+  buildValueChartData,
+  buildFrequencyData,
+  calcPositionTotals,
+  type EnrichedTransaction,
+} from "@/lib/position-analytics"
 import { AddTransactionModal } from "@/frontend/components/AddTransactionModal"
 import { EditPositionModal } from "@/frontend/components/EditPositionModal"
 import type {
@@ -21,7 +37,6 @@ import type {
   GetTransactionsResponse,
   GetExchangesResponse,
 } from "@/types/api"
-import type { Transaction } from "@/types/db"
 import {
   Table,
   TableBody,
@@ -45,47 +60,6 @@ const frequencyChartConfig = {
   timestamp: { label: "Date", color: "var(--primary)" },
 } satisfies ChartConfig
 
-const COOLDOWN_MS = 15 * 60 * 1000
-
-function formatEur(amount: number): string {
-  return new Intl.NumberFormat("nl-NL", {
-    style: "currency",
-    currency: "EUR",
-  }).format(amount)
-}
-
-/** For unit prices: use up to 8 significant decimal places when the value is < €0.01 */
-function formatEurPrice(amount: number): string {
-  if (Math.abs(amount) < 0.01 && amount !== 0) {
-    const decimals = Math.max(2, -Math.floor(Math.log10(Math.abs(amount))) + 3)
-    return "€\u202F" + amount.toFixed(Math.min(decimals, 8)).replace(".", ",")
-  }
-  return new Intl.NumberFormat("nl-NL", {
-    style: "currency",
-    currency: "EUR",
-  }).format(amount)
-}
-
-function formatUsdPrice(amount: number): string {
-  if (Math.abs(amount) < 0.01 && amount !== 0) {
-    const decimals = Math.max(2, -Math.floor(Math.log10(Math.abs(amount))) + 3)
-    return "$" + amount.toFixed(Math.min(decimals, 8))
-  }
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount)
-}
-
-function formatPct(pct: number): string {
-  const sign = pct >= 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
-}
-
-function formatUnits(n: number): string {
-  return n.toFixed(8).replace(/\.?0+$/, "")
-}
-
 interface Props {
   assetId: number
   onBack: () => void
@@ -93,7 +67,8 @@ interface Props {
 
 export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
   const queryClient = useQueryClient()
-  const lastRefreshAtRef = useRef<Map<number, number>>(new Map())
+  const { refresh: handleRefreshPrice } =
+    useRefreshPrices(assetId)
   
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
@@ -111,13 +86,6 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
     queryFn: () => fetchJson<GetExchangesResponse>("/api/exchanges"),
   })
 
-  const refreshPrices = useMutation({
-    mutationFn: () => api.refreshPrices(),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["positions"] })
-    },
-  })
-
   const deleteTx = useMutation({
     mutationFn: (id: number) => api.deleteTransaction(id),
     onSuccess: () => {
@@ -128,13 +96,6 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
     },
   })
 
-  useEffect(() => {
-    const last = lastRefreshAtRef.current.get(assetId) ?? 0
-    if (Date.now() - last < COOLDOWN_MS) return
-    lastRefreshAtRef.current.set(assetId, Date.now())
-    refreshPrices.mutate()
-  }, [assetId])
-
   const exchanges = exchangesData?.exchanges ?? []
   const position = positionsData?.positions.find((p) => p.asset.id === assetId)
   const transactions = txData?.transactions ?? []
@@ -142,11 +103,6 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
   async function handleDeleteTx(id: number) {
     if (!confirm("Delete this transaction?")) return
     deleteTx.mutate(id)
-  }
-
-  function handleRefreshPrice() {
-    lastRefreshAtRef.current.set(assetId, Date.now())
-    refreshPrices.mutate()
   }
 
   const symbol = position?.asset.symbol ?? "…"
@@ -168,63 +124,24 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
       ? priceResult.priceEur * priceResult.exchangeRate
       : null
 
-  const enrichedTx = transactions.map((tx) => {
-    if (tx.type === "buy" && priceEur !== null) {
-      const currentVal = tx.units * priceEur
-      const pct = ((currentVal - tx.eur_amount) / tx.eur_amount) * 100
-      return { ...tx, currentVal, pct }
-    }
-    return { ...tx, currentVal: null, pct: null }
-  })
-
+  const enrichedTx = enrichTransactions(transactions, priceEur)
   const buyTxs = enrichedTx.filter((t) => t.type === "buy")
-
-  // FIFO: oldest buy lots are closed first when sells occur
   const totalSoldUnits = transactions
     .filter((t) => t.type === "sell")
-    .reduce((sum, t) => sum + t.units, 0)
-  const closedBuyIds = new Set<number>()
-  let remainingSold = totalSoldUnits
-  for (const tx of [...buyTxs].sort((a, b) => a.date.localeCompare(b.date))) {
-    if (remainingSold <= 0) break
-    if (remainingSold >= tx.units) {
-      closedBuyIds.add(tx.id)
-      remainingSold -= tx.units
-    } else {
-      remainingSold = 0
-    }
-  }
-  const openBuyTxs = buyTxs.filter((t) => !closedBuyIds.has(t.id))
-
-  const pnlChartData = openBuyTxs.map((t) => ({
-    date: t.date,
-    pnl: t.pct !== null ? parseFloat(t.pct.toFixed(2)) : 0,
-  }))
-
-  const valueChartData = openBuyTxs.map((t) => ({
-    date: t.date,
-    value: t.currentVal !== null ? parseFloat(t.currentVal.toFixed(2)) : 0,
-  }))
-
-  const frequencyData = buyTxs.map((t, i) => ({
-    index: i + 1,
-    date: t.date,
-    timestamp: new Date(t.date).getTime(),
-  }))
-
-  const totalUnits = transactions.reduce(
-    (s, t) => (t.type === "buy" ? s + t.units : s - t.units),
-    0
+    .reduce((s, t) => s + t.units, 0)
+  const openBuyTxs = getOpenBuyTransactions(enrichedTx, totalSoldUnits)
+  const closedBuyIds = new Set(
+    enrichedTx
+      .filter((t) => t.type === "buy" && !openBuyTxs.some((o) => o.id === t.id))
+      .map((t) => t.id)
   )
-  const totalPaid = transactions.reduce(
-    (s, t) => (t.type === "buy" ? s + t.eur_amount : s - t.eur_amount),
-    0
+  const pnlChartData = buildPnlChartData(openBuyTxs)
+  const valueChartData = buildValueChartData(openBuyTxs)
+  const frequencyData = buildFrequencyData(buyTxs)
+  const { totalUnits, totalPaid, totalCurrentVal, totalPct } = calcPositionTotals(
+    transactions,
+    priceEur
   )
-  const totalCurrentVal = priceEur !== null ? totalUnits * priceEur : null
-  const totalPct =
-    totalPaid > 0 && totalCurrentVal !== null
-      ? ((totalCurrentVal - totalPaid) / totalPaid) * 100
-      : null
 
   if (!position && !positionsLoading) {
     return (
@@ -237,12 +154,15 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
     )
   }
 
-  const pnlBadgeClass = (pct: number) =>
-    pct > 0
-      ? "bg-green-500/15 text-green-500 border-transparent"
-      : pct < 0
-        ? "bg-destructive/15 text-destructive border-transparent"
-        : "bg-muted text-muted-foreground border-transparent"
+  const pnlBadgeClass = (pct: number) => {
+    if(pct > 0) {
+      return "bg-green-500/15 text-green-500 border-transparent"
+    } else if(pct < 0) {
+      return "bg-destructive/15 text-destructive border-transparent"
+    } else {
+      return "bg-muted text-muted-foreground border-transparent"
+    }
+  }
 
   return (
     <>
@@ -585,13 +505,7 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
                     </TableCell>
                   </TableRow>
                 )}
-                {enrichedTx.reverse().map(
-                  (
-                    tx: Transaction & {
-                      currentVal: number | null
-                      pct: number | null
-                    }
-                  ) => (
+                {enrichedTx.reverse().map((tx: EnrichedTransaction) => (
                     <TableRow key={tx.id}>
                       <TableCell className="px-3 py-2 whitespace-nowrap tabular-nums">
                         {tx.date}
