@@ -12,6 +12,14 @@ import { secretPlugin } from "./routes/secrets";
 export function createApp() {
   return new Elysia()
     .use(cors())
+    .derive(() => ({ requestStart: Date.now() }))
+    .onAfterResponse(({ request, set, requestStart }) => {
+      const method = request.method.padEnd(6)
+      const path = new URL(request.url).pathname
+      const status = set.status ?? 200
+      const ms = Date.now() - requestStart
+      console.log(`[${new Date().toISOString()}] ${method} ${path} ${status} - ${ms}ms`)
+    })
     .use(assetPlugin)
     .use(exchangePlugin)
     .use(transactionPlugin)

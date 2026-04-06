@@ -1,22 +1,17 @@
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ScatterChart,
-  Scatter,
-  ZAxis,
-} from "recharts"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts"
 import { ArrowLeft, RefreshCw, X } from "lucide-react"
 import { useEffect } from "react"
 import { useQuery, useMutation } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart"
 import { queryClient, fetchJson } from "@/lib/queryClient"
 import { apiUrl } from "@/lib/api"
 import { AddTransactionModal } from "@/frontend/components/AddTransactionModal"
@@ -37,6 +32,18 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { SiteHeader } from "@/components/site-header"
+
+const pnlChartConfig = {
+  pnl: { label: "P&L", color: "var(--primary)" },
+} satisfies ChartConfig
+
+const valueChartConfig = {
+  value: { label: "Value", color: "var(--primary)" },
+} satisfies ChartConfig
+
+const frequencyChartConfig = {
+  timestamp: { label: "Date", color: "var(--primary)" },
+} satisfies ChartConfig
 
 // Per-asset cooldown so navigating back and forth doesn't re-fetch within 15 min
 const lastRefreshAt = new Map<number, number>()
@@ -156,8 +163,8 @@ export function PositionDetail({ assetId, onBack }: Props) {
       : null
   const priceUsd =
     priceResult &&
-    priceResult.status !== "unavailable" &&
-    priceResult.exchangeRate
+      priceResult.status !== "unavailable" &&
+      priceResult.exchangeRate
       ? priceResult.priceEur * priceResult.exchangeRate
       : null
 
@@ -172,19 +179,37 @@ export function PositionDetail({ assetId, onBack }: Props) {
 
   const buyTxs = enrichedTx.filter((t) => t.type === "buy")
 
-  const pnlChartData = buyTxs.map((t) => ({
+  // FIFO: oldest buy lots are closed first when sells occur
+  const totalSoldUnits = transactions
+    .filter((t) => t.type === "sell")
+    .reduce((sum, t) => sum + t.units, 0)
+  const closedBuyIds = new Set<number>()
+  let remainingSold = totalSoldUnits
+  for (const tx of [...buyTxs].sort((a, b) => a.date.localeCompare(b.date))) {
+    if (remainingSold <= 0) break
+    if (remainingSold >= tx.units) {
+      closedBuyIds.add(tx.id)
+      remainingSold -= tx.units
+    } else {
+      remainingSold = 0
+    }
+  }
+  const openBuyTxs = buyTxs.filter((t) => !closedBuyIds.has(t.id))
+
+  const pnlChartData = openBuyTxs.map((t) => ({
     date: t.date,
     pnl: t.pct !== null ? parseFloat(t.pct.toFixed(2)) : 0,
   }))
 
-  const valueChartData = buyTxs.map((t) => ({
+  const valueChartData = openBuyTxs.map((t) => ({
     date: t.date,
     value: t.currentVal !== null ? parseFloat(t.currentVal.toFixed(2)) : 0,
   }))
 
-  const scatterData = buyTxs.map((t, i) => ({
+  const frequencyData = buyTxs.map((t, i) => ({
     index: i + 1,
     date: t.date,
+    timestamp: new Date(t.date).getTime(),
   }))
 
   const totalUnits = transactions.reduce(
@@ -222,6 +247,9 @@ export function PositionDetail({ assetId, onBack }: Props) {
   return (
     <>
       <SiteHeader name={symbol}>
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          <ArrowLeft size={14} className="mr-1" />
+        </Button>
         {position && (
           <EditPositionModal asset={position.asset} exchanges={exchanges} />
         )}
@@ -234,299 +262,276 @@ export function PositionDetail({ assetId, onBack }: Props) {
         >
           <RefreshCw size={13} />
         </Button>
-        <Button variant="outline" size="sm" onClick={onBack}>
-          <ArrowLeft size={14} className="mr-1" /> Back
-        </Button>
+        <AddTransactionModal
+          assetId={assetId}
+          trigger={
+            <Button variant="outline" size="sm">
+              + Add Transaction
+            </Button>
+          }
+        />
       </SiteHeader>
-      <div className="space-y-4 p-6">
-        <div className="grid grid-cols-2 gap-4">
-          {/* Data Dashboard card */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle>Data Dashboard</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Total {symbol} to date
-                </span>
-                {positionsLoading ? (
-                  <Skeleton className="h-4 w-28" />
-                ) : (
-                  <span className="font-medium tabular-nums">
-                    {formatUnits(unitsHeld)}
-                  </span>
-                )}
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Invested</span>
-                {positionsLoading ? (
-                  <Skeleton className="h-4 w-28" />
-                ) : (
-                  <span className="font-medium tabular-nums">
-                    {formatEur(totalInvested)}
-                  </span>
-                )}
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Value {symbol} Portfolio
-                </span>
-                {positionsLoading ? (
-                  <Skeleton className="h-4 w-28" />
-                ) : (
-                  <span className="font-medium tabular-nums">
-                    {formatEur(currentValue)}
-                  </span>
-                )}
-              </div>
 
-              {/* P&L highlight */}
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-muted-foreground">Profit/Loss</span>
-                {positionsLoading ? (
-                  <Skeleton className="h-8 w-28 rounded" />
-                ) : (
-                  <span
-                    className={`rounded px-3 py-1 text-lg font-bold tabular-nums ${pnlEur >= 0 ? "bg-green-500/15 text-green-500" : "bg-destructive/15 text-destructive"}`}
-                  >
-                    {formatEur(pnlEur)}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Average P/L</span>
-                {positionsLoading ? (
-                  <Skeleton className="h-4 w-16" />
-                ) : (
-                  <span
-                    className={`font-medium tabular-nums ${pnlPct >= 0 ? "text-green-500" : "text-destructive"}`}
-                  >
-                    {formatPct(pnlPct)}
-                  </span>
-                )}
-              </div>
-
-              {/* Price row */}
-              {priceEur !== null && (
-                <div className="grid grid-cols-2 gap-2 border-t border-border pt-2">
-                  <div className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-center">
-                    <div className="mb-0.5 text-xs text-muted-foreground">
-                      {symbol} Price
-                    </div>
-                    <div className="font-bold text-primary tabular-nums">
-                      {formatEurPrice(priceEur)}
-                    </div>
-                  </div>
-                  {priceUsd !== null && (
-                    <div className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-center">
-                      <div className="mb-0.5 text-xs text-muted-foreground">
-                        {symbol} USD Price
-                      </div>
-                      <div className="font-bold text-primary tabular-nums">
-                        {formatUsdPrice(priceUsd)}
-                      </div>
-                    </div>
-                  )}
-                </div>
+      <div className={`gap-4 flex flex-col p-6 transition-opacity duration-500 ${positionsLoading || txLoading ? "opacity-0" : "opacity-100"}`}>
+        {/* Position header — mirrors TotalValueHeader layout */}
+        <div className={`grid items-start gap-6 ${valueChartData.length > 1 ? "grid-cols-4" : "grid-cols-2"}`}>
+          {/* Key metrics */}
+          <div className="col-span-1 flex flex-col gap-1">
+            <h1 className="text-base text-muted-foreground">Current Value</h1>
+            <span className="text-4xl">
+              {positionsLoading ? (
+                <Skeleton className="h-6 w-24" />
+              ) : (
+                formatEur(currentValue)
               )}
+            </span>
+            <div>
+              <span
+                className={
+                  positionsLoading
+                    ? "text-muted-foreground"
+                    : pnlEur >= 0
+                      ? "text-green-500"
+                      : "text-destructive"
+                }
+              >
+                {positionsLoading ? (
+                  <Skeleton className="h-4 w-20" />
+                ) : (
+                  formatEur(pnlEur)
+                )}
+              </span>
+              <Badge
+                variant="outline"
+                className={`ml-2 ${positionsLoading ? "text-muted-foreground" : pnlPct >= 0 ? "text-green-500" : "text-destructive"}`}
+              >
+                {positionsLoading ? (
+                  <Skeleton className="h-5 w-16 rounded" />
+                ) : (
+                  formatPct(pnlPct)
+                )}
+              </Badge>
+            </div>
+          </div>
 
-              {priceResult?.status === "stale" && (
-                <p className="text-xs text-muted-foreground">
-                  Last known: {priceResult.lastKnownDate}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Profit and Loss Overview chart */}
-          {pnlChartData.length > 1 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">
-                  Profit and Loss Overview
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <ResponsiveContainer width="100%" height={160}>
-                  <LineChart
-                    data={pnlChartData}
-                    margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="var(--border)"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 9 }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 9 }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(v: number) => `${v}%`}
-                    />
-                    <Tooltip
-                      formatter={(v) => [`${Number(v).toFixed(2)}%`, "P&L"]}
-                      labelStyle={{ fontSize: 11 }}
-                      contentStyle={{
-                        background: "var(--card)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 8,
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="pnl"
-                      stroke="var(--primary)"
-                      dot={{ r: 3, fill: "var(--primary)" }}
-                      strokeWidth={1.5}
-                      label={{
-                        position: "top",
-                        fontSize: 8,
-                        formatter: (v: unknown) => `${Number(v)}%`,
-                      }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* EUR Current Value chart */}
+          {/* Sparkline — only rendered when there's data (grid adjusts automatically) */}
           {valueChartData.length > 1 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">
-                  EUR Current Value per Lot
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <ResponsiveContainer width="100%" height={160}>
-                  <LineChart
-                    data={valueChartData}
-                    margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="var(--border)"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 9 }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 9 }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(v: number) => `€${v.toFixed(0)}`}
-                    />
-                    <Tooltip
-                      formatter={(v) => [formatEur(Number(v)), "Value"]}
-                      labelStyle={{ fontSize: 11 }}
-                      contentStyle={{
-                        background: "var(--card)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 8,
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="var(--primary)"
-                      dot={{ r: 3, fill: "var(--primary)" }}
-                      strokeWidth={1.5}
-                      label={{
-                        position: "top",
-                        fontSize: 8,
-                        formatter: (v: unknown) => `€${Number(v).toFixed(0)}`,
-                      }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+          <div className="col-span-2">
+              <ChartContainer
+                config={valueChartConfig}
+                className="aspect-auto h-32 w-full"
+                initialDimension={{ width: 320, height: 112 }}
+              >
+                <LineChart
+                  data={valueChartData}
+                  margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+                >
+                  <CartesianGrid vertical={false} horizontal={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickLine={false}
+                    tick={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    hide
+                    domain={["dataMin - 10", "dataMax + 10"]}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <ChartTooltip
+                    cursor={false}
+                    content={
+                      <ChartTooltipContent
+                        formatter={(v) => formatEur(Number(v))}
+                      />
+                    }
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke="var(--color-value)"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ChartContainer>
+          </div>
           )}
 
-          {/* Investing frequency scatter */}
-          {scatterData.length > 1 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">
-                  Investing Frequency — the more linear the better
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0">
-                <ResponsiveContainer width="100%" height={180}>
-                  <ScatterChart
-                    margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="var(--border)"
-                    />
-                    <XAxis
-                      dataKey="index"
-                      type="number"
-                      name="Index"
-                      tick={{ fontSize: 9 }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      dataKey="date"
-                      type="category"
-                      name="Date"
-                      tick={{ fontSize: 9 }}
-                      tickLine={false}
-                      axisLine={false}
-                      width={72}
-                    />
-                    <ZAxis range={[30, 30]} />
-                    <Tooltip
-                      cursor={{ strokeDasharray: "3 3" }}
-                      content={({ payload }) => {
-                        const item = payload?.[0]?.payload as
-                          | { date: string; index: number }
-                          | undefined
-                        if (!item) return null
-                        return (
-                          <div className="rounded border border-border bg-card p-2 text-xs shadow">
-                            {item.date}
-                          </div>
-                        )
-                      }}
-                    />
-                    <Scatter data={scatterData} fill="var(--primary)" />
-                  </ScatterChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
+          {/* Secondary stats */}
+          <div className="col-span-1 flex flex-col gap-1">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs tracking-wider text-muted-foreground uppercase">
+                Holdings
+              </span>
+              <span className="font-medium tabular-nums">
+                {positionsLoading ? (
+                  <Skeleton className="h-4 w-24" />
+                ) : (
+                  `${formatUnits(unitsHeld)} ${symbol}`
+                )}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs tracking-wider text-muted-foreground uppercase">
+                Invested
+              </span>
+              <span className="font-medium tabular-nums">
+                {positionsLoading ? (
+                  <Skeleton className="h-4 w-24" />
+                ) : (
+                  formatEur(totalInvested)
+                )}
+              </span>
+            </div>
+            {priceEur !== null && (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs tracking-wider text-muted-foreground uppercase">
+                  Price
+                </span>
+                <span className="font-medium tabular-nums text-primary">
+                  {formatEurPrice(priceEur)}
+                  {priceUsd !== null && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {formatUsdPrice(priceUsd)}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+            {priceResult?.status === "stale" && (
+              <p className="text-xs text-muted-foreground">
+                Last known: {priceResult.lastKnownDate}
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Transaction table */}
-        <Card>
-          <CardHeader className="pb-0">
-            <div className="flex items-center justify-between">
-              <CardTitle>Transaction Log</CardTitle>
-              <AddTransactionModal
-                assetId={assetId}
-                trigger={
-                  <Button variant="outline" size="sm">
-                    + Add Transaction
-                  </Button>
-                }
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0 pt-2">
+        {/* Optional charts row */}
+        {(pnlChartData.length > 1 || frequencyData.length > 1) && (
+          <div
+            className={`grid gap-4 ${pnlChartData.length > 1 && frequencyData.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
+          >
+            {pnlChartData.length > 1 && (
+              <Card className="gap-3 py-4">
+                <CardHeader className="flex items-center gap-2 px-4 font-heading text-xl">
+                  Profit and Loss Overview
+                </CardHeader>
+                <CardContent className="px-4 pt-0">
+                  <ChartContainer
+                    config={pnlChartConfig}
+                    className="aspect-auto h-40 w-full"
+                    initialDimension={{ width: 320, height: 160 }}
+                  >
+                    <LineChart
+                      data={pnlChartData}
+                      margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+                    >
+                      <CartesianGrid vertical={false} horizontal={false} />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 9 }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 9 }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(v: number) => `${v}%`}
+                      />
+                      <ChartTooltip
+                        cursor={false}
+                        content={
+                          <ChartTooltipContent
+                            formatter={(v) => `${Number(v).toFixed(2)}%`}
+                          />
+                        }
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="pnl"
+                        stroke="var(--color-pnl)"
+                        strokeWidth={2}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            )}
+            {frequencyData.length > 1 && (
+              <Card className="gap-3 py-4">
+                <CardHeader className="flex items-center gap-2 px-4 font-heading text-xl">
+                  Investing Frequency
+                </CardHeader>
+                <CardContent className="px-4 pt-0">
+                  <ChartContainer
+                    config={frequencyChartConfig}
+                    className="aspect-auto h-40 w-full"
+                    initialDimension={{ width: 320, height: 160 }}
+                  >
+                    <LineChart
+                      data={frequencyData}
+                      margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+                    >
+                      <CartesianGrid vertical={false} horizontal={false} />
+                      <XAxis
+                        dataKey="index"
+                        type="number"
+                        tick={{ fontSize: 9 }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        dataKey="timestamp"
+                        type="number"
+                        domain={["dataMin", "dataMax"]}
+                        tick={{ fontSize: 9 }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={72}
+                        tickFormatter={(v: number) => {
+                          const d = new Date(v)
+                          return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
+                        }}
+                      />
+                      <ChartTooltip
+                        cursor={false}
+                        content={({ payload }) => {
+                          const item = payload?.[0]?.payload as
+                            | { date: string; index: number }
+                            | undefined
+                          if (!item) return null
+                          return (
+                            <div className="rounded border border-border bg-card p-2 text-xs shadow">
+                              #{item.index} — {item.date}
+                            </div>
+                          )
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="timestamp"
+                        stroke="var(--color-timestamp)"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: "var(--color-timestamp)" }}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* Transaction Log */}
+        <Card className="gap-3 py-0 overflow-hidden">
+          <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -534,18 +539,17 @@ export function PositionDetail({ assetId, onBack }: Props) {
                     Date
                   </TableHead>
                   <TableHead className="px-3 py-2 text-right whitespace-nowrap">
-                    {symbol} Amount
+                    Amount
                   </TableHead>
                   <TableHead className="px-3 py-2 text-right whitespace-nowrap">
-                    EUR Paid
+                    Paid (€)
                   </TableHead>
                   <TableHead className="px-3 py-2 text-right whitespace-nowrap">
-                    EUR Current Value
+                    Current Value (€)
                   </TableHead>
                   <TableHead className="px-3 py-2 text-right whitespace-nowrap">
                     Profit/Loss
                   </TableHead>
-                  <TableHead className="px-3 py-2">Notes</TableHead>
                   <TableHead className="w-8 px-3 py-2" />
                 </TableRow>
               </TableHeader>
@@ -568,23 +572,20 @@ export function PositionDetail({ assetId, onBack }: Props) {
                       <TableCell className="px-3 py-2 text-right">
                         <Skeleton className="ml-auto h-5 w-14 rounded" />
                       </TableCell>
-                      <TableCell className="px-3 py-2">
-                        <Skeleton className="h-4 w-24" />
-                      </TableCell>
                       <TableCell className="px-3 py-2" />
                     </TableRow>
                   ))}
                 {transactions.length === 0 && !txLoading && (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={6}
                       className="px-4 py-6 text-center text-sm text-muted-foreground"
                     >
                       No transactions yet.
                     </TableCell>
                   </TableRow>
                 )}
-                {enrichedTx.map(
+                {enrichedTx.reverse().map(
                   (
                     tx: Transaction & {
                       currentVal: number | null
@@ -615,26 +616,27 @@ export function PositionDetail({ assetId, onBack }: Props) {
                         )}
                       </TableCell>
                       <TableCell className="px-3 py-2 text-right whitespace-nowrap">
-                        {tx.pct !== null ? (
-                          <Badge
-                            className={`rounded tabular-nums ${pnlBadgeClass(tx.pct)}`}
-                          >
-                            {formatPct(tx.pct)}
-                          </Badge>
-                        ) : tx.type === "sell" && tx.realized_pnl !== null ? (
+                        {tx.type === "sell" && tx.realized_pnl !== null ? (
                           <span
                             className={`text-xs font-medium tabular-nums ${tx.realized_pnl >= 0 ? "text-green-500" : "text-destructive"}`}
                           >
                             {formatEur(tx.realized_pnl)}
                           </span>
+                        ) : closedBuyIds.has(tx.id) ? (
+                          <span className="text-xs text-muted-foreground">
+                            Closed
+                          </span>
+                        ) : tx.pct !== null ? (
+                          <Badge
+                            className={`rounded tabular-nums ${pnlBadgeClass(tx.pct)}`}
+                          >
+                            {formatPct(tx.pct)}
+                          </Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground">
-                            0.00%
+                            —
                           </span>
                         )}
-                      </TableCell>
-                      <TableCell className="max-w-[120px] truncate px-3 py-2 text-xs text-muted-foreground">
-                        {tx.notes ?? ""}
                       </TableCell>
                       <TableCell className="px-3 py-2">
                         <Button
