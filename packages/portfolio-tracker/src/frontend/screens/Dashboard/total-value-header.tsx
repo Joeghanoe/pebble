@@ -15,7 +15,7 @@ function formatEur(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: "EUR",
-  }).format(amount)
+  }).format(amount).replaceAll(/\s+/g, "")
 }
 
 function formatPct(pct: number): string {
@@ -145,10 +145,10 @@ export function TotalValueHeader({
       {/* Contains the total value of the portfolio and P&L */}
       <div className={cn("col-span-1 flex flex-col gap-1 transition-opacity duration-300", positionsLoading ? "opacity-0" : "opacity-100")}>
         <h1 className="text-base text-muted-foreground">Total Worth</h1>
-        <span className="text-2xl">{formatEur(totalValue)}</span>
+        <span className="text-2xl font-number">{formatEur(totalValue)}</span>
         <div>
-          <span className={getPnlColor()}>{formatEur(pnlEur)}</span>
-          <Badge variant="outline" className={cn("ml-2", getPnlColor())}>
+          <span className={cn(getPnlColor(), "font-number")}>{formatEur(pnlEur)}</span>
+          <Badge variant="outline" className={cn("ml-2 font-number", getPnlColor())}>
             {formatPct(overallPnl)}
           </Badge>
         </div>

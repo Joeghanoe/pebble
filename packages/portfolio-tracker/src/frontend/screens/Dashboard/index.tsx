@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { fetchJson } from "@/lib/queryClient"
 import { formatEur, formatPct } from "@/lib/format"
@@ -10,7 +10,6 @@ import { SiteHeader } from "@/components/site-header"
 import { TotalValueHeader } from "./total-value-header"
 
 export function Dashboard() {
-  const navigate = useNavigate()
   const { refresh: refreshPrices, isPending: isRefreshing } = useRefreshPrices()
 
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
@@ -86,7 +85,7 @@ export function Dashboard() {
                     </div>
                     <p
                       data-slot="item-description"
-                      className="cn-item-description [&amp;&gt;a]:underline [&amp;&gt;a]:underline-offset-4 [&amp;&gt;a:hover]:text-primary line-clamp-2 text-xs font-normal tracking-wider uppercase"
+                      className="cn-item-description [&amp;&gt;a]:underline [&amp;&gt;a]:underline-offset-4 [&amp;&gt;a:hover]:text-primary line-clamp-2 text-xs font-normal tracking-wider uppercase font-number"
                     >
                       {pos.unitsHeld} Shares &middot; P&L:{" "}
                       <span
@@ -114,7 +113,7 @@ export function Dashboard() {
                       <span className="text-xs tracking-wider text-muted-foreground uppercase">
                         Value
                       </span>
-                      <span className="font-medium tabular-nums">
+                      <span className="font-medium tabular-nums font-number">
                         {formatEur(pos.currentValueEur)}
                       </span>
                     </div>

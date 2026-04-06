@@ -7,3 +7,5 @@
 .squad-workstream
 .squad
 .copilot
+
+node_modules/

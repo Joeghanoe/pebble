@@ -100,7 +100,7 @@ export function PositionsMenu({ isPositionActive }: Props) {
                     <span className="flex-1 truncate">{pos.asset.symbol}</span>
                     <span
                       className={cn(
-                        "text-[10px] font-medium tabular-nums",
+                        "text-[10px] font-medium tabular-nums font-number",
                         pos.pnlPct > 0
                           ? "text-green-600"
                           : pos.pnlPct < 0

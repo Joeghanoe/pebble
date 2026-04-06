@@ -198,7 +198,7 @@ export function PositionDetail() {
           {/* Key metrics */}
           <div className="col-span-1 flex flex-col gap-1">
             <h1 className="text-base text-muted-foreground">Current Value</h1>
-            <span className="text-4xl">
+            <span className="text-4xl font-number">
               {positionsLoading ? (
                 <Skeleton className="h-6 w-24" />
               ) : (
@@ -209,10 +209,10 @@ export function PositionDetail() {
               <span
                 className={
                   positionsLoading
-                    ? "text-muted-foreground"
+                    ? "text-muted-foreground font-number"
                     : pnlEur >= 0
-                      ? "text-green-500"
-                      : "text-destructive"
+                      ? "text-green-500 font-number"
+                      : "text-destructive font-number"
                 }
               >
                 {positionsLoading ? (
@@ -223,7 +223,7 @@ export function PositionDetail() {
               </span>
               <Badge
                 variant="outline"
-                className={cn("ml-2", positionsLoading ? "text-muted-foreground" : pnlPct >= 0 ? "text-green-500" : "text-destructive")}
+                className={cn("ml-2 font-number", positionsLoading ? "text-muted-foreground" : pnlPct >= 0 ? "text-green-500" : "text-destructive")}
               >
                 {positionsLoading ? (
                   <Skeleton className="h-5 w-16 rounded" />
@@ -284,7 +284,7 @@ export function PositionDetail() {
               <span className="text-xs tracking-wider text-muted-foreground uppercase">
                 Holdings
               </span>
-              <span className="font-medium tabular-nums">
+              <span className="font-medium tabular-nums font-number">
                 {positionsLoading ? (
                   <Skeleton className="h-4 w-24" />
                 ) : (
@@ -296,7 +296,7 @@ export function PositionDetail() {
               <span className="text-xs tracking-wider text-muted-foreground uppercase">
                 Invested
               </span>
-              <span className="font-medium tabular-nums">
+              <span className="font-medium tabular-nums font-number">
                 {positionsLoading ? (
                   <Skeleton className="h-4 w-24" />
                 ) : (
@@ -309,7 +309,7 @@ export function PositionDetail() {
                 <span className="text-xs tracking-wider text-muted-foreground uppercase">
                   Price
                 </span>
-                <span className="font-medium tabular-nums text-primary">
+                <span className="font-medium tabular-nums font-number text-primary">
                   {formatEurPrice(priceEur)}
                   {priceUsd !== null && (
                     <span className="ml-2 text-xs text-muted-foreground">
@@ -504,11 +504,11 @@ export function PositionDetail() {
                   </TableRow>
                 )}
                 {enrichedTx.reverse().map((tx: EnrichedTransaction) => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="px-3 py-2 whitespace-nowrap tabular-nums">
+                  <TableRow key={tx.id}>
+                      <TableCell className="px-3 py-2 whitespace-nowrap tabular-nums font-number">
                         {tx.date}
                       </TableCell>
-                      <TableCell className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                      <TableCell className="px-3 py-2 text-right whitespace-nowrap tabular-nums font-number">
                         {tx.type === "sell" ? (
                           <span className="text-destructive">
                             −{formatUnits(tx.units)}
@@ -517,10 +517,10 @@ export function PositionDetail() {
                           formatUnits(tx.units)
                         )}
                       </TableCell>
-                      <TableCell className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                      <TableCell className="px-3 py-2 text-right whitespace-nowrap tabular-nums font-number">
                         {formatEur(tx.eur_amount)}
                       </TableCell>
-                      <TableCell className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                      <TableCell className="px-3 py-2 text-right whitespace-nowrap tabular-nums font-number">
                         {tx.currentVal !== null ? (
                           formatEur(tx.currentVal)
                         ) : (
@@ -530,7 +530,7 @@ export function PositionDetail() {
                       <TableCell className="px-3 py-2 text-right whitespace-nowrap">
                         {tx.type === "sell" && tx.realized_pnl !== null ? (
                           <span
-                            className={cn("text-xs font-medium tabular-nums", tx.realized_pnl >= 0 ? "text-green-500" : "text-destructive")}
+                            className={cn("text-xs font-medium tabular-nums font-number", tx.realized_pnl >= 0 ? "text-green-500" : "text-destructive")}
                           >
                             {formatEur(tx.realized_pnl)}
                           </span>
@@ -540,7 +540,7 @@ export function PositionDetail() {
                           </span>
                         ) : tx.pct !== null ? (
                           <Badge
-                            className={cn("rounded tabular-nums", pnlBadgeClass(tx.pct))}
+                            className={cn("rounded tabular-nums font-number", pnlBadgeClass(tx.pct))}
                           >
                             {formatPct(tx.pct)}
                           </Badge>
@@ -571,13 +571,13 @@ export function PositionDetail() {
                     <TableCell className="px-3 py-2 font-semibold">
                       Total
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-right font-semibold whitespace-nowrap tabular-nums">
+                    <TableCell className="px-3 py-2 text-right font-semibold whitespace-nowrap tabular-nums font-number">
                       {formatUnits(totalUnits)}
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-right font-semibold whitespace-nowrap tabular-nums">
+                    <TableCell className="px-3 py-2 text-right font-semibold whitespace-nowrap tabular-nums font-number">
                       {formatEur(totalPaid)}
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-right font-semibold whitespace-nowrap tabular-nums">
+                    <TableCell className="px-3 py-2 text-right font-semibold whitespace-nowrap tabular-nums font-number">
                       {totalCurrentVal !== null
                         ? formatEur(totalCurrentVal)
                         : "—"}
@@ -585,7 +585,7 @@ export function PositionDetail() {
                     <TableCell className="px-3 py-2 text-right whitespace-nowrap">
                       {totalPct !== null ? (
                         <Badge
-                          className={cn("rounded tabular-nums", pnlBadgeClass(totalPct))}
+                          className={cn("rounded tabular-nums font-number", pnlBadgeClass(totalPct))}
                         >
                           {formatPct(totalPct)}
                         </Badge>

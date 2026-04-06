@@ -1,0 +1,9 @@
+{
+  "name": "portfolio-tracker",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "build": "bun run --filter '*' build"
+  }
+}

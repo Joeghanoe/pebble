@@ -4,19 +4,19 @@ export function formatEur(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: "EUR",
-  }).format(amount)
+  }).format(amount).replaceAll(/\s+/g, "")
 }
 
 /** For unit prices: up to 8 significant decimal places when < €0.01 */
 export function formatEurPrice(amount: number): string {
   if (Math.abs(amount) < 0.01 && amount !== 0) {
     const decimals = Math.max(2, -Math.floor(Math.log10(Math.abs(amount))) + 3)
-    return "€\u202F" + amount.toFixed(Math.min(decimals, 8)).replace(".", ",")
+    return "€" + amount.toFixed(Math.min(decimals, 8)).replace(".", ",")
   }
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: "EUR",
-  }).format(amount)
+  }).format(amount).replaceAll(/\s+/g, "")
 }
 
 export function formatUsdPrice(amount: number): string {
