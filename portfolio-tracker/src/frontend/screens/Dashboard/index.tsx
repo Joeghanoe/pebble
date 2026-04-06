@@ -1,4 +1,6 @@
 import { Calendar, DollarSign } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useNavigate } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fetchJson } from "@/lib/queryClient"
@@ -17,11 +19,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { SiteHeader } from "@/components/site-header"
 import { TotalValueHeader } from "./total-value-header"
 
-interface Props {
-  onNavigate: (path: string) => void
-}
-
-export function Dashboard({ onNavigate }: Readonly<Props>) {
+export function Dashboard() {
+  const navigate = useNavigate()
   const { refresh: refreshPrices, isPending: isRefreshing } = useRefreshPrices()
   
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
@@ -54,7 +53,7 @@ export function Dashboard({ onNavigate }: Readonly<Props>) {
   return (
     <>
       <SiteHeader name="Dashboard" />
-      <div className={`space-y-2 p-6 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card transition-opacity duration-500 ${positionsLoading || netWorthLoading ? "opacity-0" : "opacity-100"}`}>
+      <div className={cn("space-y-2 p-6 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card transition-opacity duration-500", positionsLoading || netWorthLoading ? "opacity-0" : "opacity-100")}>
         <TotalValueHeader
           totalValue={totalValue}
           totalInvested={totalInvested}
@@ -81,7 +80,7 @@ export function Dashboard({ onNavigate }: Readonly<Props>) {
                   data-variant="muted"
                   data-size="default"
                   role="button"
-                  onClick={() => onNavigate(`/position/${pos.asset.id}`)}
+                  onClick={() => void navigate({ to: "/position/$assetId", params: { assetId: String(pos.asset.id) } })}
                   className="cn-item group/item cn-item-variant-muted cn-item-size-default flex w-full cursor-pointer flex-wrap items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 transition-colors duration-100 outline-none hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent [a]:transition-colors"
                 >
                   <div

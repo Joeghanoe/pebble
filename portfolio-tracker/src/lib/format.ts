@@ -35,6 +35,15 @@ export function formatPct(pct: number): string {
   return `${sign}${pct.toFixed(2)}%`
 }
 
+/**
+ * Format a number with up to 8 decimal places, removing trailing zeros.
+ * It also makes millions and billions more readable by clear separators.
+ * @param n The number to format
+ * @returns The formatted string
+ */
 export function formatUnits(n: number): string {
-  return n.toFixed(8).replace(/\.?0+$/, "")
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 8,
+  }).format(n).replaceAll(',', ".")
 }

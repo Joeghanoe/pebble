@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
@@ -142,12 +143,12 @@ export function TotalValueHeader({
   return (
     <div className="grid grid-cols-4 h-28">
       {/* Contains the total value of the portfolio and P&L */}
-      <div className={`col-span-1 flex flex-col gap-1 transition-opacity duration-300 ${positionsLoading ? "opacity-0" : "opacity-100"}`}>
+      <div className={cn("col-span-1 flex flex-col gap-1 transition-opacity duration-300", positionsLoading ? "opacity-0" : "opacity-100")}>
         <h1 className="text-base text-muted-foreground">Total Worth</h1>
         <span className="text-2xl">{formatEur(totalValue)}</span>
         <div>
           <span className={getPnlColor()}>{formatEur(pnlEur)}</span>
-          <Badge variant="outline" className={`ml-2 ${getPnlColor()}`}>
+          <Badge variant="outline" className={cn("ml-2", getPnlColor())}>
             {formatPct(overallPnl)}
           </Badge>
         </div>

@@ -1,6 +1,7 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts"
 import { ArrowLeft, RefreshCw, X } from "lucide-react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useNavigate, useParams } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
@@ -47,6 +48,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { SiteHeader } from "@/components/site-header"
+import { cn } from "@/lib/utils"
 
 const pnlChartConfig = {
   pnl: { label: "P&L", color: "var(--primary)" },
@@ -60,12 +62,10 @@ const frequencyChartConfig = {
   timestamp: { label: "Date", color: "var(--primary)" },
 } satisfies ChartConfig
 
-interface Props {
-  assetId: number
-  onBack: () => void
-}
-
-export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
+export function PositionDetail() {
+  const { assetId: assetIdStr } = useParams({ strict: false })
+  const assetId = Number(assetIdStr ?? "0")
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { refresh: handleRefreshPrice } =
     useRefreshPrices(assetId)
@@ -146,7 +146,7 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
   if (!position && !positionsLoading) {
     return (
       <div>
-        <Button variant="outline" size="sm" onClick={onBack}>
+        <Button variant="outline" size="sm" onClick={() => void navigate({ to: "/" })}>
           <ArrowLeft size={14} className="mr-1" /> Back
         </Button>
         <p className="mt-4 text-muted-foreground">Position not found</p>
@@ -167,7 +167,7 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
   return (
     <>
       <SiteHeader name={symbol}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
+        <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/" })}>
           <ArrowLeft size={14} className="mr-1" />
         </Button>
         {position && (
@@ -192,9 +192,9 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
         />
       </SiteHeader>
 
-      <div className={`gap-4 flex flex-col p-6 transition-opacity duration-500 ${positionsLoading || txLoading ? "opacity-0" : "opacity-100"}`}>
+      <div className={cn("gap-4 flex flex-col p-6 transition-opacity duration-500", positionsLoading || txLoading ? "opacity-0" : "opacity-100")}>
         {/* Position header — mirrors TotalValueHeader layout */}
-        <div className={`grid items-start gap-6 ${valueChartData.length > 1 ? "grid-cols-4" : "grid-cols-2"}`}>
+        <div className="grid items-start gap-6 grid-cols-4">
           {/* Key metrics */}
           <div className="col-span-1 flex flex-col gap-1">
             <h1 className="text-base text-muted-foreground">Current Value</h1>
@@ -223,7 +223,7 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
               </span>
               <Badge
                 variant="outline"
-                className={`ml-2 ${positionsLoading ? "text-muted-foreground" : pnlPct >= 0 ? "text-green-500" : "text-destructive"}`}
+                className={cn("ml-2", positionsLoading ? "text-muted-foreground" : pnlPct >= 0 ? "text-green-500" : "text-destructive")}
               >
                 {positionsLoading ? (
                   <Skeleton className="h-5 w-16 rounded" />
@@ -235,8 +235,7 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
           </div>
 
           {/* Sparkline — only rendered when there's data (grid adjusts automatically) */}
-          {valueChartData.length > 1 && (
-          <div className="col-span-2">
+          <div className={cn("col-span-2", valueChartData.length <= 1 && "opacity-0")}>
               <ChartContainer
                 config={valueChartConfig}
                 className="aspect-auto h-32 w-full"
@@ -278,7 +277,6 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
                 </LineChart>
               </ChartContainer>
           </div>
-          )}
 
           {/* Secondary stats */}
           <div className="col-span-1 flex flex-col gap-1">
@@ -332,7 +330,7 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
         {/* Optional charts row */}
         {(pnlChartData.length > 1 || frequencyData.length > 1) && (
           <div
-            className={`grid gap-4 ${pnlChartData.length > 1 && frequencyData.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
+            className={cn("grid gap-4", pnlChartData.length > 1 && frequencyData.length > 1 ? "grid-cols-2" : "grid-cols-1")}
           >
             {pnlChartData.length > 1 && (
               <Card className="gap-3 py-4">
@@ -532,7 +530,7 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
                       <TableCell className="px-3 py-2 text-right whitespace-nowrap">
                         {tx.type === "sell" && tx.realized_pnl !== null ? (
                           <span
-                            className={`text-xs font-medium tabular-nums ${tx.realized_pnl >= 0 ? "text-green-500" : "text-destructive"}`}
+                            className={cn("text-xs font-medium tabular-nums", tx.realized_pnl >= 0 ? "text-green-500" : "text-destructive")}
                           >
                             {formatEur(tx.realized_pnl)}
                           </span>
@@ -542,7 +540,7 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
                           </span>
                         ) : tx.pct !== null ? (
                           <Badge
-                            className={`rounded tabular-nums ${pnlBadgeClass(tx.pct)}`}
+                            className={cn("rounded tabular-nums", pnlBadgeClass(tx.pct))}
                           >
                             {formatPct(tx.pct)}
                           </Badge>
@@ -587,7 +585,7 @@ export function PositionDetail({ assetId, onBack }: Readonly<Props>) {
                     <TableCell className="px-3 py-2 text-right whitespace-nowrap">
                       {totalPct !== null ? (
                         <Badge
-                          className={`rounded tabular-nums ${pnlBadgeClass(totalPct)}`}
+                          className={cn("rounded tabular-nums", pnlBadgeClass(totalPct))}
                         >
                           {formatPct(totalPct)}
                         </Badge>

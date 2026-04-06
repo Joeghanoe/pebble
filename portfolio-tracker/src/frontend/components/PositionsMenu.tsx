@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { cn } from "@/lib/utils"
 import { ChevronRight, TrendingUp, Plus } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import {
@@ -89,13 +90,14 @@ export function PositionsMenu({ currentAssetId, onNavigate }: Props) {
                   <span className="size-2 shrink-0 rounded-full bg-primary" />
                   <span className="flex-1 truncate">{pos.asset.symbol}</span>
                   <span
-                    className={`text-[10px] font-medium tabular-nums ${
+                    className={cn(
+                      "text-[10px] font-medium tabular-nums",
                       pos.pnlPct > 0
                         ? "text-green-600"
                         : pos.pnlPct < 0
                           ? "text-red-500"
                           : "text-muted-foreground"
-                    }`}
+                    )}
                   >
                     {pos.pnlPct > 0 ? "+" : ""}
                     {pos.pnlPct.toFixed(1)}%
