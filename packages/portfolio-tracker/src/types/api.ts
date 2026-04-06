@@ -80,6 +80,9 @@ export interface CreateExchangeRequest {
 // ---- Prices ----
 
 export interface RefreshPricesResponse {
+  throttled: boolean
+  reason?: "cooldown" | "in_progress"
+  nextAllowedAt?: string
   results: Array<{
     assetId: number
     symbol: string

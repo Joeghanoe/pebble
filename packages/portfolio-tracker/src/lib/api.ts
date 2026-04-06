@@ -1,3 +1,5 @@
+import type { RefreshPricesResponse } from "@/types/api"
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -13,8 +15,8 @@ declare global {
 let _base = ""
 
 export async function initApiBase(): Promise<void> {
-  if (typeof window !== "undefined" && window.electronAPI?.isElectron) {
-    const port = await window.electronAPI.getApiPort()
+  if (globalThis.window?.electronAPI?.isElectron) {
+    const port = await globalThis.window.electronAPI.getApiPort()
     _base = `http://127.0.0.1:${port}`
   }
 }
@@ -28,10 +30,15 @@ async function mutateJson<T>(
   path: string,
   body?: unknown
 ): Promise<T> {
+  let hasBody = true
+  if (body === undefined) {
+    hasBody = false
+  }
+
   const res = await fetch(apiUrl(path), {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    headers: hasBody ? { "Content-Type": "application/json" } : undefined,
+    body: hasBody ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {
     const err = (await res.json()) as { error?: string }
@@ -79,7 +86,7 @@ export const api = {
     coingeckoId?: string | null
   }) => mutateJson<unknown>("PUT", `/api/assets/${id}`, body),
 
-  refreshPrices: () => mutateJson<unknown>("POST", "/api/prices/refresh"),
+  refreshPrices: () => mutateJson<RefreshPricesResponse>("POST", "/api/prices/refresh"),
 
   setSecret: (name: string, value: string) =>
     mutateJson<unknown>("POST", `/api/secrets/${name}`, { value }),

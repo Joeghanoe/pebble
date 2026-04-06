@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/api"
+import type { RefreshPricesResponse } from "@/types/api"
 
 const COOLDOWN_MS = 15 * 60 * 1000
 
@@ -17,7 +18,10 @@ export function useRefreshPrices(assetId?: number) {
 
   const mutation = useMutation({
     mutationFn: () => api.refreshPrices(),
-    onSuccess: () => {
+    onSuccess: (response: RefreshPricesResponse) => {
+      if (response.throttled) {
+        return
+      }
       void queryClient.invalidateQueries({ queryKey: ["positions"] })
       void queryClient.invalidateQueries({ queryKey: ["net-worth"] })
     },
