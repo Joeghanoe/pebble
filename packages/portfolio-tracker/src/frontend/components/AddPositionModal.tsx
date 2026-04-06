@@ -132,7 +132,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
           </Dialog.Title>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div>
+              <div className="gap-2 flex-col flex">
                 <Label htmlFor="symbol">Symbol</Label>
                 <Input
                   id="symbol"
@@ -144,7 +144,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
                   required
                 />
               </div>
-              <div>
+              <div className="gap-2 flex-col flex">
                 <Label htmlFor="assetType">Type</Label>
                 <select
                   id="assetType"
@@ -163,7 +163,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
               </div>
             </div>
 
-            <div>
+            <div className="gap-2 flex-col flex">
               <Label htmlFor="name">Name</Label>
               <Input
                 id="name"
@@ -180,7 +180,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
               />
             </div>
 
-            <div>
+            <div className="gap-2 flex-col flex">
               <Label htmlFor="exchangeId">Exchange / Broker</Label>
               <select
                 id="exchangeId"
@@ -203,7 +203,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
             </div>
 
             {type === "etf" && (
-              <div>
+              <div className="gap-2 flex-col flex">
                 <Label htmlFor="yahooTicker">Ticker</Label>
                 <Input
                   id="yahooTicker"
@@ -219,7 +219,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
             )}
 
             {type === "crypto" && (
-              <div>
+              <div className="gap-2 flex-col flex">
                 <Label htmlFor="coingeckoId">CoinGecko ID</Label>
                 <Input
                   id="coingeckoId"

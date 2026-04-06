@@ -17,6 +17,16 @@ export function getLatestPrice(assetId: number): PriceCache | null {
     .get(assetId);
 }
 
+export function getLatestExchangeRate(): number | null {
+  const row = db
+    .query<{ exchange_rate: number }, []>(
+      "SELECT exchange_rate FROM price_cache ORDER BY date DESC LIMIT 1"
+    )
+    .get();
+
+  return row?.exchange_rate ?? null;
+}
+
 export function upsertPrice(
   assetId: number,
   date: string,
