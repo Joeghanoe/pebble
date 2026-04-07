@@ -24,7 +24,7 @@ import { buildPositions } from "./services/positions";
 import type { CreateAssetRequest, UpdateAssetRequest, CreateExchangeRequest, CreateTransactionRequest, UpdateTransactionRequest, RefreshPricesResponse } from "./types/api";
 
 const DB_PATH = process.env["DB_PATH"] ?? "./portfolio.db";
-const SERVICE = "com.portfolio-tracker.desktop";
+const SERVICE = "com.pebble.desktop";
 
 // ── Route registry ────────────────────────────────────────────────────────────
 

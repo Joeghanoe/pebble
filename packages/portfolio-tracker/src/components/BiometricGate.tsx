@@ -13,40 +13,22 @@ export function BiometricGate({ children }: BiometricGateProps) {
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // Skip biometrics in dev mode
-  if (import.meta.env.DEV) {
-    return <>{children}</>;
-  }
-
-  useEffect(() => {
-    authenticateUser();
-  }, []);
-
   const authenticateUser = async () => {
     setAuthState("loading");
     setErrorMessage("");
 
     try {
-      // Skip if not in Tauri environment
-      if (typeof window === "undefined" || !(window as Window & { __TAURI__?: unknown }).__TAURI__) {
-        setAuthState("success");
-        return;
-      }
-
       const { checkStatus, authenticate } = await import(
         "@choochmeque/tauri-plugin-biometry-api"
       );
 
-      // Check if biometrics are available
       const status = await checkStatus();
 
       if (!status.isAvailable || status.biometryType === 0) {
-        // Biometrics not available - graceful degradation
         setAuthState("no-biometry");
         return;
       }
 
-      // Attempt authentication
       await authenticate("Authenticate to access Portfolio Tracker", {
         allowDeviceCredential: true,
         cancelTitle: "Cancel",
@@ -61,6 +43,20 @@ export function BiometricGate({ children }: BiometricGateProps) {
       );
     }
   };
+
+  useEffect(() => {
+    // Skip biometrics in dev mode
+    if (import.meta.env.DEV) {
+      setAuthState("success");
+      return;
+    }
+    authenticateUser();
+  }, []);
+
+  // Skip biometrics in dev mode (early return for render)
+  if (import.meta.env.DEV) {
+    return <>{children}</>;
+  }
 
   // Loading state
   if (authState === "loading") {

@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { resetPriceService } from "../services/price-service-factory";
 
-const SERVICE = "com.portfolio-tracker.desktop";
+const SERVICE = "com.pebble.desktop";
 
 async function keytarSet(name: string, value: string): Promise<void> {
   const { default: keytar } = await import("keytar");
