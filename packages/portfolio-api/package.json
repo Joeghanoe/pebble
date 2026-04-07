@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
-    "start": "bun run src/index.ts",
-    "build:server-node": "cd ../portfolio-tracker-electron && bun run build.electron.ts"
+    "start": "bun run src/index.ts"
   },
   "dependencies": {
     "elysia": "latest",

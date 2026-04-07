@@ -1,28 +1,11 @@
 import type { RefreshPricesResponse } from "@/types/api"
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      isElectron: boolean
-      getApiPort: () => Promise<number>
-      getApiKey: (name: string) => Promise<string | null>
-      setApiKey: (name: string, value: string) => Promise<void>
-      deleteApiKey: (name: string) => Promise<void>
-    }
-  }
-}
-
-let _base = ""
-
-export async function initApiBase(): Promise<void> {
-  if (globalThis.window?.electronAPI?.isElectron) {
-    const port = await globalThis.window.electronAPI.getApiPort()
-    _base = `http://127.0.0.1:${port}`
-  }
-}
+// In dev, Vite proxies /api → http://127.0.0.1:39131 (no base needed).
+// In production (bundled Tauri), we call the sidecar directly.
+const API_BASE = import.meta.env.DEV ? "" : "http://127.0.0.1:39131"
 
 export function apiUrl(path: string): string {
-  return `${_base}${path}`
+  return `${API_BASE}${path}`
 }
 
 async function mutateJson<T>(

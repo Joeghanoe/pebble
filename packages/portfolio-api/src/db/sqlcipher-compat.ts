@@ -2,11 +2,8 @@
  * Drop-in replacement for `bun:sqlite`'s Database class, backed by
  * better-sqlite3-multiple-ciphers (SQLCipher).
  *
- * When bundled for Electron, esbuild aliases `bun:sqlite` to this file so
- * that src/db/runner.ts and all query files continue to work unchanged.
- *
- * The encryption key is read from DB_ENCRYPTION_KEY env var and applied
- * immediately after the database is opened.
+ * Used when bundling for non-Bun runtimes (e.g. Node.js fallback).
+ * The encryption key is read from DB_ENCRYPTION_KEY env var.
  */
 
 import BetterSqlite3 from "better-sqlite3-multiple-ciphers";

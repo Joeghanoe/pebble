@@ -1,7 +1,7 @@
 /**
- * Node.js-compatible HTTP server — used as the Electron sidecar.
- * When bundled by esbuild for Electron, `bun:sqlite` is aliased to
- * `./db/sqlcipher-compat.ts` so all DB queries work with SQLCipher.
+ * Node.js-compatible HTTP server — used as the Tauri sidecar fallback.
+ * This file is kept for reference but the primary sidecar entry point is
+ * src/index.ts (Bun runtime with bun:sqlite).
  */
 
 import { createServer, IncomingMessage, ServerResponse } from "node:http";

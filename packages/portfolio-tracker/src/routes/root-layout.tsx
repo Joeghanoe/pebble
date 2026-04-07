@@ -30,7 +30,7 @@ export function RootLayout() {
               <TrendingUp size={14} />
             </div>
             <span className="text-sm text-sidebar-foreground">
-              Portfolio Tracker
+              Pebble Tracker
             </span>
           </div>
         </SidebarHeader>

@@ -36,3 +36,25 @@
 - `src/hooks/use-refresh-prices.ts` — Auto-refresh with per-key cooldown
 - `src/lib/position-analytics.ts` — Transaction analysis and chart data building
 - `src/frontend/components/ApiKeyInput.tsx` — Reusable API key input component
+
+### Tauri v2 Vite Integration (2026-04-06)
+
+Configured Vite for Tauri v2 desktop app compatibility while preserving all existing React + Tailwind setup. Key additions: fixed port (5173) with `strictPort`, conditional HMR for mobile dev via `TAURI_DEV_HOST`, platform-specific build targets (chrome105/safari13), debug-aware minification/sourcemaps, and Rust file watching exclusion. The existing `/api` proxy remains functional in both standalone and Tauri dev modes.
+
+### Build Target Update for Recharts v3 (2026-04-06)
+
+Updated Vite build target from `safari13` to `safari16` to fix build failure with recharts v3.8.1. Recharts v3 uses modern JavaScript features (destructuring in class properties, private fields) that esbuild cannot transform to `safari13`. The `safari16` target (Sept 2022) is safe for all macOS versions that can run Tauri v2, which requires macOS 12+ with WKWebView that supports Safari 15/16+ features. This resolves the esbuild transformation error: "Transforming destructuring to the configured target environment is not supported yet".
+
+### Biometric Authentication Gate (2026-04-06)
+
+Created a production security gate pattern using `@choochmeque/tauri-plugin-biometry-api` that blocks all app access until biometric authentication succeeds. Key design decisions:
+
+1. **Dev Mode Bypass** — `import.meta.env.DEV` check returns children immediately, preserving fast dev workflow without breaking HMR.
+2. **Graceful Degradation** — When biometrics unavailable (desktop without TouchID/FaceID), shows persistent warning banner but allows access. Security warning is visible but doesn't lock out users on unsupported hardware.
+3. **Provider Order** — Gate sits INSIDE `<ThemeProvider>` so auth UI respects theme, but WRAPS `<RouterProvider>` so no routes render until auth succeeds.
+4. **State Machine** — Four states: `loading` (spinner), `success` (render children), `error` (retry button), `no-biometry` (warning banner + children). Each state has clear UI with shadcn components.
+5. **Dynamic Import** — Biometry API imported conditionally to avoid errors in non-Tauri environments (web preview, tests).
+
+**Key Files:**
+- `src/components/BiometricGate.tsx` — Auth gate component with state machine
+- `src/main.tsx` — Wraps RouterProvider with BiometricGate inside ThemeProvider
