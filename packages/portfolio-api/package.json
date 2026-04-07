@@ -7,12 +7,11 @@
     "start": "bun run src/index.ts"
   },
   "dependencies": {
-    "elysia": "latest",
     "@elysiajs/cors": "latest",
-    "date-fns": "^4.1.0",
-    "zod": "^4.3.6",
     "better-sqlite3-multiple-ciphers": "^12.8.0",
-    "keytar": "^7.9.0"
+    "date-fns": "^4.1.0",
+    "elysia": "latest",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "bun-types": "latest",

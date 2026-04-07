@@ -20,7 +20,8 @@ export class Database {
   private _db: BetterSqlite3.Database;
 
   constructor(path: string, _options?: { create?: boolean; readonly?: boolean }) {
-    this._db = new BetterSqlite3(path);
+    const addonPath = process.env["SQLITE_ADDON_PATH"];
+    this._db = new BetterSqlite3(path, addonPath ? { nativeBinding: addonPath } : undefined);
 
     const encKey = process.env["DB_ENCRYPTION_KEY"];
     if (encKey) {
