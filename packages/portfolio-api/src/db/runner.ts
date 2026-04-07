@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { readdir, readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { BUNDLED_MIGRATIONS } from "./migrations-bundle";
 
 // import.meta.dir is Bun-specific; fall back to Node's import.meta.url
 const _dir: string =
@@ -45,24 +46,26 @@ export async function runMigrations(database: Database = db): Promise<void> {
     .all();
   const appliedSet = new Set(applied.map((r) => r.filename));
 
-  // Read migration files
-  let files: string[];
+  // Read migration files — fall back to pre-bundled strings in compiled binaries
+  // where the virtual bun FS doesn't support readdir/readFile.
+  let migrations: Array<{ filename: string; sql: string }>;
   try {
-    files = await readdir(MIGRATIONS_DIR);
+    const files = await readdir(MIGRATIONS_DIR);
+    const sqlFiles = files.filter((f) => f.endsWith(".sql")).sort();
+    migrations = await Promise.all(
+      sqlFiles.map(async (filename) => ({
+        filename,
+        sql: await readFile(join(MIGRATIONS_DIR, filename), "utf-8"),
+      }))
+    );
   } catch {
-    console.warn("No migrations directory found at", MIGRATIONS_DIR);
-    return;
+    migrations = BUNDLED_MIGRATIONS;
   }
 
-  const sqlFiles = files.filter((f) => f.endsWith(".sql")).sort();
-
-  for (const filename of sqlFiles) {
+  for (const { filename, sql } of migrations) {
     if (appliedSet.has(filename)) {
       continue;
     }
-
-    const filePath = join(MIGRATIONS_DIR, filename);
-    const sql = await readFile(filePath, "utf-8");
 
     // Run migration in a transaction
     const applyMigration = database.transaction(() => {

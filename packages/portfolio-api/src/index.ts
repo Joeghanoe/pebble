@@ -5,7 +5,8 @@ import { createApp } from "./app";
 await runMigrations();
 await runSnapshotBackfill();
 
+const port = Number(process.env["PORT"] ?? 3131);
 const app = createApp();
-app.listen(3131);
+app.listen(port);
 
 console.log(`Portfolio API running on http://${app.server?.hostname}:${app.server?.port}`);

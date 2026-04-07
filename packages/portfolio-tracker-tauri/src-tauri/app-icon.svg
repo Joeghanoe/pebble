@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" rx="224" fill="#0A0A0A"/>
+  <!-- Rising bars -->
+  <rect x="148" y="640" width="140" height="236" rx="20" fill="#22D3EE"/>
+  <rect x="332" y="480" width="140" height="396" rx="20" fill="#22D3EE"/>
+  <rect x="516" y="320" width="140" height="556" rx="20" fill="#4ADE80"/>
+  <rect x="700" y="160" width="140" height="716" rx="20" fill="#4ADE80"/>
+  <!-- Upward arrow overlay -->
+  <polyline points="148,580 332,420 516,260 840,100" stroke="#FFFFFF" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.25"/>
+</svg>
