@@ -57,7 +57,7 @@ export const api = {
   createAsset: (body: {
     symbol: string
     name: string
-    type: "crypto" | "etf" | "cash"
+    type: "crypto" | "etf" | "cash" | "stock"
     exchangeId: number
     yahooTicker?: string
     coingeckoId?: string
@@ -68,7 +68,7 @@ export const api = {
     body: {
       symbol?: string
       name?: string
-      type?: "crypto" | "etf" | "cash"
+      type?: "crypto" | "etf" | "cash" | "stock"
       exchangeId?: number
       yahooTicker?: string | null
       coingeckoId?: string | null

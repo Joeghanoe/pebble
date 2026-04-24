@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/chart"
 import type { GetNetWorthResponse } from "@/types/api"
 
+type Period = "1d" | "1w" | "1m"
+
 function formatEur(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
@@ -41,6 +43,12 @@ const netWorthChartConfig = {
   },
 } satisfies ChartConfig
 
+const PERIODS: { label: string; value: Period }[] = [
+  { label: "1D", value: "1d" },
+  { label: "1W", value: "1w" },
+  { label: "1M", value: "1m" },
+]
+
 interface Props {
   totalValue: number
   totalValueBtc: number | null
@@ -49,6 +57,8 @@ interface Props {
   positionsLoading: boolean
   netWorthLoading: boolean
   chartData: GetNetWorthResponse["snapshots"]
+  period: Period
+  onPeriodChange: (p: Period) => void
   onRefresh: () => void
   isRefreshing: boolean
 }
@@ -61,6 +71,8 @@ export function TotalValueHeader({
   positionsLoading,
   netWorthLoading,
   chartData,
+  period,
+  onPeriodChange,
   onRefresh,
   isRefreshing,
 }: Readonly<Props>) {
@@ -94,62 +106,80 @@ export function TotalValueHeader({
     )
   } else {
     chartContent = (
-      <ChartContainer
-        config={netWorthChartConfig}
-        className="aspect-auto h-28 w-full"
-        initialDimension={{ width: 320, height: 200 }}
-      >
-        <LineChart
-          accessibilityLayer
-          data={chartData}
-          margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+      <div className="relative h-28 w-full">
+        <div className="absolute top-0 right-0 z-10 flex gap-1">
+          {PERIODS.map(({ label, value }) => (
+            <button
+              key={value}
+              onClick={() => onPeriodChange(value)}
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors",
+                period === value
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <ChartContainer
+          config={netWorthChartConfig}
+          className="h-28 w-full"
+          initialDimension={{ width: 320, height: 200 }}
         >
-          <CartesianGrid vertical={false} horizontal={false} />
-          <XAxis
-            dataKey="date"
-            tickLine={false}
-            tick={false}
-            axisLine={false}
-            tickMargin={8}
-            tickFormatter={(value: string) => formatDate(value).slice(0, 5)}
-          />
-          <YAxis
-            hide
-            domain={["dataMin - 50", "dataMax + 50"]}
-            axisLine={false}
-            tickLine={false}
-          />
-          <ChartTooltip
-            cursor={false}
-            content={
-              <ChartTooltipContent
-                formatter={(value) => formatEur(Number(value))}
-                labelFormatter={(label) => formatDate(String(label))}
-              />
-            }
-          />
-          <Line
-            dataKey="total_eur"
-            type="monotone"
-            stroke="var(--color-total_eur)"
-            fill="var(--color-total_eur)"
-            fillOpacity={0.2}
-            strokeWidth={2}
-            dot={false}
-            isAnimationActive={false}
-          />
-          <Line
-            dataKey="invested_eur"
-            type="monotone"
-            stroke="var(--color-invested_eur)"
-            fill="var(--color-invested_eur)"
-            fillOpacity={0.05}
-            strokeWidth={2}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </ChartContainer>
+          <LineChart
+            accessibilityLayer
+            data={chartData}
+            margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+          >
+            <CartesianGrid vertical={false} horizontal={false} />
+            <XAxis
+              dataKey="date"
+              tickLine={false}
+              tick={false}
+              axisLine={false}
+              tickMargin={8}
+              tickFormatter={(value: string) => formatDate(value).slice(0, 5)}
+            />
+            <YAxis
+              hide
+              domain={["dataMin - 50", "dataMax + 50"]}
+              axisLine={false}
+              tickLine={false}
+            />
+            <ChartTooltip
+              cursor={false}
+              content={
+                <ChartTooltipContent
+                  formatter={(value) => formatEur(Number(value))}
+                  labelFormatter={(label) => formatDate(String(label))}
+                />
+              }
+            />
+            <Line
+              dataKey="total_eur"
+              type="monotone"
+              stroke="var(--color-total_eur)"
+              fill="var(--color-total_eur)"
+              fillOpacity={0.2}
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
+            />
+            <Line
+              dataKey="invested_eur"
+              type="monotone"
+              stroke="var(--color-invested_eur)"
+              fill="var(--color-invested_eur)"
+              fillOpacity={0.05}
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ChartContainer>
+      </div>
     )
   }
 
@@ -180,7 +210,7 @@ export function TotalValueHeader({
         </div>
       </div>
 
-      {/* Contains the chart over time (max 1y and 365d grain) */}
+      {/* Contains the chart over time */}
       <div className="col-span-2">{chartContent}</div>
 
       {/* Contains Sync Button (to refresh data) */}

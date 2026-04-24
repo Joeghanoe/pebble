@@ -1,12 +1,10 @@
 import { Elysia, t } from "elysia";
 import { listTransactionsByAsset, createTransaction, updateTransaction, softDeleteTransaction, getTransactionById } from "../db/queries/transactions";
-import { recalculateFifoForAsset } from "../services/fifo-recalc";
 
 export const transactionPlugin = new Elysia({ prefix: "/api/transactions" })
   .post("/", ({ body, set }) => {
     const { assetId, date, type, units, eurAmount, notes } = body;
     const tx = createTransaction(assetId, date, type, Math.abs(units), Math.abs(eurAmount), notes ?? null);
-    recalculateFifoForAsset(assetId);
     set.status = 201;
     return { transaction: tx };
   }, {
@@ -36,7 +34,6 @@ export const transactionPlugin = new Elysia({ prefix: "/api/transactions" })
       eur_amount: body.eurAmount !== undefined ? Math.abs(body.eurAmount) : undefined,
       notes: body.notes,
     });
-    recalculateFifoForAsset(existing.asset_id);
     return { ok: true };
   }, {
     body: t.Object({
@@ -53,6 +50,5 @@ export const transactionPlugin = new Elysia({ prefix: "/api/transactions" })
     const existing = getTransactionById(id);
     if (!existing) { set.status = 404; return { error: "Not found" }; }
     softDeleteTransaction(id);
-    recalculateFifoForAsset(existing.asset_id);
     return { ok: true };
   });

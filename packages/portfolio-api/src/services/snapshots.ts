@@ -1,18 +1,16 @@
-import { endOfMonth, addMonths, parseISO, format, isBefore, isAfter } from "date-fns";
-import { getEarliestTransactionDate, upsertSnapshot, getSnapshot } from "../db/queries/snapshots";
+import { addDays, format, isAfter, parseISO } from "date-fns";
+import {
+  getEarliestTransactionDate,
+  upsertSnapshot,
+  getSnapshot,
+  upsertPositionSnapshot,
+} from "../db/queries/snapshots";
+import { getInvestedEurOnDate, getInvestedEurForAssetOnDate } from "../db/queries/transactions";
 import { listAssets } from "../db/queries/assets";
 import { getPriceOnOrBefore } from "../db/queries/prices";
 import { getPriceService } from "./price-service-factory";
 import { db } from "../db/runner";
 
-interface UnitsRow {
-  asset_id: number;
-  units: number;
-}
-
-/**
- * Calculate units held for an asset as of a specific date (end of day).
- */
 function getUnitsHeldOnDate(assetId: number, date: string): number {
   const result = db
     .query<{ total: number }, [number, string]>(
@@ -27,59 +25,68 @@ function getUnitsHeldOnDate(assetId: number, date: string): number {
   return result?.total ?? 0;
 }
 
+async function runSnapshotForDate(
+  dateStr: string,
+  assets: ReturnType<typeof listAssets>,
+  fetchMissing: boolean
+): Promise<boolean> {
+  const priceService = fetchMissing ? getPriceService() : null;
+  let totalEur = 0;
+  let anyPosition = false;
+
+  for (const asset of assets) {
+    const units = getUnitsHeldOnDate(asset.id, dateStr);
+    if (units <= 0) continue;
+    anyPosition = true;
+
+    let priceRow = getPriceOnOrBefore(asset.id, dateStr);
+    if (!priceRow && priceService) {
+      await priceService.fetchHistoricalPrice(asset, dateStr);
+      priceRow = getPriceOnOrBefore(asset.id, dateStr);
+    }
+    if (!priceRow) return false;
+
+    const value = units * priceRow.price_eur;
+    const invested = getInvestedEurForAssetOnDate(asset.id, dateStr);
+    totalEur += value;
+    upsertPositionSnapshot(dateStr, asset.id, units, priceRow.price_eur, value, invested);
+  }
+
+  if (!anyPosition) return false;
+
+  upsertSnapshot(dateStr, totalEur, getInvestedEurOnDate(dateStr));
+  return true;
+}
+
 /**
- * Run month-end snapshot backfill.
- * For each month-end since the earliest transaction, try to write a snapshot.
- * Fetches historical prices on demand for any month-end date missing from the cache.
+ * Creates position and net worth snapshots for today using cached prices only.
+ * Called after a price refresh so the current day is always up to date.
+ */
+export async function runTodaySnapshot(): Promise<void> {
+  const today = format(new Date(), "yyyy-MM-dd");
+  const assets = listAssets().filter((a) => a.type !== "cash");
+  await runSnapshotForDate(today, assets, false);
+}
+
+/**
+ * Backfills daily snapshots from the earliest transaction date to today.
+ * Fetches missing historical prices on demand. Skips dates already snapshotted.
  */
 export async function runSnapshotBackfill(): Promise<void> {
   const earliestDate = getEarliestTransactionDate();
   if (!earliestDate) return;
 
-  const assets = listAssets().filter(a => a.type !== "cash");
+  const assets = listAssets().filter((a) => a.type !== "cash");
   if (assets.length === 0) return;
 
-  const priceService = getPriceService();
   const today = new Date();
-  let cursor = endOfMonth(parseISO(earliestDate));
+  let cursor = parseISO(earliestDate);
 
-  while (isBefore(cursor, today) || format(cursor, "yyyy-MM-dd") === format(endOfMonth(today), "yyyy-MM-dd")) {
+  while (!isAfter(cursor, today)) {
     const dateStr = format(cursor, "yyyy-MM-dd");
-
-    // Skip if snapshot already exists
     if (!getSnapshot(dateStr)) {
-      let totalEur = 0;
-      let allPricesAvailable = true;
-
-      for (const asset of assets) {
-        const units = getUnitsHeldOnDate(asset.id, dateStr);
-        if (units <= 0) continue;
-
-        // Try cache first
-        let priceRow = getPriceOnOrBefore(asset.id, dateStr);
-
-        // If no cached price, fetch it now
-        if (!priceRow) {
-          await priceService.fetchHistoricalPrice(asset, dateStr);
-          priceRow = getPriceOnOrBefore(asset.id, dateStr);
-        }
-
-        if (!priceRow) {
-          allPricesAvailable = false;
-          break;
-        }
-        totalEur += units * priceRow.price_eur;
-      }
-
-      if (allPricesAvailable) {
-        upsertSnapshot(dateStr, totalEur);
-      }
+      await runSnapshotForDate(dateStr, assets, true);
     }
-
-    // Move to next month-end
-    cursor = endOfMonth(addMonths(cursor, 1));
-
-    // Safety: don't go past today
-    if (isAfter(cursor, today)) break;
+    cursor = addDays(cursor, 1);
   }
 }

@@ -15,7 +15,7 @@ interface Props {
 }
 
 function defaultExchangeForType(
-  type: "crypto" | "etf" | "cash",
+  type: "crypto" | "etf" | "cash" | "stock",
   exchanges: Exchange[]
 ): number {
   if (type === "crypto") {
@@ -33,7 +33,7 @@ function defaultExchangeForType(
 }
 
 function exchangesForType(
-  type: "crypto" | "etf" | "cash",
+  type: "crypto" | "etf" | "cash" | "stock",
   exchanges: Exchange[]
 ): Exchange[] {
   if (type === "crypto") return exchanges.filter((e) => e.type === "crypto")
@@ -48,7 +48,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
   const [open, setOpen] = useState(false)
   const [symbol, setSymbol] = useState("")
   const [name, setName] = useState("")
-  const [type, setType] = useState<"crypto" | "etf" | "cash">("crypto")
+  const [type, setType] = useState<"crypto" | "etf" | "cash" | "stock">("crypto")
   const [exchangeId, setExchangeId] = useState<number>(() =>
     defaultExchangeForType("crypto", exchanges)
   )
@@ -61,10 +61,10 @@ export function AddPositionModal({ exchanges, children }: Props) {
     setExchangeId(defaultExchangeForType(type, exchanges))
   }, [type, exchanges])
 
-  function handleTypeChange(newType: "crypto" | "etf" | "cash") {
+  function handleTypeChange(newType: "crypto" | "etf" | "cash" | "stock") {
     setType(newType)
     // Clear fields that don't apply to the new type
-    if (newType !== "etf") setYahooTicker("")
+    if (newType !== "etf" && newType !== "stock") setYahooTicker("")
     if (newType !== "crypto") setCoingeckoId("")
   }
 
@@ -139,7 +139,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value)}
                   placeholder={
-                    type === "crypto" ? "BTC" : type === "etf" ? "VUAA" : "EUR"
+                    type === "crypto" ? "BTC" : type === "etf" ? "VUAA" : type === "stock" ? "AAPL" : "EUR"
                   }
                   required
                 />
@@ -151,13 +151,14 @@ export function AddPositionModal({ exchanges, children }: Props) {
                   value={type}
                   onChange={(e) =>
                     handleTypeChange(
-                      e.target.value as "crypto" | "etf" | "cash"
+                      e.target.value as "crypto" | "etf" | "cash" | "stock"
                     )
                   }
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                 >
                   <option value="crypto">Crypto</option>
                   <option value="etf">ETF</option>
+                  <option value="stock">Stock</option>
                   <option value="cash">Cash</option>
                 </select>
               </div>
@@ -174,7 +175,9 @@ export function AddPositionModal({ exchanges, children }: Props) {
                     ? "Bitcoin"
                     : type === "etf"
                       ? "Vanguard S&P 500 UCITS ETF"
-                      : "Cash"
+                      : type === "stock"
+                        ? "Apple Inc."
+                        : "Cash"
                 }
                 required
               />
@@ -202,7 +205,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
               )}
             </div>
 
-            {type === "etf" && (
+            {(type === "etf" || type === "stock") && (
               <div className="gap-2 flex-col flex">
                 <Label htmlFor="yahooTicker">Ticker</Label>
                 <Input

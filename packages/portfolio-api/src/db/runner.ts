@@ -67,15 +67,39 @@ export async function runMigrations(database: Database = db): Promise<void> {
       continue;
     }
 
-    // Run migration in a transaction
-    const applyMigration = database.transaction(() => {
-      database.run(sql);
-      database
-        .query("INSERT INTO schema_migrations (filename, applied_at) VALUES (?, ?)")
-        .run(filename, new Date().toISOString());
-    });
+    // PRAGMA foreign_keys cannot be changed inside a transaction (it's a no-op there).
+    // Disable it at the connection level before starting so table-recreation migrations
+    // can DROP parent tables without tripping FK checks. Re-enable unconditionally after.
+    database.run("PRAGMA foreign_keys = OFF");
 
-    applyMigration();
-    console.log(`Applied migration: ${filename}`);
+    try {
+      const applyMigration = database.transaction(() => {
+        // Split on semicolons and run each statement individually.
+        // db.exec() is deprecated in Bun; db.run() only handles a single statement,
+        // so we split manually. Our migration files don't have semicolons inside
+        // string literals, so this is safe.
+        const statements = sql
+          .split(";")
+          .map((s) => s.trim())
+          .filter((s) => {
+            // Drop entries that are empty or contain only SQL comments
+            const withoutComments = s.replace(/--[^\n]*/g, "").trim();
+            return withoutComments.length > 0;
+          });
+
+        for (const stmt of statements) {
+          database.run(stmt);
+        }
+
+        database
+          .query("INSERT INTO schema_migrations (filename, applied_at) VALUES (?, ?)")
+          .run(filename, new Date().toISOString());
+      });
+
+      applyMigration();
+      console.log(`Applied migration: ${filename}`);
+    } finally {
+      database.run("PRAGMA foreign_keys = ON");
+    }
   }
 }

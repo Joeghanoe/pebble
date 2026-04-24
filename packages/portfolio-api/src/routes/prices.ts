@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { listAssets } from "../db/queries/assets";
 import { getPriceService } from "../services/price-service-factory";
+import { runTodaySnapshot } from "../services/snapshots";
 import type { RefreshPricesResponse } from "../types/api";
 
 const REFRESH_COOLDOWN_MS = 15 * 60 * 1000;
@@ -41,6 +42,7 @@ export const pricePlugin = new Elysia({ prefix: "/api/prices" })
       }
 
       lastRefreshAt = Date.now();
+      await runTodaySnapshot();
       return {
         throttled: false,
         results,

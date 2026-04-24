@@ -2,6 +2,7 @@ import { listAssets } from "../db/queries/assets";
 import { getExchangeById } from "../db/queries/exchanges";
 import { getLatestExchangeRate, getLatestPrice } from "../db/queries/prices";
 import { getTransactionSummaryByAsset } from "../db/queries/transactions";
+import { computeRealizedPnlForAsset } from "./fifo-recalc";
 import { db } from "../db/runner";
 import type { PositionRow } from "../types/api";
 
@@ -16,22 +17,22 @@ export function buildPositions(): { positions: PositionRow[]; lastUpdated: strin
     if (!exchange) continue;
 
     const summary = getTransactionSummaryByAsset(asset.id);
-    const { unitsBought, unitsSold, totalInvested, realizedPnl } = summary;
+    const { unitsBought, unitsSold, totalInvested } = summary;
     const unitsHeld = unitsBought - unitsSold;
 
     const hadActivity = unitsBought > 0 || totalInvested > 0;
     if (hadActivity && unitsHeld <= 0) continue;
 
+    const realizedPnl = computeRealizedPnlForAsset(asset.id);
+
     let priceResult: PositionRow["priceResult"];
     let currentValueEur = 0;
 
-    // Cash positions are denominated in EUR in this app, so value is 1 EUR per unit.
     if (asset.type === "cash") {
       priceResult = {
         status: "ok",
         priceEur: 1,
         date: today,
-        // Use latest known EUR->USD rate when available; 0 means "unknown" for UI rendering.
         exchangeRate: latestExchangeRate ?? 0,
       };
       currentValueEur = unitsHeld;

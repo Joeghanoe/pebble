@@ -17,9 +17,9 @@ import {
   softDeleteTransaction,
   getTransactionById,
 } from "./db/queries/transactions";
-import { listSnapshots } from "./db/queries/snapshots";
+import { listSnapshotsAggregated } from "./db/queries/snapshots";
 import { getPriceService, resetPriceService } from "./services/price-service-factory";
-import { recalculateFifoForAsset } from "./services/fifo-recalc";
+import { runTodaySnapshot } from "./services/snapshots";
 import { buildPositions } from "./services/positions";
 import type { CreateAssetRequest, UpdateAssetRequest, CreateExchangeRequest, CreateTransactionRequest, UpdateTransactionRequest, RefreshPricesResponse } from "./types/api";
 
@@ -79,7 +79,6 @@ const routes: Array<{ pattern: string; handlers: Methods }> = [
       const data = await req.json() as CreateTransactionRequest;
       if (!data.assetId || !data.date || !data.type || !data.units || !data.eurAmount) return Response.json({ error: "assetId, date, type, units, eurAmount required" }, { status: 400 });
       const tx = createTransaction(data.assetId, data.date, data.type, Math.abs(data.units), Math.abs(data.eurAmount), data.notes ?? null);
-      recalculateFifoForAsset(data.assetId);
       return Response.json({ transaction: tx }, { status: 201 });
     },
   }},
@@ -98,7 +97,6 @@ const routes: Array<{ pattern: string; handlers: Methods }> = [
       const existing = getTransactionById(id);
       if (!existing) return Response.json({ error: "Not found" }, { status: 404 });
       updateTransaction(id, { date: data.date, type: data.type, units: data.units !== undefined ? Math.abs(data.units) : undefined, eur_amount: data.eurAmount !== undefined ? Math.abs(data.eurAmount) : undefined, notes: data.notes });
-      recalculateFifoForAsset(existing.asset_id);
       return Response.json({ ok: true });
     },
   }},
@@ -109,7 +107,6 @@ const routes: Array<{ pattern: string; handlers: Methods }> = [
       const existing = getTransactionById(id);
       if (!existing) return Response.json({ error: "Not found" }, { status: 404 });
       softDeleteTransaction(id);
-      recalculateFifoForAsset(existing.asset_id);
       return Response.json({ ok: true });
     },
   }},
@@ -128,11 +125,16 @@ const routes: Array<{ pattern: string; handlers: Methods }> = [
         const result = await priceService.fetchLivePrice(asset);
         results.push({ assetId: asset.id, symbol: asset.symbol, result });
       }
+      await runTodaySnapshot();
       return Response.json({ results });
     },
   }},
   { pattern: "/api/net-worth", handlers: {
-    GET: () => Response.json({ snapshots: listSnapshots() }),
+    GET: (req) => {
+      const url = new URL(req.url);
+      const period = (url.searchParams.get("period") ?? "1m") as "1d" | "1w" | "1m";
+      return Response.json({ snapshots: listSnapshotsAggregated(period) });
+    },
   }},
   { pattern: "/api/export", handlers: {
     GET: async () => {

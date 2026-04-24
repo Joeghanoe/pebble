@@ -19,7 +19,7 @@ export function EditPositionModal({ asset, exchanges }: Props) {
   const [open, setOpen] = useState(false)
   const [symbol, setSymbol] = useState(asset.symbol)
   const [name, setName] = useState(asset.name)
-  const [type, setType] = useState<"crypto" | "etf" | "cash">(asset.type)
+  const [type, setType] = useState<"crypto" | "etf" | "cash" | "stock">(asset.type)
   const [exchangeId, setExchangeId] = useState(asset.exchange_id)
   const [yahooTicker, setYahooTicker] = useState(asset.yahoo_ticker ?? "")
   const [coingeckoId, setCoingeckoId] = useState(asset.coingecko_id ?? "")
@@ -101,12 +101,13 @@ export function EditPositionModal({ asset, exchanges }: Props) {
                   id="edit-type"
                   value={type}
                   onChange={(e) =>
-                    setType(e.target.value as "crypto" | "etf" | "cash")
+                    setType(e.target.value as "crypto" | "etf" | "cash" | "stock")
                   }
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                 >
                   <option value="crypto">Crypto</option>
                   <option value="etf">ETF</option>
+                  <option value="stock">Stock</option>
                   <option value="cash">Cash</option>
                 </select>
               </div>

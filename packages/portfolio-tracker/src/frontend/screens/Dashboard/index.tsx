@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import { useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { fetchJson } from "@/lib/queryClient"
@@ -9,8 +10,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { SiteHeader } from "@/components/site-header"
 import { TotalValueHeader } from "./total-value-header"
 
+type Period = "1d" | "1w" | "1m"
+
 export function Dashboard() {
   const { refresh: refreshPrices, isPending: isRefreshing } = useRefreshPrices()
+  const [period, setPeriod] = useState<Period>("1m")
 
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
@@ -24,8 +28,8 @@ export function Dashboard() {
   })
 
   const { data: netWorthData, isLoading: netWorthLoading } = useQuery({
-    queryKey: ["net-worth"],
-    queryFn: () => fetchJson<GetNetWorthResponse>("/api/net-worth"),
+    queryKey: ["net-worth", period],
+    queryFn: () => fetchJson<GetNetWorthResponse>(`/api/net-worth?period=${period}`),
   })
 
   const positions = positionsData?.positions ?? []
@@ -68,6 +72,8 @@ export function Dashboard() {
           positionsLoading={positionsLoading}
           netWorthLoading={netWorthLoading}
           chartData={snapshots}
+          period={period}
+          onPeriodChange={setPeriod}
           onRefresh={refreshPrices}
           isRefreshing={isRefreshing}
         />
