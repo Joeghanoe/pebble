@@ -111,9 +111,15 @@ impl From<&str> for ContentType {
     }
 }
 
+pub mod assets_api;
 pub mod default_api;
-pub mod items_api;
-pub mod login_api;
-pub mod users_api;
+pub mod exchanges_api;
+pub mod export_api;
+pub mod net_worth_api;
+pub mod positions_api;
+pub mod prices_api;
+pub mod secrets_api;
+pub mod transactions_api;
+pub mod window_api;
 
 pub mod configuration;

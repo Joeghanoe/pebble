@@ -1,23 +1,18 @@
-"""
-Initialize database with default data.
-Called after migrations have been applied.
-"""
+"""Initialize database with default data. Called after migrations."""
 
 from loguru import logger
-from sqlmodel import Session
 
-from app.core.db import engine, init_db
+from app.core.db import init_db
 
 
 def init() -> None:
-    with Session(engine) as session:
-        init_db(session)
+    init_db()
 
 
 def main() -> None:
-    logger.info("Creating initial data")
+    logger.info("Initializing data")
     init()
-    logger.info("Initial data created")
+    logger.info("Data initialization complete")
 
 
 if __name__ == "__main__":

@@ -22,11 +22,11 @@ class Settings(BaseSettings):
     )
 
     # App settings
-    PROJECT_NAME: str = "Desktop App"
-    API_V1_STR: str = "/api/v1"
+    PROJECT_NAME: str = "Portfolio Tracker"
+    API_V1_STR: str = "/api"
     ENVIRONMENT: Literal["local", "development", "production"] = "local"
 
-    # Auth settings (opt-in, disabled by default for desktop)
+    # Auth disabled for local desktop use
     AUTH_REQUIRED: bool = False
     SECRET_KEY: str = secrets.token_urlsafe(32)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # Database settings (SQLite)
     # DATA_DIR is passed from Tauri (app_data_dir) or defaults to project root .data in dev
     DATA_DIR: Path = _get_default_data_dir()
-    DATABASE_NAME: str = "app.db"
+    DATABASE_NAME: str = "portfolio.db"
 
     @property
     def is_dev(self) -> bool:
@@ -51,9 +51,8 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 1430
 
-    # Default user settings (used when AUTH_REQUIRED=False)
-    DEFAULT_USER_EMAIL: str = "local@desktop.app"
-    DEFAULT_USER_NAME: str = "Local User"
+    # CoinGecko API key (stored in keyring, loaded into env on startup)
+    COINGECKO_API_KEY: str = ""
 
 
 settings = Settings()

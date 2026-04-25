@@ -5,17 +5,16 @@ export default defineConfig({
   output: "./src/client",
 
   plugins: [
-    "legacy/axios",
+    "legacy/fetch",
     {
       name: "@hey-api/sdk",
-      // NOTE: this doesn't allow tree-shaking
       asClass: true,
       operationId: true,
       classNameBuilder: "{{name}}Service",
       methodNameBuilder: (operation) => {
-        // @ts-expect-error
+        // @ts-expect-error - operation.name is not typed, but it should be there
         let name: string = operation.name
-        // @ts-expect-error
+        // @ts-expect-error - operation.service is not typed, but it should be there
         const service: string = operation.service
 
         if (service && name.toLowerCase().startsWith(service.toLowerCase())) {

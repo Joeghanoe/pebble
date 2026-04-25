@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"Default capabilities for Pebble desktop app","local":true,"windows":["main"],"permissions":["core:default","biometry:default",{"identifier":"shell:allow-execute","allow":[{"args":true,"name":"portfolio-api","sidecar":true}]}]}}
