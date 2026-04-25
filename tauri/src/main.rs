@@ -1,6 +1,6 @@
-// Prevents additional console window on Windows in release, do not remove!!
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    app_lib::run();
+    tauri_fastapi_full_stack_template_lib::run()
 }
