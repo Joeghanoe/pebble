@@ -6,7 +6,7 @@ class FrankfurterClient:
 
     async def get_rate(self, date: str) -> float:
         url = f"{self.BASE_URL}/{date}?from=EUR&to=USD"
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
             r = await client.get(url)
         r.raise_for_status()
         data = r.json()

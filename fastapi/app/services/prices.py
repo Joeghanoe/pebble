@@ -40,12 +40,19 @@ class PriceService:
         rate = await self._get_rate_safe(date)
 
         if asset.type == "crypto":
-            if not asset.coingecko_id:
-                return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
-            price = await self.coingecko.get_historical_price(asset.coingecko_id, date)
-            if price is not None:
-                upsert_price(session, asset.id, date, price, rate)  # type: ignore[arg-type]
-                return PriceResultOk(price_eur=price, date=date, exchange_rate=rate)
+            # Prefer Yahoo Finance when available — more reliable rate limits
+            if asset.yahoo_ticker:
+                usd_price = await self.yahoo.get_historical_price(asset.yahoo_ticker, date)
+                if usd_price is not None:
+                    price_eur = usd_price / rate
+                    upsert_price(session, asset.id, date, price_eur, rate)  # type: ignore[arg-type]
+                    return PriceResultOk(price_eur=price_eur, date=date, exchange_rate=rate)
+            # Fall back to CoinGecko for assets not listed on Yahoo
+            if asset.coingecko_id:
+                price = await self.coingecko.get_historical_price(asset.coingecko_id, date)
+                if price is not None:
+                    upsert_price(session, asset.id, date, price, rate)  # type: ignore[arg-type]
+                    return PriceResultOk(price_eur=price, date=date, exchange_rate=rate)
             return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
 
         if asset.type in ("etf", "stock"):
@@ -64,6 +71,14 @@ class PriceService:
         self, session: Session, asset: Asset, today: str
     ) -> PriceResultOk | PriceResultStale | PriceResultUnavailable:
         rate = await self._get_rate_safe(today)
+        # Prefer Yahoo Finance when available — more reliable rate limits
+        if asset.yahoo_ticker:
+            usd_price = await self.yahoo.get_live_price(asset.yahoo_ticker)
+            if usd_price is not None:
+                price_eur = usd_price / rate
+                upsert_price(session, asset.id, today, price_eur, rate)  # type: ignore[arg-type]
+                return PriceResultOk(price_eur=price_eur, date=today, exchange_rate=rate)
+        # Fall back to CoinGecko for assets not listed on Yahoo
         if asset.coingecko_id:
             price = await self.coingecko.get_live_price(asset.coingecko_id)
             if price is not None:
@@ -80,6 +95,13 @@ class PriceService:
         if price is not None:
             rate = await self._get_rate_safe(today)
             price_eur = price if is_eur_listing(asset.yahoo_ticker) else price / rate
+            upsert_price(session, asset.id, today, price_eur, rate)  # type: ignore[arg-type]
+            return PriceResultOk(price_eur=price_eur, date=today, exchange_rate=rate)
+        # Stooq unavailable or returned N/D — fall back to Yahoo Finance
+        yahoo_price = await self.yahoo.get_live_price(asset.yahoo_ticker)
+        if yahoo_price is not None:
+            rate = await self._get_rate_safe(today)
+            price_eur = yahoo_price if is_eur_listing(asset.yahoo_ticker) else yahoo_price / rate
             upsert_price(session, asset.id, today, price_eur, rate)  # type: ignore[arg-type]
             return PriceResultOk(price_eur=price_eur, date=today, exchange_rate=rate)
         return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]

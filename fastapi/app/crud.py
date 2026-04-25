@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date as date_cls, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import text
@@ -253,6 +253,20 @@ def get_price_on_or_before(session: Session, asset_id: int, date: str) -> PriceC
     ).first()
 
 
+def get_price_in_month(session: Session, asset_id: int, year: int, month: int) -> PriceCache | None:
+    """Return any price_cache entry that falls within the given calendar month."""
+    import calendar as _cal
+    month_start = f"{year:04d}-{month:02d}-01"
+    month_end = f"{year:04d}-{month:02d}-{_cal.monthrange(year, month)[1]:02d}"
+    return session.exec(
+        select(PriceCache)
+        .where(PriceCache.asset_id == asset_id)
+        .where(PriceCache.date >= month_start)
+        .where(PriceCache.date <= month_end)
+        .limit(1)
+    ).first()
+
+
 def upsert_price(session: Session, asset_id: int, date: str, price_eur: float, exchange_rate: float) -> None:
     existing = session.exec(
         select(PriceCache)
@@ -279,20 +293,44 @@ def get_max_price_date(session: Session) -> str | None:
 
 
 def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSnapshot]:
-    if period == "1d":
-        rows = session.exec(
-            text("SELECT date, total_eur, invested_eur FROM net_worth_snapshot ORDER BY date DESC LIMIT 60")
-        ).all()
-        return [NetWorthSnapshot(date=r[0], total_eur=r[1], invested_eur=r[2]) for r in reversed(rows)]
+    today = date_cls.today()
 
-    bucket = "strftime('%Y-%W', date)" if period == "1w" else "strftime('%Y-%m', date)"
-    sql = text(f"""
+    if period == "1d":
+        # One data point per day, last 60 days
+        cutoff = (today - timedelta(days=60)).isoformat()
+        rows = session.exec(
+            text(
+                "SELECT date, total_eur, invested_eur FROM net_worth_snapshot "
+                "WHERE date >= :cutoff ORDER BY date ASC"
+            ).bindparams(cutoff=cutoff)
+        ).all()
+        return [NetWorthSnapshot(date=r[0], total_eur=r[1], invested_eur=r[2]) for r in rows]
+
+    if period == "1w":
+        # One data point per ISO week (latest date in each week), last 60 weeks
+        sql = text("""
+            SELECT s.date, s.total_eur, s.invested_eur
+            FROM net_worth_snapshot s
+            JOIN (
+              SELECT MAX(date) AS max_date
+              FROM net_worth_snapshot
+              GROUP BY strftime('%Y-%W', date)
+              ORDER BY max_date DESC
+              LIMIT 60
+            ) g ON s.date = g.max_date
+            ORDER BY s.date ASC
+        """)
+        rows = session.exec(sql).all()
+        return [NetWorthSnapshot(date=r[0], total_eur=r[1], invested_eur=r[2]) for r in rows]
+
+    # 1m — one data point per calendar month (latest date in each month), last 60 months
+    sql = text("""
         SELECT s.date, s.total_eur, s.invested_eur
         FROM net_worth_snapshot s
         JOIN (
           SELECT MAX(date) AS max_date
           FROM net_worth_snapshot
-          GROUP BY {bucket}
+          GROUP BY strftime('%Y-%m', date)
           ORDER BY max_date DESC
           LIMIT 60
         ) g ON s.date = g.max_date

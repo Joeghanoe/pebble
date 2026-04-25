@@ -5,9 +5,9 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { queryClient } from "@/lib/queryClient";
 import { api } from "@/lib/api";
 import type { Exchange } from "@/types/db";
+import { queryClient } from "@/main";
 
 interface Props {
   exchanges: Exchange[];
@@ -44,7 +44,7 @@ function exchangesForType(
   return filtered.length > 0 ? filtered : exchanges;
 }
 
-export function AddPositionModal({ exchanges, children }: Props) {
+export function AddPositionModal({ exchanges, children }: Readonly<Props>) {
   const [open, setOpen] = useState(false);
   const [symbol, setSymbol] = useState("");
   const [name, setName] = useState("");

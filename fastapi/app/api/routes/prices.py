@@ -8,6 +8,7 @@ from app import crud
 from app.core.db import get_session
 from app.models import RefreshPricesResponse, RefreshResultItem
 from app.services.price_service_factory import get_price_service
+from app.services.snapshots import upsert_live_snapshot, run_price_correction_backfill, run_full_snapshot_recompute
 
 router = APIRouter(prefix="/prices", tags=["prices"])
 
@@ -53,4 +54,14 @@ async def refresh_prices(session: Session = Depends(get_session)) -> dict:
         ))
 
     _last_refresh_at = datetime.now(timezone.utc).timestamp()
+    upsert_live_snapshot(session)
     return RefreshPricesResponse(throttled=False, results=results).model_dump()
+
+
+@router.post("/backfill")
+async def backfill_prices(session: Session = Depends(get_session)) -> dict:
+    """Correct historical prices stored with the fallback exchange rate, then
+    wipe and recompute all net-worth snapshots from scratch."""
+    corrected = await run_price_correction_backfill(session)
+    await run_full_snapshot_recompute(session)
+    return {"corrected_prices": corrected}

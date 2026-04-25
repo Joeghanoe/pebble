@@ -82,6 +82,16 @@ export function TotalValueHeader({
   const lastSnapshot = chartData.at(-1);
   const lastUpdatedLabel = lastSnapshot ? formatDate(lastSnapshot.date) : "N/A";
 
+  // Replace the last chart point's total_eur with the live value so the
+  // rightmost dot always matches the "Total Worth" header — snapshots are
+  // written during backfill using historical API prices which can differ.
+  const today = new Date().toISOString().slice(0, 10);
+  const displayChartData = chartData.map((point, i) =>
+    i === chartData.length - 1 && point.date === today
+      ? { ...point, total_eur: totalValue }
+      : point,
+  );
+
   const getPnlColor = () => {
     if (positionsLoading) {
       return "text-muted-foreground";
@@ -98,7 +108,7 @@ export function TotalValueHeader({
   let chartContent: React.ReactNode;
   if (netWorthLoading) {
     chartContent = null;
-  } else if (chartData.length === 0) {
+  } else if (displayChartData.length === 0) {
     chartContent = (
       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
         No snapshots yet
@@ -130,7 +140,7 @@ export function TotalValueHeader({
         >
           <LineChart
             accessibilityLayer
-            data={chartData}
+            data={displayChartData}
             margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
           >
             <CartesianGrid vertical={false} horizontal={false} />
