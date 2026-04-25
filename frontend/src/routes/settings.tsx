@@ -1,8 +1,8 @@
-import { createRoute } from "@tanstack/react-router"
-import { rootRoute } from "./__root"
-import { Settings } from "@/frontend/screens/Settings"
-import { ExchangesService } from "@/client"
-import type { GetExchangesResponse } from "@/types/api"
+import { createRoute } from "@tanstack/react-router";
+import { rootRoute } from "./__root";
+import { Settings } from "@/frontend/screens/Settings";
+import { ExchangesService } from "@/client";
+import type { GetExchangesResponse } from "@/types/api";
 
 export const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -10,8 +10,9 @@ export const settingsRoute = createRoute({
   loader: ({ context: { queryClient } }) => {
     void queryClient.prefetchQuery({
       queryKey: ["exchanges"],
-      queryFn: () => ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
-    })
+      queryFn: () =>
+        ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+    });
   },
   component: Settings,
-})
+});

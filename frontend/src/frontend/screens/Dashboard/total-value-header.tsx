@@ -1,17 +1,17 @@
-import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
-import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
+import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@/components/ui/chart"
-import type { GetNetWorthResponse } from "@/types/api"
+} from "@/components/ui/chart";
+import type { GetNetWorthResponse } from "@/types/api";
 
-type Period = "1d" | "1w" | "1m"
+type Period = "1d" | "1w" | "1m";
 
 function formatEur(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
@@ -19,17 +19,17 @@ function formatEur(amount: number): string {
     currency: "EUR",
   })
     .format(amount)
-    .replaceAll(/\s+/g, "")
+    .replaceAll(/\s+/g, "");
 }
 
 function formatPct(pct: number): string {
-  const sign = pct >= 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
+  const sign = pct >= 0 ? "+" : "";
+  return `${sign}${pct.toFixed(2)}%`;
 }
 
 function formatDate(iso: string): string {
-  const [year, month, day] = iso.split("-")
-  return `${day}/${month}/${year}`
+  const [year, month, day] = iso.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 const netWorthChartConfig = {
@@ -41,26 +41,26 @@ const netWorthChartConfig = {
     label: "Invested",
     color: "var(--muted-foreground)",
   },
-} satisfies ChartConfig
+} satisfies ChartConfig;
 
 const PERIODS: { label: string; value: Period }[] = [
   { label: "1D", value: "1d" },
   { label: "1W", value: "1w" },
   { label: "1M", value: "1m" },
-]
+];
 
 interface Props {
-  totalValue: number
-  totalValueBtc: number | null
-  totalInvested: number
-  overallPnl: number
-  positionsLoading: boolean
-  netWorthLoading: boolean
-  chartData: GetNetWorthResponse["snapshots"]
-  period: Period
-  onPeriodChange: (p: Period) => void
-  onRefresh: () => void
-  isRefreshing: boolean
+  totalValue: number;
+  totalValueBtc: number | null;
+  totalInvested: number;
+  overallPnl: number;
+  positionsLoading: boolean;
+  netWorthLoading: boolean;
+  chartData: GetNetWorthResponse["snapshots"];
+  period: Period;
+  onPeriodChange: (p: Period) => void;
+  onRefresh: () => void;
+  isRefreshing: boolean;
 }
 
 export function TotalValueHeader({
@@ -76,34 +76,34 @@ export function TotalValueHeader({
   onRefresh,
   isRefreshing,
 }: Readonly<Props>) {
-  const pnlEur = totalValue - totalInvested
+  const pnlEur = totalValue - totalInvested;
   const totalValueBtcLabel =
-    totalValueBtc === null ? "N/A BTC" : `${totalValueBtc.toFixed(8)} BTC`
-  const lastSnapshot = chartData.at(-1)
-  const lastUpdatedLabel = lastSnapshot ? formatDate(lastSnapshot.date) : "N/A"
+    totalValueBtc === null ? "N/A BTC" : `${totalValueBtc.toFixed(8)} BTC`;
+  const lastSnapshot = chartData.at(-1);
+  const lastUpdatedLabel = lastSnapshot ? formatDate(lastSnapshot.date) : "N/A";
 
   const getPnlColor = () => {
     if (positionsLoading) {
-      return "text-muted-foreground"
+      return "text-muted-foreground";
     }
     if (overallPnl > 0) {
-      return "text-green-500"
+      return "text-green-500";
     }
     if (overallPnl < 0) {
-      return "text-red-500"
+      return "text-red-500";
     }
-    return "text-muted-foreground"
-  }
+    return "text-muted-foreground";
+  };
 
-  let chartContent: React.ReactNode
+  let chartContent: React.ReactNode;
   if (netWorthLoading) {
-    chartContent = null
+    chartContent = null;
   } else if (chartData.length === 0) {
     chartContent = (
       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
         No snapshots yet
       </div>
-    )
+    );
   } else {
     chartContent = (
       <div className="relative h-32 w-full">
@@ -116,7 +116,7 @@ export function TotalValueHeader({
                 "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors",
                 period === value
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {label}
@@ -180,7 +180,7 @@ export function TotalValueHeader({
           </LineChart>
         </ChartContainer>
       </div>
-    )
+    );
   }
 
   return (
@@ -189,7 +189,7 @@ export function TotalValueHeader({
       <div
         className={cn(
           "col-span-1 flex flex-col transition-opacity duration-300",
-          positionsLoading ? "opacity-0" : "opacity-100"
+          positionsLoading ? "opacity-0" : "opacity-100",
         )}
       >
         <h1 className="mb-1 text-base text-muted-foreground">Total Worth</h1>
@@ -230,5 +230,5 @@ export function TotalValueHeader({
         </div>
       </div>
     </div>
-  )
+  );
 }

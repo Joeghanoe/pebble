@@ -1,17 +1,17 @@
-import { Button } from "./ui/button"
-import { Separator } from "./ui/separator"
-import { SidebarTrigger } from "./ui/sidebar"
-import { useTheme } from "next-themes"
-import { Sun, Moon } from "lucide-react"
+import { Button } from "./ui/button";
+import { Separator } from "./ui/separator";
+import { SidebarTrigger } from "./ui/sidebar";
+import { useTheme } from "next-themes";
+import { Sun, Moon } from "lucide-react";
 
 export function SiteHeader({
   children,
   name,
 }: {
-  children?: React.ReactNode
-  name?: string
+  children?: React.ReactNode;
+  name?: string;
 }) {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme();
 
   return (
     <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b py-3 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
@@ -40,5 +40,5 @@ export function SiteHeader({
         <span className="sr-only">Toggle theme</span>
       </Button>
     </header>
-  )
+  );
 }

@@ -1,47 +1,49 @@
-import { useState } from "react"
-import { cn } from "@/lib/utils"
-import { ChevronRight, TrendingUp, Plus } from "lucide-react"
-import { Link, useRouterState } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { ChevronRight, TrendingUp, Plus } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+} from "@/components/ui/collapsible";
 import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
-} from "@/components/ui/sidebar"
-import { AddPositionModal } from "./AddPositionModal"
-import { PositionsService, ExchangesService } from "@/client"
-import type { GetPositionsResponse, GetExchangesResponse } from "@/types/api"
+} from "@/components/ui/sidebar";
+import { AddPositionModal } from "./AddPositionModal";
+import { PositionsService, ExchangesService } from "@/client";
+import type { GetPositionsResponse, GetExchangesResponse } from "@/types/api";
 
 interface Props {
-  isPositionActive: boolean
+  isPositionActive: boolean;
 }
 
 export function PositionsMenu({ isPositionActive }: Props) {
-  const [open, setOpen] = useState(true)
-  const routerState = useRouterState()
-  const pathname = routerState.location.pathname
-  const positionMatch = /^\/position\/(\d+)$/.exec(pathname)
-  const currentAssetId = positionMatch ? Number(positionMatch[1]) : null
+  const [open, setOpen] = useState(true);
+  const routerState = useRouterState();
+  const pathname = routerState.location.pathname;
+  const positionMatch = /^\/position\/(\d+)$/.exec(pathname);
+  const currentAssetId = positionMatch ? Number(positionMatch[1]) : null;
 
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
-    queryFn: () => PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
-  })
+    queryFn: () =>
+      PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
+  });
 
   const { data: exchangesData } = useQuery({
     queryKey: ["exchanges"],
-    queryFn: () => ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
-  })
+    queryFn: () =>
+      ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+  });
 
-  const positions = positionsData?.positions ?? []
-  const exchanges = exchangesData?.exchanges ?? []
+  const positions = positionsData?.positions ?? [];
+  const exchanges = exchangesData?.exchanges ?? [];
 
   return (
     <Collapsible
@@ -102,7 +104,7 @@ export function PositionsMenu({ isPositionActive }: Props) {
                           ? "text-green-600"
                           : pos.pnl_pct < 0
                             ? "text-red-500"
-                            : "text-muted-foreground"
+                            : "text-muted-foreground",
                       )}
                     >
                       {pos.pnl_pct > 0 ? "+" : ""}
@@ -128,5 +130,5 @@ export function PositionsMenu({ isPositionActive }: Props) {
         </CollapsibleContent>
       </SidebarMenuItem>
     </Collapsible>
-  )
+  );
 }

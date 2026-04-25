@@ -1,27 +1,27 @@
-import { useState } from "react"
-import type React from "react"
-import { useMutation } from "@tanstack/react-query"
-import * as Dialog from "@radix-ui/react-dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { queryClient } from "@/lib/queryClient"
-import { api } from "@/lib/api"
-import type { Exchange } from "@/types/db"
+import { useState } from "react";
+import type React from "react";
+import { useMutation } from "@tanstack/react-query";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { queryClient } from "@/lib/queryClient";
+import { api } from "@/lib/api";
+import type { Exchange } from "@/types/db";
 
 interface Props {
-  exchanges: Exchange[]
-  children?: React.ReactNode
+  exchanges: Exchange[];
+  children?: React.ReactNode;
 }
 
 function defaultExchangeForType(
   type: "crypto" | "etf" | "cash" | "stock",
-  exchanges: Exchange[]
+  exchanges: Exchange[],
 ): number {
   if (type === "crypto") {
     return (
       exchanges.find((e) => e.type === "crypto")?.id ?? exchanges[0]?.id ?? 1
-    )
+    );
   }
   // etf / cash → prefer broker or manual
   return (
@@ -29,64 +29,66 @@ function defaultExchangeForType(
     exchanges.find((e) => e.type === "manual")?.id ??
     exchanges[0]?.id ??
     1
-  )
+  );
 }
 
 function exchangesForType(
   type: "crypto" | "etf" | "cash" | "stock",
-  exchanges: Exchange[]
+  exchanges: Exchange[],
 ): Exchange[] {
-  if (type === "crypto") return exchanges.filter((e) => e.type === "crypto")
+  if (type === "crypto") return exchanges.filter((e) => e.type === "crypto");
   // etf / cash can use broker or manual exchanges
   const filtered = exchanges.filter(
-    (e) => e.type === "broker" || e.type === "manual"
-  )
-  return filtered.length > 0 ? filtered : exchanges
+    (e) => e.type === "broker" || e.type === "manual",
+  );
+  return filtered.length > 0 ? filtered : exchanges;
 }
 
 export function AddPositionModal({ exchanges, children }: Props) {
-  const [open, setOpen] = useState(false)
-  const [symbol, setSymbol] = useState("")
-  const [name, setName] = useState("")
-  const [type, setType] = useState<"crypto" | "etf" | "cash" | "stock">("crypto")
+  const [open, setOpen] = useState(false);
+  const [symbol, setSymbol] = useState("");
+  const [name, setName] = useState("");
+  const [type, setType] = useState<"crypto" | "etf" | "cash" | "stock">(
+    "crypto",
+  );
   const [exchangeId, setExchangeId] = useState<number>(() =>
-    defaultExchangeForType("crypto", exchanges)
-  )
-  const [yahooTicker, setYahooTicker] = useState("")
-  const [coingeckoId, setCoingeckoId] = useState("")
-  const [error, setError] = useState<string | null>(null)
+    defaultExchangeForType("crypto", exchanges),
+  );
+  const [yahooTicker, setYahooTicker] = useState("");
+  const [coingeckoId, setCoingeckoId] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   function handleTypeChange(newType: "crypto" | "etf" | "cash" | "stock") {
-    setType(newType)
-    setExchangeId(defaultExchangeForType(newType, exchanges))
+    setType(newType);
+    setExchangeId(defaultExchangeForType(newType, exchanges));
     // Clear fields that don't apply to the new type
-    if (newType !== "etf" && newType !== "stock") setYahooTicker("")
-    if (newType !== "crypto") setCoingeckoId("")
+    if (newType !== "etf" && newType !== "stock") setYahooTicker("");
+    if (newType !== "crypto") setCoingeckoId("");
   }
 
   function resetForm() {
-    setSymbol("")
-    setName("")
-    setYahooTicker("")
-    setCoingeckoId("")
-    setType("crypto")
-    setError(null)
+    setSymbol("");
+    setName("");
+    setYahooTicker("");
+    setCoingeckoId("");
+    setType("crypto");
+    setError(null);
   }
 
   const createPosition = useMutation({
     mutationFn: (body: Parameters<typeof api.createAsset>[0]) =>
       api.createAsset(body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["positions"] })
-      setOpen(false)
-      resetForm()
+      void queryClient.invalidateQueries({ queryKey: ["positions"] });
+      setOpen(false);
+      resetForm();
     },
     onError: (err) => setError(err.message),
-  })
+  });
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
+    e.preventDefault();
+    setError(null);
     createPosition.mutate({
       symbol: symbol.toUpperCase(),
       name,
@@ -94,17 +96,17 @@ export function AddPositionModal({ exchanges, children }: Props) {
       exchangeId,
       yahooTicker: yahooTicker || undefined,
       coingeckoId: coingeckoId || undefined,
-    })
+    });
   }
 
-  const availableExchanges = exchangesForType(type, exchanges)
+  const availableExchanges = exchangesForType(type, exchanges);
 
   return (
     <Dialog.Root
       open={open}
       onOpenChange={(o) => {
-        setOpen(o)
-        if (!o) resetForm()
+        setOpen(o);
+        if (!o) resetForm();
       }}
     >
       <Dialog.Trigger asChild>
@@ -125,7 +127,13 @@ export function AddPositionModal({ exchanges, children }: Props) {
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value)}
                   placeholder={
-                    type === "crypto" ? "BTC" : type === "etf" ? "VUAA" : type === "stock" ? "AAPL" : "EUR"
+                    type === "crypto"
+                      ? "BTC"
+                      : type === "etf"
+                        ? "VUAA"
+                        : type === "stock"
+                          ? "AAPL"
+                          : "EUR"
                   }
                   required
                 />
@@ -137,7 +145,7 @@ export function AddPositionModal({ exchanges, children }: Props) {
                   value={type}
                   onChange={(e) =>
                     handleTypeChange(
-                      e.target.value as "crypto" | "etf" | "cash" | "stock"
+                      e.target.value as "crypto" | "etf" | "cash" | "stock",
                     )
                   }
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -243,5 +251,5 @@ export function AddPositionModal({ exchanges, children }: Props) {
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
-  )
+  );
 }

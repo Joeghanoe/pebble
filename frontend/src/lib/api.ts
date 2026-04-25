@@ -5,11 +5,11 @@ import {
   PricesService,
   SecretsService,
   TransactionsService,
-} from "@/client"
-import type { RefreshPricesResponse } from "@/types/api"
+} from "@/client";
+import type { RefreshPricesResponse } from "@/types/api";
 
 export function apiUrl(path: string): string {
-  return `${OpenAPI.BASE}${path}`
+  return `${OpenAPI.BASE}${path}`;
 }
 
 export const api = {
@@ -17,12 +17,12 @@ export const api = {
     PricesService.refreshPricesApiPricesRefreshPost() as unknown as Promise<RefreshPricesResponse>,
 
   createTransaction: (body: {
-    assetId: number
-    date: string
-    type: string
-    units: number
-    eurAmount: number
-    notes?: string
+    assetId: number;
+    date: string;
+    type: string;
+    units: number;
+    eurAmount: number;
+    notes?: string;
   }) =>
     TransactionsService.createTransactionApiTransactionsPost({
       requestBody: {
@@ -36,7 +36,9 @@ export const api = {
     }),
 
   deleteTransaction: (txId: number) =>
-    TransactionsService.deleteTransactionApiTransactionsTxIdDeleteDelete({ txId }),
+    TransactionsService.deleteTransactionApiTransactionsTxIdDeleteDelete({
+      txId,
+    }),
 
   createExchange: (body: { name: string; type: string }) =>
     ExchangesService.createExchangeApiExchangesPost({ requestBody: body }),
@@ -45,12 +47,12 @@ export const api = {
     ExchangesService.deleteExchangeApiExchangesExchangeIdDelete({ exchangeId }),
 
   createAsset: (body: {
-    symbol: string
-    name: string
-    type: string
-    exchangeId: number
-    yahooTicker?: string | null
-    coingeckoId?: string | null
+    symbol: string;
+    name: string;
+    type: string;
+    exchangeId: number;
+    yahooTicker?: string | null;
+    coingeckoId?: string | null;
   }) =>
     AssetsService.createAssetApiAssetsPost({
       requestBody: {
@@ -66,12 +68,12 @@ export const api = {
   updateAsset: (
     assetId: number,
     body: {
-      symbol?: string | null
-      name?: string | null
-      type?: string | null
-      exchangeId?: number | null
-      yahooTicker?: string | null
-      coingeckoId?: string | null
+      symbol?: string | null;
+      name?: string | null;
+      type?: string | null;
+      exchangeId?: number | null;
+      yahooTicker?: string | null;
+      coingeckoId?: string | null;
     },
   ) =>
     AssetsService.updateAssetApiAssetsAssetIdPut({
@@ -87,5 +89,8 @@ export const api = {
     }),
 
   setSecret: (name: string, value: string) =>
-    SecretsService.setSecretApiSecretsNamePost({ name, requestBody: { value } }),
-}
+    SecretsService.setSecretApiSecretsNamePost({
+      name,
+      requestBody: { value },
+    }),
+};

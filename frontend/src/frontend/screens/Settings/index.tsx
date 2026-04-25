@@ -1,9 +1,9 @@
-import { useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -11,58 +11,59 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { ExchangesService } from "@/client"
-import { api, apiUrl } from "@/lib/api"
-import { ApiKeyInput } from "@/frontend/components/ApiKeyInput"
-import type { GetExchangesResponse } from "@/types/api"
+} from "@/components/ui/table";
+import { ExchangesService } from "@/client";
+import { api, apiUrl } from "@/lib/api";
+import { ApiKeyInput } from "@/frontend/components/ApiKeyInput";
+import type { GetExchangesResponse } from "@/types/api";
 
 export function Settings() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const { data: exchangesData } = useQuery({
     queryKey: ["exchanges"],
-    queryFn: () => ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
-  })
+    queryFn: () =>
+      ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+  });
 
-  const [newExchangeName, setNewExchangeName] = useState("")
+  const [newExchangeName, setNewExchangeName] = useState("");
   const [newExchangeType, setNewExchangeType] = useState<
     "crypto" | "broker" | "manual"
-  >("crypto")
+  >("crypto");
 
   const addExchange = useMutation({
     mutationFn: (body: { name: string; type: string }) =>
       api.createExchange(body),
     onSuccess: () => {
-      setNewExchangeName("")
-      void queryClient.invalidateQueries({ queryKey: ["exchanges"] })
+      setNewExchangeName("");
+      void queryClient.invalidateQueries({ queryKey: ["exchanges"] });
     },
-  })
+  });
 
   const deleteExchange = useMutation({
     mutationFn: (id: number) => api.deleteExchange(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["exchanges"] })
+      void queryClient.invalidateQueries({ queryKey: ["exchanges"] });
     },
-  })
+  });
 
-  const exchanges = exchangesData?.exchanges ?? []
+  const exchanges = exchangesData?.exchanges ?? [];
 
   async function handleAddExchange(e: React.FormEvent) {
-    e.preventDefault()
-    addExchange.mutate({ name: newExchangeName, type: newExchangeType })
+    e.preventDefault();
+    addExchange.mutate({ name: newExchangeName, type: newExchangeType });
   }
 
   async function handleDeleteExchange(id: number) {
-    if (!confirm("Delete this exchange?")) return
-    deleteExchange.mutate(id)
+    if (!confirm("Delete this exchange?")) return;
+    deleteExchange.mutate(id);
   }
 
   async function handleExportDb() {
-    const a = document.createElement("a")
-    a.href = apiUrl("/api/export")
-    a.download = `portfolio-${new Date().toISOString().slice(0, 10)}.db`
-    a.click()
+    const a = document.createElement("a");
+    a.href = apiUrl("/api/export");
+    a.download = `portfolio-${new Date().toISOString().slice(0, 10)}.db`;
+    a.click();
   }
 
   return (
@@ -141,7 +142,7 @@ export function Settings() {
                 value={newExchangeType}
                 onChange={(e) =>
                   setNewExchangeType(
-                    e.target.value as "crypto" | "broker" | "manual"
+                    e.target.value as "crypto" | "broker" | "manual",
                   )
                 }
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -174,5 +175,5 @@ export function Settings() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

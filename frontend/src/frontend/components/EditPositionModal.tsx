@@ -1,56 +1,58 @@
-import { useState } from "react"
-import type React from "react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import * as Dialog from "@radix-ui/react-dialog"
-import { Pencil } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { api } from "@/lib/api"
-import type { Asset, Exchange } from "@/types/db"
+import { useState } from "react";
+import type React from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { api } from "@/lib/api";
+import type { Asset, Exchange } from "@/types/db";
 
 interface Props {
-  readonly asset: Asset
-  readonly exchanges: Exchange[]
+  readonly asset: Asset;
+  readonly exchanges: Exchange[];
 }
 
 export function EditPositionModal({ asset, exchanges }: Props) {
-  const queryClient = useQueryClient()
-  const [open, setOpen] = useState(false)
-  const [symbol, setSymbol] = useState(asset.symbol)
-  const [name, setName] = useState(asset.name)
-  const [type, setType] = useState<"crypto" | "etf" | "cash" | "stock">(asset.type)
-  const [exchangeId, setExchangeId] = useState(asset.exchange_id)
-  const [yahooTicker, setYahooTicker] = useState(asset.yahoo_ticker ?? "")
-  const [coingeckoId, setCoingeckoId] = useState(asset.coingecko_id ?? "")
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [symbol, setSymbol] = useState(asset.symbol);
+  const [name, setName] = useState(asset.name);
+  const [type, setType] = useState<"crypto" | "etf" | "cash" | "stock">(
+    asset.type,
+  );
+  const [exchangeId, setExchangeId] = useState(asset.exchange_id);
+  const [yahooTicker, setYahooTicker] = useState(asset.yahoo_ticker ?? "");
+  const [coingeckoId, setCoingeckoId] = useState(asset.coingecko_id ?? "");
+  const [error, setError] = useState<string | null>(null);
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
-      setSymbol(asset.symbol)
-      setName(asset.name)
-      setType(asset.type)
-      setExchangeId(asset.exchange_id)
-      setYahooTicker(asset.yahoo_ticker ?? "")
-      setCoingeckoId(asset.coingecko_id ?? "")
-      setError(null)
+      setSymbol(asset.symbol);
+      setName(asset.name);
+      setType(asset.type);
+      setExchangeId(asset.exchange_id);
+      setYahooTicker(asset.yahoo_ticker ?? "");
+      setCoingeckoId(asset.coingecko_id ?? "");
+      setError(null);
     }
-    setOpen(nextOpen)
+    setOpen(nextOpen);
   }
 
   const updatePosition = useMutation({
     mutationFn: (body: Parameters<typeof api.updateAsset>[1]) =>
       api.updateAsset(asset.id, body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["positions"] })
-      setOpen(false)
+      void queryClient.invalidateQueries({ queryKey: ["positions"] });
+      setOpen(false);
     },
     onError: (err) => setError(err.message),
-  })
+  });
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
+    e.preventDefault();
+    setError(null);
     updatePosition.mutate({
       symbol: symbol.toUpperCase(),
       name,
@@ -58,13 +60,13 @@ export function EditPositionModal({ asset, exchanges }: Props) {
       exchangeId,
       yahooTicker: yahooTicker.trim() || null,
       coingeckoId: coingeckoId.trim() || null,
-    })
+    });
   }
 
   const availableExchanges =
     type === "crypto"
       ? exchanges.filter((e) => e.type === "crypto")
-      : exchanges.filter((e) => e.type === "broker" || e.type === "manual")
+      : exchanges.filter((e) => e.type === "broker" || e.type === "manual");
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -101,7 +103,9 @@ export function EditPositionModal({ asset, exchanges }: Props) {
                   id="edit-type"
                   value={type}
                   onChange={(e) =>
-                    setType(e.target.value as "crypto" | "etf" | "cash" | "stock")
+                    setType(
+                      e.target.value as "crypto" | "etf" | "cash" | "stock",
+                    )
                   }
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                 >
@@ -187,5 +191,5 @@ export function EditPositionModal({ asset, exchanges }: Props) {
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
-  )
+  );
 }

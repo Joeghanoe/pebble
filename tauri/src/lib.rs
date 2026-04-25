@@ -59,6 +59,35 @@ fn wait_for_backend() -> Result<(), String> {
     ))
 }
 
+/// Kill any process currently listening on the given port.
+#[cfg(not(debug_assertions))]
+fn kill_process_on_port(port: u16) {
+    use std::process::{Command, Stdio};
+
+    // lsof -ti TCP:<port> returns the PID(s) of processes using the port
+    let output = Command::new("lsof")
+        .args(["-ti", &format!("TCP:{}", port)])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output();
+
+    if let Ok(output) = output {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for pid_str in stdout.split_whitespace() {
+            if let Ok(pid) = pid_str.trim().parse::<u32>() {
+                log::info!("Killing stale process {} on port {}", pid, port);
+                let _ = Command::new("kill")
+                    .args(["-9", &pid.to_string()])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
+        }
+        // Brief pause to let the OS release the port
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+}
+
 /// Start the FastAPI backend.
 /// - In development: assumes backend is running separately (uvicorn --reload)
 /// - In production: spawns the bundled sidecar binary
@@ -70,6 +99,8 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(), String> {
     } else {
         #[cfg(not(debug_assertions))]
         {
+            // Clear any stale process occupying the port before spawning
+            kill_process_on_port(SETTINGS.port);
             // Get app data directory
             let data_dir = app
                 .path()
@@ -241,6 +272,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_biometry::init())
         .manage(SidecarState {
             child: Mutex::new(None),
         })
@@ -248,7 +280,25 @@ pub fn run() {
             // Start backend on app setup
             if let Err(e) = start_backend(app.handle()) {
                 log::error!("Failed to start backend: {}", e);
-                panic!("Failed to start backend: {}", e);
+                // Show a native alert via osascript then exit cleanly instead of panicking
+                #[cfg(target_os = "macos")]
+                {
+                    let msg = format!(
+                        "Pebble failed to start its backend server.\\n\\n{}",
+                        e.replace('"', "'")
+                    );
+                    let _ = std::process::Command::new("osascript")
+                        .args([
+                            "-e",
+                            &format!(
+                                "display alert \"Pebble \u{2014} Startup Error\" message \"{}\" as critical",
+                                msg
+                            ),
+                        ])
+                        .status();
+                }
+                app.handle().exit(1);
+                return Err(e.into());
             }
 
             // Create system tray

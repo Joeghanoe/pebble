@@ -6,37 +6,37 @@ export function formatEur(amount: number): string {
     currency: "EUR",
   })
     .format(amount)
-    .replaceAll(/\s+/g, "")
+    .replaceAll(/\s+/g, "");
 }
 
 /** For unit prices: up to 8 significant decimal places when < €0.01 */
 export function formatEurPrice(amount: number): string {
   if (Math.abs(amount) < 0.01 && amount !== 0) {
-    const decimals = Math.max(2, -Math.floor(Math.log10(Math.abs(amount))) + 3)
-    return "€" + amount.toFixed(Math.min(decimals, 8)).replace(".", ",")
+    const decimals = Math.max(2, -Math.floor(Math.log10(Math.abs(amount))) + 3);
+    return "€" + amount.toFixed(Math.min(decimals, 8)).replace(".", ",");
   }
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: "EUR",
   })
     .format(amount)
-    .replaceAll(/\s+/g, "")
+    .replaceAll(/\s+/g, "");
 }
 
 export function formatUsdPrice(amount: number): string {
   if (Math.abs(amount) < 0.01 && amount !== 0) {
-    const decimals = Math.max(2, -Math.floor(Math.log10(Math.abs(amount))) + 3)
-    return "$" + amount.toFixed(Math.min(decimals, 8))
+    const decimals = Math.max(2, -Math.floor(Math.log10(Math.abs(amount))) + 3);
+    return "$" + amount.toFixed(Math.min(decimals, 8));
   }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-  }).format(amount)
+  }).format(amount);
 }
 
 export function formatPct(pct: number): string {
-  const sign = pct >= 0 ? "+" : ""
-  return `${sign}${pct.toFixed(2)}%`
+  const sign = pct >= 0 ? "+" : "";
+  return `${sign}${pct.toFixed(2)}%`;
 }
 
 /**
@@ -51,5 +51,5 @@ export function formatUnits(n: number): string {
     maximumFractionDigits: 8,
   })
     .format(n)
-    .replaceAll(",", ".")
+    .replaceAll(",", ".");
 }

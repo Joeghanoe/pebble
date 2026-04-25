@@ -1,6 +1,6 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router"
-import { LayoutDashboard, Settings2, TrendingUp } from "lucide-react"
-import { PositionsMenu } from "@/frontend/components/PositionsMenu"
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { LayoutDashboard, Settings2, TrendingUp } from "lucide-react";
+import { PositionsMenu } from "@/frontend/components/PositionsMenu";
 import {
   Sidebar,
   SidebarContent,
@@ -13,13 +13,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
 
 export function RootLayout() {
-  const routerState = useRouterState()
-  const pathname = routerState.location.pathname
+  const routerState = useRouterState();
+  const pathname = routerState.location.pathname;
 
-  const isPosition = pathname.startsWith("/position/")
+  const isPosition = pathname.startsWith("/position/");
 
   return (
     <SidebarProvider>
@@ -72,5 +72,5 @@ export function RootLayout() {
         <Outlet />
       </SidebarInset>
     </SidebarProvider>
-  )
+  );
 }

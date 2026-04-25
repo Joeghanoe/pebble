@@ -47,7 +47,7 @@ impl Settings {
     }
 
     pub fn health_endpoint(&self) -> String {
-        format!("{}/api/v1/health", self.backend_url())
+        format!("{}/api/health", self.backend_url())
     }
 
     pub fn health_check_timeout(&self) -> Duration {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ShieldAlert, Loader2 } from "lucide-react";
@@ -6,20 +6,19 @@ import { ShieldAlert, Loader2 } from "lucide-react";
 type AuthState = "loading" | "success" | "error" | "no-biometry";
 
 interface BiometricGateProps {
-  children: React.ReactNode;
+  readonly children: React.ReactNode;
 }
 
 export function BiometricGate({ children }: BiometricGateProps) {
   const [authState, setAuthState] = useState<AuthState>(
-    import.meta.env.DEV ? "success" : "loading"
+    import.meta.env.DEV ? "success" : "loading",
   );
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   const authenticateUser = async () => {
     try {
-      const { checkStatus, authenticate } = await import(
-        "@choochmeque/tauri-plugin-biometry-api"
-      );
+      const { checkStatus, authenticate } =
+        await import("@choochmeque/tauri-plugin-biometry-api");
 
       const status = await checkStatus();
 
@@ -38,14 +37,16 @@ export function BiometricGate({ children }: BiometricGateProps) {
     } catch (error) {
       setAuthState("error");
       setErrorMessage(
-        error instanceof Error ? error.message : "Authentication failed"
+        error instanceof Error ? error.message : "Authentication failed",
       );
     }
   };
 
-  if (!import.meta.env.DEV) {
-    authenticateUser();
-  }
+  useEffect(() => {
+    if (import.meta.env.DEV) return;
+    void authenticateUser();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Skip biometrics in dev mode (early return for render)
   if (import.meta.env.DEV) {
@@ -80,7 +81,14 @@ export function BiometricGate({ children }: BiometricGateProps) {
             <p className="text-sm text-muted-foreground">
               {errorMessage || "Unable to verify your identity"}
             </p>
-            <Button onClick={() => { setAuthState("loading"); setErrorMessage(""); authenticateUser(); }} className="mt-4">
+            <Button
+              onClick={() => {
+                setAuthState("loading");
+                setErrorMessage("");
+                authenticateUser();
+              }}
+              className="mt-4"
+            >
               Try Again
             </Button>
           </div>

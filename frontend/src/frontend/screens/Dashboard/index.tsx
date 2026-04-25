@@ -1,59 +1,66 @@
-import { cn } from "@/lib/utils"
-import { useState } from "react"
-import { Link } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
-import { PositionsService, NetWorthService } from "@/client"
-import { formatEur, formatPct, formatUnits } from "@/lib/format"
-import { useRefreshPrices } from "@/hooks/use-refresh-prices"
-import type { GetPositionsResponse, GetNetWorthResponse } from "@/types/api"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { SiteHeader } from "@/components/site-header"
-import { TotalValueHeader } from "./total-value-header"
+import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { PositionsService, NetWorthService } from "@/client";
+import { formatEur, formatPct, formatUnits } from "@/lib/format";
+import { useRefreshPrices } from "@/hooks/use-refresh-prices";
+import type { GetPositionsResponse, GetNetWorthResponse } from "@/types/api";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { SiteHeader } from "@/components/site-header";
+import { TotalValueHeader } from "./total-value-header";
 
-type Period = "1d" | "1w" | "1m"
+type Period = "1d" | "1w" | "1m";
 
 export function Dashboard() {
-  const { refresh: refreshPrices, isPending: isRefreshing } = useRefreshPrices()
-  const [period, setPeriod] = useState<Period>("1m")
+  const { refresh: refreshPrices, isPending: isRefreshing } =
+    useRefreshPrices();
+  const [period, setPeriod] = useState<Period>("1m");
 
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
-    queryFn: () => PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
+    queryFn: () =>
+      PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
     // Sort positions by current value descending
     select: (data: GetPositionsResponse) => ({
       positions: [...data.positions].sort(
-        (a, b) => b.current_value_eur - a.current_value_eur
+        (a, b) => b.current_value_eur - a.current_value_eur,
       ),
     }),
-  })
+  });
 
   const { data: netWorthData, isLoading: netWorthLoading } = useQuery({
     queryKey: ["net-worth", period],
-    queryFn: () => NetWorthService.getNetWorthApiNetWorthGet({ period }) as unknown as Promise<GetNetWorthResponse>,
-  })
+    queryFn: () =>
+      NetWorthService.getNetWorthApiNetWorthGet({
+        period,
+      }) as unknown as Promise<GetNetWorthResponse>,
+  });
 
-  const positions = positionsData?.positions ?? []
-  const snapshots = netWorthData?.snapshots ?? []
+  const positions = positionsData?.positions ?? [];
+  const snapshots = netWorthData?.snapshots ?? [];
 
   const btcPosition = positions.find(
     (pos) =>
       pos.asset.symbol.toUpperCase() === "BTC" &&
-      pos.price_result.status !== "unavailable"
-  )
+      pos.price_result.status !== "unavailable",
+  );
   const btcEurPrice =
     btcPosition && btcPosition.units_held > 0
       ? btcPosition.current_value_eur / btcPosition.units_held
-      : null
+      : null;
 
   const totalInvested = positions.reduce(
     (sum, p) => sum + p.total_invested_eur,
-    0
-  )
-  const totalValue = positions.reduce((sum, p) => sum + p.current_value_eur, 0)
+    0,
+  );
+  const totalValue = positions.reduce((sum, p) => sum + p.current_value_eur, 0);
   const totalValueBtc =
-    btcEurPrice && btcEurPrice > 0 ? totalValue / btcEurPrice : null
+    btcEurPrice && btcEurPrice > 0 ? totalValue / btcEurPrice : null;
   const overallPnl =
-    totalInvested > 0 ? ((totalValue - totalInvested) / totalInvested) * 100 : 0
+    totalInvested > 0
+      ? ((totalValue - totalInvested) / totalInvested) * 100
+      : 0;
 
   return (
     <>
@@ -61,7 +68,7 @@ export function Dashboard() {
       <div
         className={cn(
           "space-y-2 p-6 transition-opacity duration-500 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card",
-          positionsLoading || netWorthLoading ? "opacity-0" : "opacity-100"
+          positionsLoading || netWorthLoading ? "opacity-0" : "opacity-100",
         )}
       >
         <TotalValueHeader
@@ -90,14 +97,16 @@ export function Dashboard() {
                 const valueBtc =
                   btcEurPrice && btcEurPrice > 0
                     ? pos.current_value_eur / btcEurPrice
-                    : null
+                    : null;
                 const valueBtcLabel =
-                  valueBtc === null ? "N/A BTC" : `${formatUnits(valueBtc)} BTC`
-                let pnlClass = ""
+                  valueBtc === null
+                    ? "N/A BTC"
+                    : `${formatUnits(valueBtc)} BTC`;
+                let pnlClass = "";
                 if (pos.pnl_pct > 0) {
-                  pnlClass = "text-green-600"
+                  pnlClass = "text-green-600";
                 } else if (pos.pnl_pct < 0) {
-                  pnlClass = "text-red-600"
+                  pnlClass = "text-red-600";
                 }
 
                 return (
@@ -158,12 +167,12 @@ export function Dashboard() {
                       </div>
                     </div>
                   </Link>
-                )
+                );
               })}
             </CardContent>
           </Card>
         </div>
       </div>
     </>
-  )
+  );
 }

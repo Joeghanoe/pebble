@@ -1,4 +1,4 @@
-import { defineConfig } from "@hey-api/openapi-ts"
+import { defineConfig } from "@hey-api/openapi-ts";
 
 export default defineConfig({
   input: "./openapi.json",
@@ -13,15 +13,15 @@ export default defineConfig({
       classNameBuilder: "{{name}}Service",
       methodNameBuilder: (operation) => {
         // @ts-expect-error - operation.name is not typed, but it should be there
-        let name: string = operation.name
+        let name: string = operation.name;
         // @ts-expect-error - operation.service is not typed, but it should be there
-        const service: string = operation.service
+        const service: string = operation.service;
 
         if (service && name.toLowerCase().startsWith(service.toLowerCase())) {
-          name = name.slice(service.length)
+          name = name.slice(service.length);
         }
 
-        return name.charAt(0).toLowerCase() + name.slice(1)
+        return name.charAt(0).toLowerCase() + name.slice(1);
       },
     },
     {
@@ -29,4 +29,4 @@ export default defineConfig({
       type: "json",
     },
   ],
-})
+});

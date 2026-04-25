@@ -1,27 +1,31 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts"
-import { ArrowLeft, RefreshCw, X } from "lucide-react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { useNavigate, useParams } from "@tanstack/react-router"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
+import { ArrowLeft, RefreshCw, X } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useParams } from "@tanstack/react-router";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@/components/ui/chart"
-import { PositionsService, TransactionsService, ExchangesService } from "@/client"
-import { api } from "@/lib/api"
+} from "@/components/ui/chart";
+import {
+  PositionsService,
+  TransactionsService,
+  ExchangesService,
+} from "@/client";
+import { api } from "@/lib/api";
 import {
   formatEur,
   formatEurPrice,
   formatUsdPrice,
   formatPct,
   formatUnits,
-} from "@/lib/format"
-import { useRefreshPrices } from "@/hooks/use-refresh-prices"
+} from "@/lib/format";
+import { useRefreshPrices } from "@/hooks/use-refresh-prices";
 import {
   enrichTransactions,
   getOpenBuyTransactions,
@@ -30,14 +34,14 @@ import {
   buildFrequencyData,
   calcPositionTotals,
   type EnrichedTransaction,
-} from "@/lib/position-analytics"
-import { AddTransactionModal } from "@/frontend/components/AddTransactionModal"
-import { EditPositionModal } from "@/frontend/components/EditPositionModal"
+} from "@/lib/position-analytics";
+import { AddTransactionModal } from "@/frontend/components/AddTransactionModal";
+import { EditPositionModal } from "@/frontend/components/EditPositionModal";
 import type {
   GetPositionsResponse,
   GetTransactionsResponse,
   GetExchangesResponse,
-} from "@/types/api"
+} from "@/types/api";
 import {
   Table,
   TableBody,
@@ -46,99 +50,103 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { SiteHeader } from "@/components/site-header"
-import { cn } from "@/lib/utils"
+} from "@/components/ui/table";
+import { SiteHeader } from "@/components/site-header";
+import { cn } from "@/lib/utils";
 
 const pnlChartConfig = {
   pnl: { label: "P&L", color: "var(--primary)" },
-} satisfies ChartConfig
+} satisfies ChartConfig;
 
 const valueChartConfig = {
   value: { label: "Value", color: "var(--primary)" },
-} satisfies ChartConfig
+} satisfies ChartConfig;
 
 const frequencyChartConfig = {
   timestamp: { label: "Date", color: "var(--primary)" },
-} satisfies ChartConfig
+} satisfies ChartConfig;
 
 export function PositionDetail() {
-  const { assetId: assetIdStr } = useParams({ strict: false })
-  const assetId = Number(assetIdStr ?? "0")
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { refresh: handleRefreshPrice } = useRefreshPrices(assetId)
+  const { assetId: assetIdStr } = useParams({ strict: false });
+  const assetId = Number(assetIdStr ?? "0");
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { refresh: handleRefreshPrice } = useRefreshPrices(assetId);
 
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
-    queryFn: () => PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
-  })
+    queryFn: () =>
+      PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
+  });
 
   const { data: txData, isLoading: txLoading } = useQuery({
     queryKey: ["transactions", assetId],
     queryFn: () =>
-      TransactionsService.listTransactionsApiTransactionsAssetIdGet({ assetId }) as unknown as Promise<GetTransactionsResponse>,
-  })
+      TransactionsService.listTransactionsApiTransactionsAssetIdGet({
+        assetId,
+      }) as unknown as Promise<GetTransactionsResponse>,
+  });
 
   const { data: exchangesData } = useQuery({
     queryKey: ["exchanges"],
-    queryFn: () => ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
-  })
+    queryFn: () =>
+      ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+  });
 
   const deleteTx = useMutation({
     mutationFn: (id: number) => api.deleteTransaction(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["transactions", assetId],
-      })
-      void queryClient.invalidateQueries({ queryKey: ["positions"] })
+      });
+      void queryClient.invalidateQueries({ queryKey: ["positions"] });
     },
-  })
+  });
 
-  const exchanges = exchangesData?.exchanges ?? []
-  const position = positionsData?.positions.find((p) => p.asset.id === assetId)
-  const transactions = txData?.transactions ?? []
+  const exchanges = exchangesData?.exchanges ?? [];
+  const position = positionsData?.positions.find((p) => p.asset.id === assetId);
+  const transactions = txData?.transactions ?? [];
 
   async function handleDeleteTx(id: number) {
-    if (!confirm("Delete this transaction?")) return
-    deleteTx.mutate(id)
+    if (!confirm("Delete this transaction?")) return;
+    deleteTx.mutate(id);
   }
 
-  const symbol = position?.asset.symbol ?? "…"
-  const unitsHeld = position?.units_held ?? 0
-  const totalInvested = position?.total_invested_eur ?? 0
-  const currentValue = position?.current_value_eur ?? 0
-  const pnlEur = currentValue - totalInvested
-  const pnlPct = position?.pnl_pct ?? 0
+  const symbol = position?.asset.symbol ?? "…";
+  const unitsHeld = position?.units_held ?? 0;
+  const totalInvested = position?.total_invested_eur ?? 0;
+  const currentValue = position?.current_value_eur ?? 0;
+  const pnlEur = currentValue - totalInvested;
+  const pnlPct = position?.pnl_pct ?? 0;
 
-  const priceResult = position?.price_result
+  const priceResult = position?.price_result;
   const priceEur =
     priceResult && priceResult.status !== "unavailable"
       ? priceResult.price_eur
-      : null
+      : null;
   const priceUsd =
     priceResult &&
     priceResult.status !== "unavailable" &&
     priceResult.exchange_rate
       ? priceResult.price_eur * priceResult.exchange_rate
-      : null
+      : null;
 
-  const enrichedTx = enrichTransactions(transactions, priceEur)
-  const buyTxs = enrichedTx.filter((t) => t.type === "buy")
+  const enrichedTx = enrichTransactions(transactions, priceEur);
+  const buyTxs = enrichedTx.filter((t) => t.type === "buy");
   const totalSoldUnits = transactions
     .filter((t) => t.type === "sell")
-    .reduce((s, t) => s + t.units, 0)
-  const openBuyTxs = getOpenBuyTransactions(enrichedTx, totalSoldUnits)
+    .reduce((s, t) => s + t.units, 0);
+  const openBuyTxs = getOpenBuyTransactions(enrichedTx, totalSoldUnits);
   const closedBuyIds = new Set(
     enrichedTx
       .filter((t) => t.type === "buy" && !openBuyTxs.some((o) => o.id === t.id))
-      .map((t) => t.id)
-  )
-  const pnlChartData = buildPnlChartData(openBuyTxs)
-  const valueChartData = buildValueChartData(openBuyTxs)
-  const frequencyData = buildFrequencyData(buyTxs)
+      .map((t) => t.id),
+  );
+  const pnlChartData = buildPnlChartData(openBuyTxs);
+  const valueChartData = buildValueChartData(openBuyTxs);
+  const frequencyData = buildFrequencyData(buyTxs);
   const { totalUnits, totalPaid, totalCurrentVal, totalPct } =
-    calcPositionTotals(transactions, priceEur)
+    calcPositionTotals(transactions, priceEur);
 
   if (!position && !positionsLoading) {
     return (
@@ -152,18 +160,18 @@ export function PositionDetail() {
         </Button>
         <p className="mt-4 text-muted-foreground">Position not found</p>
       </div>
-    )
+    );
   }
 
   const pnlBadgeClass = (pct: number) => {
     if (pct > 0) {
-      return "bg-green-500/15 text-green-500 border-transparent"
+      return "bg-green-500/15 text-green-500 border-transparent";
     } else if (pct < 0) {
-      return "bg-destructive/15 text-destructive border-transparent"
+      return "bg-destructive/15 text-destructive border-transparent";
     } else {
-      return "bg-muted text-muted-foreground border-transparent"
+      return "bg-muted text-muted-foreground border-transparent";
     }
-  }
+  };
 
   return (
     <>
@@ -200,7 +208,7 @@ export function PositionDetail() {
       <div
         className={cn(
           "flex flex-col gap-4 p-6 transition-opacity duration-500",
-          positionsLoading || txLoading ? "opacity-0" : "opacity-100"
+          positionsLoading || txLoading ? "opacity-0" : "opacity-100",
         )}
       >
         {/* Position header — mirrors TotalValueHeader layout */}
@@ -239,7 +247,7 @@ export function PositionDetail() {
                     ? "text-muted-foreground"
                     : pnlPct >= 0
                       ? "text-green-500"
-                      : "text-destructive"
+                      : "text-destructive",
                 )}
               >
                 {positionsLoading ? (
@@ -255,7 +263,7 @@ export function PositionDetail() {
           <div
             className={cn(
               "col-span-2",
-              valueChartData.length <= 1 && "opacity-0"
+              valueChartData.length <= 1 && "opacity-0",
             )}
           >
             <ChartContainer
@@ -356,7 +364,7 @@ export function PositionDetail() {
               "grid gap-4",
               pnlChartData.length > 1 && frequencyData.length > 1
                 ? "grid-cols-2"
-                : "grid-cols-1"
+                : "grid-cols-1",
             )}
           >
             {pnlChartData.length > 1 && (
@@ -440,8 +448,8 @@ export function PositionDetail() {
                         axisLine={false}
                         width={72}
                         tickFormatter={(v: number) => {
-                          const d = new Date(v)
-                          return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
+                          const d = new Date(v);
+                          return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
                         }}
                       />
                       <ChartTooltip
@@ -449,13 +457,13 @@ export function PositionDetail() {
                         content={({ payload }) => {
                           const item = payload?.[0]?.payload as
                             | { date: string; index: number }
-                            | undefined
-                          if (!item) return null
+                            | undefined;
+                          if (!item) return null;
                           return (
                             <div className="rounded border border-border bg-card p-2 text-xs shadow">
                               #{item.index} — {item.date}
                             </div>
-                          )
+                          );
                         }}
                       />
                       <Line
@@ -561,7 +569,7 @@ export function PositionDetail() {
                             "font-number text-xs font-medium tabular-nums",
                             tx.realized_pnl >= 0
                               ? "text-green-500"
-                              : "text-destructive"
+                              : "text-destructive",
                           )}
                         >
                           {formatEur(tx.realized_pnl)}
@@ -574,7 +582,7 @@ export function PositionDetail() {
                         <Badge
                           className={cn(
                             "rounded font-number tabular-nums",
-                            pnlBadgeClass(tx.pct)
+                            pnlBadgeClass(tx.pct),
                           )}
                         >
                           {formatPct(tx.pct)}
@@ -619,7 +627,7 @@ export function PositionDetail() {
                         <Badge
                           className={cn(
                             "rounded font-number tabular-nums",
-                            pnlBadgeClass(totalPct)
+                            pnlBadgeClass(totalPct),
                           )}
                         >
                           {formatPct(totalPct)}
@@ -637,5 +645,5 @@ export function PositionDetail() {
         </Card>
       </div>
     </>
-  )
+  );
 }

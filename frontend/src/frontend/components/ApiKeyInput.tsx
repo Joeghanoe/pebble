@@ -1,30 +1,30 @@
 // src/frontend/components/ApiKeyInput.tsx
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { api } from "@/lib/api"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { api } from "@/lib/api";
 
 interface Props {
-  readonly label: string
-  readonly secretName: string
+  readonly label: string;
+  readonly secretName: string;
 }
 
 export function ApiKeyInput({ label, secretName }: Props) {
-  const [value, setValue] = useState("")
+  const [value, setValue] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
-    "idle"
-  )
+    "idle",
+  );
 
   async function handleSave() {
-    setStatus("saving")
+    setStatus("saving");
     try {
-      await api.setSecret(secretName, value)
-      setStatus("saved")
-      setValue("")
-      setTimeout(() => setStatus("idle"), 2000)
+      await api.setSecret(secretName, value);
+      setStatus("saved");
+      setValue("");
+      setTimeout(() => setStatus("idle"), 2000);
     } catch {
-      setStatus("error")
+      setStatus("error");
     }
   }
 
@@ -52,5 +52,5 @@ export function ApiKeyInput({ label, secretName }: Props) {
         <p className="text-sm text-destructive">Failed to save key</p>
       )}
     </div>
-  )
+  );
 }

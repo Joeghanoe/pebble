@@ -1,25 +1,25 @@
-import { useState } from "react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import * as Dialog from "@radix-ui/react-dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { api } from "@/lib/api"
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { api } from "@/lib/api";
 
 interface Props {
-  assetId: number
-  trigger?: React.ReactNode
+  assetId: number;
+  trigger?: React.ReactNode;
 }
 
 export function AddTransactionModal({ assetId, trigger }: Readonly<Props>) {
-  const queryClient = useQueryClient()
-  const [open, setOpen] = useState(false)
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
-  const [type, setType] = useState<"buy" | "sell">("buy")
-  const [units, setUnits] = useState("")
-  const [eurAmount, setEurAmount] = useState("")
-  const [notes, setNotes] = useState("")
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [type, setType] = useState<"buy" | "sell">("buy");
+  const [units, setUnits] = useState("");
+  const [eurAmount, setEurAmount] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const createTx = useMutation({
     mutationFn: (body: Parameters<typeof api.createTransaction>[0]) =>
@@ -27,19 +27,19 @@ export function AddTransactionModal({ assetId, trigger }: Readonly<Props>) {
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["transactions", assetId],
-      })
-      void queryClient.invalidateQueries({ queryKey: ["positions"] })
-      setOpen(false)
-      setUnits("")
-      setEurAmount("")
-      setNotes("")
+      });
+      void queryClient.invalidateQueries({ queryKey: ["positions"] });
+      setOpen(false);
+      setUnits("");
+      setEurAmount("");
+      setNotes("");
     },
     onError: (err) => setError(err.message),
-  })
+  });
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
+    e.preventDefault();
+    setError(null);
     createTx.mutate({
       assetId,
       date,
@@ -47,7 +47,7 @@ export function AddTransactionModal({ assetId, trigger }: Readonly<Props>) {
       units: parseFloat(units),
       eurAmount: parseFloat(eurAmount),
       notes: notes || undefined,
-    })
+    });
   }
 
   return (
@@ -135,5 +135,5 @@ export function AddTransactionModal({ assetId, trigger }: Readonly<Props>) {
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
-  )
+  );
 }
