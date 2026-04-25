@@ -78,7 +78,7 @@ init-db:
 # Package the FastAPI sidecar binary (PyInstaller)
 package-backend:
 	@echo "==> 📦 Packaging FastAPI sidecar binary..."
-	cd fastapi && uv run --with build build.py
+	cd fastapi && uv run --group build build.py
 
 # Package the desktop application for production
 # This will create platform-specific installers in tauri/target/release/bundle/

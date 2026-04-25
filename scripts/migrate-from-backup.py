@@ -77,6 +77,17 @@ def migrate():
         )
         print(f"  net_worth_snapshots: {len(snapshots)} rows")
 
+        # Backfill invested_eur: cumulative net spend (buys - sells) up to each snapshot date
+        dst.execute("""
+            UPDATE net_worth_snapshot
+            SET invested_eur = (
+                SELECT COALESCE(SUM(CASE WHEN t.type='buy' THEN t.eur_amount ELSE -t.eur_amount END), 0)
+                FROM "transaction" t
+                WHERE t.deleted_at IS NULL AND t.date <= net_worth_snapshot.date
+            )
+        """)
+        print("  invested_eur backfilled")
+
     src.close()
     dst.close()
     print("Done.")
