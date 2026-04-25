@@ -54,7 +54,7 @@ def init_db() -> None:
         import keyring
         from app.services.price_service_factory import reset_price_service
 
-        api_key = keyring.get_password("com.portfolio.desktop", "coingecko-api-key")
+        api_key = keyring.get_password("com.pebble.desktop", "coingecko-api-key")
         if api_key:
             os.environ["COINGECKO_API_KEY"] = api_key
             reset_price_service()

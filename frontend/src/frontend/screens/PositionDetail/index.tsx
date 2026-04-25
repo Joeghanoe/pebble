@@ -105,22 +105,22 @@ export function PositionDetail() {
   }
 
   const symbol = position?.asset.symbol ?? "…"
-  const unitsHeld = position?.unitsHeld ?? 0
-  const totalInvested = position?.totalInvestedEur ?? 0
-  const currentValue = position?.currentValueEur ?? 0
+  const unitsHeld = position?.units_held ?? 0
+  const totalInvested = position?.total_invested_eur ?? 0
+  const currentValue = position?.current_value_eur ?? 0
   const pnlEur = currentValue - totalInvested
-  const pnlPct = position?.pnlPct ?? 0
+  const pnlPct = position?.pnl_pct ?? 0
 
-  const priceResult = position?.priceResult
+  const priceResult = position?.price_result
   const priceEur =
     priceResult && priceResult.status !== "unavailable"
-      ? priceResult.priceEur
+      ? priceResult.price_eur
       : null
   const priceUsd =
     priceResult &&
     priceResult.status !== "unavailable" &&
-    priceResult.exchangeRate
-      ? priceResult.priceEur * priceResult.exchangeRate
+    priceResult.exchange_rate
+      ? priceResult.price_eur * priceResult.exchange_rate
       : null
 
   const enrichedTx = enrichTransactions(transactions, priceEur)
@@ -343,7 +343,7 @@ export function PositionDetail() {
             )}
             {priceResult?.status === "stale" && (
               <p className="text-xs text-muted-foreground">
-                Last known: {priceResult.lastKnownDate}
+                Last known: {priceResult.last_known_date}
               </p>
             )}
           </div>

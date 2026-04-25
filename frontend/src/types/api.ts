@@ -3,16 +3,17 @@ import type { PriceResult } from "./price"
 
 export type Position = {
   asset: Asset
-  currentValueEur: number
-  totalInvestedEur: number
-  unitsHeld: number
-  pnlPct: number
-  priceResult: PriceResult
+  current_value_eur: number
+  total_invested_eur: number
+  units_held: number
+  pnl_pct: number
+  price_result: PriceResult
 }
 
 export type NetWorthSnapshot = {
   date: string
-  valueEur: number
+  total_eur: number
+  invested_eur: number
 }
 
 export type GetPositionsResponse = {

@@ -106,8 +106,8 @@ export function TotalValueHeader({
     )
   } else {
     chartContent = (
-      <div className="relative h-28 w-full">
-        <div className="absolute top-0 right-0 z-10 flex gap-1">
+      <div className="relative h-32 w-full">
+        <div className="ml-auto z-10 flex gap-1">
           {PERIODS.map(({ label, value }) => (
             <button
               key={value}

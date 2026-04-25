@@ -7,7 +7,7 @@ from app.services.price_service_factory import reset_price_service
 
 router = APIRouter(prefix="/secrets", tags=["secrets"])
 
-_KEYRING_SERVICE = "com.portfolio.desktop"
+_KEYRING_SERVICE = "com.pebble.desktop"
 
 
 def _keyring_set(name: str, value: str) -> None:

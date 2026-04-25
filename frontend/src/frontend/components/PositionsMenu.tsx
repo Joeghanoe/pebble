@@ -98,15 +98,15 @@ export function PositionsMenu({ isPositionActive }: Props) {
                     <span
                       className={cn(
                         "font-number text-[10px] font-medium tabular-nums",
-                        pos.pnlPct > 0
+                        pos.pnl_pct > 0
                           ? "text-green-600"
-                          : pos.pnlPct < 0
+                          : pos.pnl_pct < 0
                             ? "text-red-500"
                             : "text-muted-foreground"
                       )}
                     >
-                      {pos.pnlPct > 0 ? "+" : ""}
-                      {pos.pnlPct.toFixed(1)}%
+                      {pos.pnl_pct > 0 ? "+" : ""}
+                      {pos.pnl_pct.toFixed(1)}%
                     </span>
                   </Link>
                 </SidebarMenuSubButton>

@@ -11,7 +11,7 @@ export function PriceStatusBadge({ result }: Props) {
   }
   if (result.status === "stale") {
     return (
-      <Badge variant="warning" title={`Last known: ${result.lastKnownDate}`}>
+      <Badge variant="warning" title={`Last known: ${result.last_known_date}`}>
         Stale
       </Badge>
     )

@@ -1,4 +1,4 @@
 export type PriceResult =
-  | { status: "ok"; priceEur: number; exchangeRate: number | null }
-  | { status: "stale"; priceEur: number; exchangeRate: number | null; lastKnownDate: string }
+  | { status: "ok"; price_eur: number; exchange_rate: number; date: string }
+  | { status: "stale"; price_eur: number; exchange_rate: number; last_known_date: string }
   | { status: "unavailable" }

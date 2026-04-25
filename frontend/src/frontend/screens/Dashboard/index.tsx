@@ -22,7 +22,7 @@ export function Dashboard() {
     // Sort positions by current value descending
     select: (data: GetPositionsResponse) => ({
       positions: [...data.positions].sort(
-        (a, b) => b.currentValueEur - a.currentValueEur
+        (a, b) => b.current_value_eur - a.current_value_eur
       ),
     }),
   })
@@ -38,18 +38,18 @@ export function Dashboard() {
   const btcPosition = positions.find(
     (pos) =>
       pos.asset.symbol.toUpperCase() === "BTC" &&
-      pos.priceResult.status !== "unavailable"
+      pos.price_result.status !== "unavailable"
   )
   const btcEurPrice =
-    btcPosition && btcPosition.unitsHeld > 0
-      ? btcPosition.currentValueEur / btcPosition.unitsHeld
+    btcPosition && btcPosition.units_held > 0
+      ? btcPosition.current_value_eur / btcPosition.units_held
       : null
 
   const totalInvested = positions.reduce(
-    (sum, p) => sum + p.totalInvestedEur,
+    (sum, p) => sum + p.total_invested_eur,
     0
   )
-  const totalValue = positions.reduce((sum, p) => sum + p.currentValueEur, 0)
+  const totalValue = positions.reduce((sum, p) => sum + p.current_value_eur, 0)
   const totalValueBtc =
     btcEurPrice && btcEurPrice > 0 ? totalValue / btcEurPrice : null
   const overallPnl =
@@ -89,14 +89,14 @@ export function Dashboard() {
               {positions.map((pos) => {
                 const valueBtc =
                   btcEurPrice && btcEurPrice > 0
-                    ? pos.currentValueEur / btcEurPrice
+                    ? pos.current_value_eur / btcEurPrice
                     : null
                 const valueBtcLabel =
                   valueBtc === null ? "N/A BTC" : `${formatUnits(valueBtc)} BTC`
                 let pnlClass = ""
-                if (pos.pnlPct > 0) {
+                if (pos.pnl_pct > 0) {
                   pnlClass = "text-green-600"
-                } else if (pos.pnlPct < 0) {
+                } else if (pos.pnl_pct < 0) {
                   pnlClass = "text-red-600"
                 }
 
@@ -131,9 +131,9 @@ export function Dashboard() {
                         data-slot="item-description"
                         className="cn-item-description [&amp;&gt;a]:underline [&amp;&gt;a]:underline-offset-4 [&amp;&gt;a:hover]:text-primary line-clamp-2 font-number text-xs font-normal tracking-wider uppercase"
                       >
-                        {pos.unitsHeld} Shares &middot; P&L:{" "}
+                        {pos.units_held} Shares &middot; P&L:{" "}
                         <span className={pnlClass}>
-                          {formatPct(pos.pnlPct)}
+                          {formatPct(pos.pnl_pct)}
                         </span>
                       </p>
                     </div>
@@ -150,7 +150,7 @@ export function Dashboard() {
                           Value
                         </span>
                         <span className="font-number font-medium tabular-nums">
-                          {formatEur(pos.currentValueEur)}
+                          {formatEur(pos.current_value_eur)}
                         </span>
                         <span className="font-number text-xs text-muted-foreground uppercase tabular-nums">
                           {valueBtcLabel}
