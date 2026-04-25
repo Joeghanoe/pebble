@@ -33,7 +33,7 @@ The identifier comes from `tauri.conf.json` → `identifier`.
 
 ```
 {app_data_dir}/
-└── app.db          # SQLite database (WAL mode)
+└── portfolio.db          # SQLite database (WAL mode)
 ```
 
 ### How It's Configured
@@ -53,7 +53,7 @@ The Rust code detects `debug_assertions` and skips spawning the sidecar, expecti
 1. Gets the platform-specific `app_data_dir()`
 2. Creates the directory if it doesn't exist
 3. Spawns the PyInstaller-bundled sidecar with `DATA_DIR` set
-4. FastAPI stores `app.db` at `{DATA_DIR}/app.db`
+4. FastAPI stores `portfolio.db` at `{DATA_DIR}/portfolio.db`
 
 ### Environment Variables
 
@@ -65,7 +65,7 @@ FastAPI is configured via these environment variables:
 | `HOST` | No | `127.0.0.1` | Server bind address |
 | `PORT` | No | `1430` | Server port |
 | `AUTH_REQUIRED` | No | `false` | Enable authentication |
-| `DATABASE_NAME` | No | `app.db` | SQLite filename |
+| `DATABASE_NAME` | No | `portfolio.db` | SQLite filename |
 
 ## Data Flow
 
@@ -392,7 +392,7 @@ uv run alembic downgrade -1
 uv run alembic history
 
 # Reset database (development only!)
-rm ../.data/app.db*
+rm ../.data/portfolio.db*
 uv run alembic upgrade head
 ```
 

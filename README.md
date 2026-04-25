@@ -81,10 +81,10 @@ graph TB
 **Database**: SQLite (included with Python standard library, no external server needed)
 
 **Location**:
-- **Dev**: `.data/app.db` (project root)
-- **Production (Linux)**: `~/.local/share/com.example.tauri-fastapi-full-stack-template/app.db`
-- **Production (macOS)**: `~/Library/Application Support/com.example.tauri-fastapi-full-stack-template/app.db`
-- **Production (Windows)**: `%APPDATA%\com.example.tauri-fastapi-full-stack-template\app.db`
+- **Dev**: `.data/portfolio.db` (project root)
+- **Production (Linux)**: `~/.local/share/com.example.tauri-fastapi-full-stack-template/portfolio.db`
+- **Production (macOS)**: `~/Library/Application Support/com.example.tauri-fastapi-full-stack-template/portfolio.db`
+- **Production (Windows)**: `%APPDATA%\com.example.tauri-fastapi-full-stack-template\portfolio.db`
 
 **Models**: SQLModel with automatic TypeScript/Rust type generation via OpenAPI
 
