@@ -12,7 +12,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { fetchJson } from "@/lib/queryClient"
+import { PositionsService, TransactionsService, ExchangesService } from "@/client"
 import { api } from "@/lib/api"
 import {
   formatEur,
@@ -71,18 +71,18 @@ export function PositionDetail() {
 
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
-    queryFn: () => fetchJson<GetPositionsResponse>("/api/positions"),
+    queryFn: () => PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
   })
 
   const { data: txData, isLoading: txLoading } = useQuery({
     queryKey: ["transactions", assetId],
     queryFn: () =>
-      fetchJson<GetTransactionsResponse>(`/api/transactions/${assetId}`),
+      TransactionsService.listTransactionsApiTransactionsAssetIdGet({ assetId }) as unknown as Promise<GetTransactionsResponse>,
   })
 
   const { data: exchangesData } = useQuery({
     queryKey: ["exchanges"],
-    queryFn: () => fetchJson<GetExchangesResponse>("/api/exchanges"),
+    queryFn: () => ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
   })
 
   const deleteTx = useMutation({

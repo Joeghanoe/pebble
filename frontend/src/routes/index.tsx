@@ -1,7 +1,7 @@
 import { createRoute } from "@tanstack/react-router"
 import { rootRoute } from "./__root"
 import { Dashboard } from "@/frontend/screens/Dashboard"
-import { fetchJson } from "@/lib/queryClient"
+import { PositionsService, NetWorthService } from "@/client"
 import type { GetPositionsResponse, GetNetWorthResponse } from "@/types/api"
 
 export const indexRoute = createRoute({
@@ -10,11 +10,11 @@ export const indexRoute = createRoute({
   loader: ({ context: { queryClient } }) => {
     void queryClient.prefetchQuery({
       queryKey: ["positions"],
-      queryFn: () => fetchJson<GetPositionsResponse>("/api/positions"),
+      queryFn: () => PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
     })
     void queryClient.prefetchQuery({
       queryKey: ["net-worth"],
-      queryFn: () => fetchJson<GetNetWorthResponse>("/api/net-worth"),
+      queryFn: () => NetWorthService.getNetWorthApiNetWorthGet() as unknown as Promise<GetNetWorthResponse>,
     })
   },
   component: Dashboard,

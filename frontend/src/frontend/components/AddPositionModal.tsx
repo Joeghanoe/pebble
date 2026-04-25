@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { queryClient } from "@/lib/queryClient"
-import { apiUrl } from "@/lib/api"
+import { api } from "@/lib/api"
 import type { Exchange } from "@/types/db"
 
 interface Props {
@@ -74,18 +74,8 @@ export function AddPositionModal({ exchanges, children }: Props) {
   }
 
   const createPosition = useMutation({
-    mutationFn: async (body: object) => {
-      const res = await fetch(apiUrl("/api/assets"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const err = (await res.json()) as { error: string }
-        throw new Error(err.error)
-      }
-      return res.json()
-    },
+    mutationFn: (body: Parameters<typeof api.createAsset>[0]) =>
+      api.createAsset(body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["positions"] })
       setOpen(false)

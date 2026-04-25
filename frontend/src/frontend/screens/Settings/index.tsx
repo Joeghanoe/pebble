@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { fetchJson } from "@/lib/queryClient"
+import { ExchangesService } from "@/client"
 import { api, apiUrl } from "@/lib/api"
 import { ApiKeyInput } from "@/frontend/components/ApiKeyInput"
 import type { GetExchangesResponse } from "@/types/api"
@@ -22,7 +22,7 @@ export function Settings() {
 
   const { data: exchangesData } = useQuery({
     queryKey: ["exchanges"],
-    queryFn: () => fetchJson<GetExchangesResponse>("/api/exchanges"),
+    queryFn: () => ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
   })
 
   const [newExchangeName, setNewExchangeName] = useState("")

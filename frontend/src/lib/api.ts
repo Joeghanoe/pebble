@@ -1,92 +1,91 @@
+import {
+  OpenAPI,
+  AssetsService,
+  ExchangesService,
+  PricesService,
+  SecretsService,
+  TransactionsService,
+} from "@/client"
 import type { RefreshPricesResponse } from "@/types/api"
 
-// In dev, Vite proxies /api → http://127.0.0.1:39131 (no base needed).
-// In production (bundled Tauri), we call the sidecar directly.
-const API_BASE = import.meta.env.DEV ? "" : "http://127.0.0.1:39131"
-
 export function apiUrl(path: string): string {
-  return `${API_BASE}${path}`
-}
-
-async function mutateJson<T>(
-  method: "POST" | "PUT" | "DELETE" | "PATCH",
-  path: string,
-  body?: unknown
-): Promise<T> {
-  let hasBody = true
-  if (body === undefined) {
-    hasBody = false
-  }
-
-  const res = await fetch(apiUrl(path), {
-    method,
-    headers: hasBody ? { "Content-Type": "application/json" } : undefined,
-    body: hasBody ? JSON.stringify(body) : undefined,
-  })
-  if (!res.ok) {
-    const err = (await res.json()) as { error?: string }
-    throw new Error(err.error ?? `HTTP ${res.status}`)
-  }
-  return res.json() as Promise<T>
+  return `${OpenAPI.BASE}${path}`
 }
 
 export const api = {
+  refreshPrices: (): Promise<RefreshPricesResponse> =>
+    PricesService.refreshPricesApiPricesRefreshPost() as unknown as Promise<RefreshPricesResponse>,
+
   createTransaction: (body: {
     assetId: number
     date: string
-    type: "buy" | "sell"
+    type: string
     units: number
     eurAmount: number
     notes?: string
-  }) => mutateJson<unknown>("POST", "/api/transactions", body),
+  }) =>
+    TransactionsService.createTransactionApiTransactionsPost({
+      requestBody: {
+        asset_id: body.assetId,
+        date: body.date,
+        type: body.type,
+        units: body.units,
+        eur_amount: body.eurAmount,
+        notes: body.notes ?? null,
+      },
+    }),
 
-  updateTransaction: (
-    id: number,
-    body: {
-      date?: string
-      type?: "buy" | "sell"
-      units?: number
-      eurAmount?: number
-      notes?: string
-    }
-  ) => mutateJson<unknown>("PUT", `/api/transactions/${id}/update`, body),
+  deleteTransaction: (txId: number) =>
+    TransactionsService.deleteTransactionApiTransactionsTxIdDeleteDelete({ txId }),
 
-  deleteTransaction: (id: number) =>
-    mutateJson<unknown>("DELETE", `/api/transactions/${id}/delete`),
+  createExchange: (body: { name: string; type: string }) =>
+    ExchangesService.createExchangeApiExchangesPost({ requestBody: body }),
+
+  deleteExchange: (exchangeId: number) =>
+    ExchangesService.deleteExchangeApiExchangesExchangeIdDelete({ exchangeId }),
 
   createAsset: (body: {
     symbol: string
     name: string
-    type: "crypto" | "etf" | "cash" | "stock"
+    type: string
     exchangeId: number
-    yahooTicker?: string
-    coingeckoId?: string
-  }) => mutateJson<unknown>("POST", "/api/assets", body),
+    yahooTicker?: string | null
+    coingeckoId?: string | null
+  }) =>
+    AssetsService.createAssetApiAssetsPost({
+      requestBody: {
+        symbol: body.symbol,
+        name: body.name,
+        type: body.type,
+        exchange_id: body.exchangeId,
+        yahoo_ticker: body.yahooTicker,
+        coingecko_id: body.coingeckoId,
+      },
+    }),
 
   updateAsset: (
-    id: number,
+    assetId: number,
     body: {
-      symbol?: string
-      name?: string
-      type?: "crypto" | "etf" | "cash" | "stock"
-      exchangeId?: number
+      symbol?: string | null
+      name?: string | null
+      type?: string | null
+      exchangeId?: number | null
       yahooTicker?: string | null
       coingeckoId?: string | null
-    }
-  ) => mutateJson<unknown>("PUT", `/api/assets/${id}`, body),
-
-  refreshPrices: () =>
-    mutateJson<RefreshPricesResponse>("POST", "/api/prices/refresh"),
+    },
+  ) =>
+    AssetsService.updateAssetApiAssetsAssetIdPut({
+      assetId,
+      requestBody: {
+        symbol: body.symbol,
+        name: body.name,
+        type: body.type,
+        exchange_id: body.exchangeId,
+        yahoo_ticker: body.yahooTicker,
+        coingecko_id: body.coingeckoId,
+      },
+    }),
 
   setSecret: (name: string, value: string) =>
-    mutateJson<unknown>("POST", `/api/secrets/${name}`, { value }),
-
-  deleteSecret: (name: string) =>
-    mutateJson<unknown>("DELETE", `/api/secrets/${name}`),
-
-  createExchange: (body: { name: string; type: string }) =>
-    mutateJson<unknown>("POST", "/api/exchanges", body),
-
-  deleteExchange: (id: number) =>
-    mutateJson<unknown>("DELETE", `/api/exchanges/${id}`),
+    SecretsService.setSecretApiSecretsNamePost({ name, requestBody: { value } }),
 }

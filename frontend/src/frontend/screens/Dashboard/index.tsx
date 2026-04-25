@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
-import { fetchJson } from "@/lib/queryClient"
+import { PositionsService, NetWorthService } from "@/client"
 import { formatEur, formatPct, formatUnits } from "@/lib/format"
 import { useRefreshPrices } from "@/hooks/use-refresh-prices"
 import type { GetPositionsResponse, GetNetWorthResponse } from "@/types/api"
@@ -18,7 +18,7 @@ export function Dashboard() {
 
   const { data: positionsData, isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
-    queryFn: () => fetchJson<GetPositionsResponse>("/api/positions"),
+    queryFn: () => PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
     // Sort positions by current value descending
     select: (data: GetPositionsResponse) => ({
       positions: [...data.positions].sort(
@@ -29,7 +29,7 @@ export function Dashboard() {
 
   const { data: netWorthData, isLoading: netWorthLoading } = useQuery({
     queryKey: ["net-worth", period],
-    queryFn: () => fetchJson<GetNetWorthResponse>(`/api/net-worth?period=${period}`),
+    queryFn: () => NetWorthService.getNetWorthApiNetWorthGet({ period }) as unknown as Promise<GetNetWorthResponse>,
   })
 
   const positions = positionsData?.positions ?? []
