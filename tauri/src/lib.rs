@@ -11,8 +11,6 @@ use tauri::tray::TrayIconBuilder;
 
 #[cfg(not(debug_assertions))]
 use std::collections::HashMap;
-#[cfg(not(debug_assertions))]
-use tauri_plugin_shell::ShellExt;
 
 use config::{Settings, SETTINGS};
 use socket_server::run_socket_server;
@@ -20,7 +18,7 @@ use socket_server::run_socket_server;
 // Global state to hold the sidecar process handle
 struct SidecarState {
     #[allow(dead_code)]  // Only used in non-debug builds
-    child: Mutex<Option<tauri_plugin_shell::process::CommandChild>>,
+    child: Mutex<Option<std::process::Child>>,
 }
 
 unsafe impl Send for SidecarState {}
@@ -90,7 +88,7 @@ fn kill_process_on_port(port: u16) {
 
 /// Start the FastAPI backend.
 /// - In development: assumes backend is running separately (uvicorn --reload)
-/// - In production: spawns the bundled sidecar binary
+/// - In production: spawns the bundled onedir binary from the resource dir
 #[allow(unused_variables)]
 fn start_backend(app: &tauri::AppHandle) -> Result<(), String> {
     if Settings::is_dev_mode() {
@@ -101,38 +99,58 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(), String> {
         {
             // Clear any stale process occupying the port before spawning
             kill_process_on_port(SETTINGS.port);
-            // Get app data directory
+
             let data_dir = app
                 .path()
                 .app_data_dir()
                 .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
-            // Ensure directory exists
             std::fs::create_dir_all(&data_dir)
                 .map_err(|e| format!("Failed to create data dir: {}", e))?;
 
-            log::info!("Starting FastAPI sidecar with DATA_DIR={:?}", data_dir);
+            // Resolve the onedir binary bundled as a Tauri resource
+            let resource_dir = app
+                .path()
+                .resource_dir()
+                .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-            // Set environment variables for the sidecar
+            let binary = resource_dir
+                .join("sidecar")
+                .join("fastapi-server")
+                .join("fastapi-server");
+
+            if !binary.exists() {
+                return Err(format!("FastAPI binary not found at {:?}", binary));
+            }
+
+            // Ensure the binary is executable (resources may lose the x bit on bundle)
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = std::fs::metadata(&binary)
+                    .map_err(|e| format!("Failed to read binary metadata: {}", e))?
+                    .permissions();
+                perms.set_mode(perms.mode() | 0o111);
+                std::fs::set_permissions(&binary, perms)
+                    .map_err(|e| format!("Failed to set binary permissions: {}", e))?;
+            }
+
+            log::info!("Starting FastAPI server from {:?} with DATA_DIR={:?}", binary, data_dir);
+
             let mut env: HashMap<String, String> = HashMap::new();
             env.insert("DATA_DIR".into(), data_dir.to_string_lossy().to_string());
             env.insert("HOST".into(), SETTINGS.host.clone());
             env.insert("PORT".into(), SETTINGS.port.to_string());
 
-            // Spawn the sidecar
-            let (_rx, child) = app
-                .shell()
-                .sidecar("fastapi-server")
-                .map_err(|e| format!("Failed to create sidecar command: {}", e))?
-                .envs(env)
+            let child = std::process::Command::new(&binary)
+                .envs(&env)
                 .spawn()
-                .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+                .map_err(|e| format!("Failed to spawn FastAPI server: {}", e))?;
 
-            // Store the child handle for cleanup
             let state = app.state::<SidecarState>();
             *state.child.lock().unwrap() = Some(child);
 
-            log::info!("FastAPI sidecar spawned");
+            log::info!("FastAPI server spawned");
         }
     }
 
@@ -140,11 +158,11 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(), String> {
     wait_for_backend()
 }
 
-/// Stop the FastAPI sidecar gracefully.
+/// Stop the FastAPI server gracefully.
 #[allow(unused_variables)]
 fn stop_backend(app: &tauri::AppHandle) {
     if Settings::is_dev_mode() {
-        log::info!("Dev mode: no sidecar to stop");
+        log::info!("Dev mode: no backend to stop");
         return;
     }
 
@@ -154,12 +172,9 @@ fn stop_backend(app: &tauri::AppHandle) {
         let mut child_guard = state.child.lock().unwrap();
 
         if let Some(child) = child_guard.take() {
-            log::info!("Stopping FastAPI sidecar...");
+            let pid = child.id();
+            log::info!("Stopping FastAPI server (PID {})...", pid);
 
-            let pid = child.pid();
-
-            // Try graceful shutdown first (SIGTERM)
-            // Note: CommandChild.kill() consumes self, so we get PID first
             #[cfg(unix)]
             {
                 use std::process::{Command, Stdio};
@@ -176,7 +191,6 @@ fn stop_backend(app: &tauri::AppHandle) {
                     // Wait up to 2 seconds for graceful shutdown
                     for _ in 0..20 {
                         thread::sleep(std::time::Duration::from_millis(100));
-                        // Check if process is still running
                         if Command::new("kill")
                             .args(["-0", &pid.to_string()])
                             .stdout(Stdio::null())
@@ -184,12 +198,11 @@ fn stop_backend(app: &tauri::AppHandle) {
                             .status()
                             .is_err()
                         {
-                            log::info!("FastAPI sidecar stopped gracefully");
+                            log::info!("FastAPI server stopped gracefully");
                             return;
                         }
                     }
-                    // Process still running, force kill
-                    log::warn!("Sidecar still running, sending SIGKILL");
+                    log::warn!("FastAPI server still running, sending SIGKILL");
                     let _ = Command::new("kill")
                         .args(["-9", &pid.to_string()])
                         .stdout(Stdio::null())
@@ -201,8 +214,6 @@ fn stop_backend(app: &tauri::AppHandle) {
             #[cfg(windows)]
             {
                 use std::process::{Command, Stdio};
-
-                // On Windows, just use Taskkill with /TERM (graceful)
                 let _ = Command::new("taskkill")
                     .args(["/PID", &pid.to_string(), "/T"])
                     .stdout(Stdio::null())
@@ -210,7 +221,7 @@ fn stop_backend(app: &tauri::AppHandle) {
                     .status();
             }
 
-            log::info!("FastAPI sidecar stopped");
+            log::info!("FastAPI server stopped");
         }
     }
 }

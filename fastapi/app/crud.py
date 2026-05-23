@@ -296,8 +296,8 @@ def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSna
     today = date_cls.today()
 
     if period == "1d":
-        # One data point per day, last 60 days
-        cutoff = (today - timedelta(days=60)).isoformat()
+        # One data point per day, last 90 days
+        cutoff = (today - timedelta(days=90)).isoformat()
         rows = session.exec(
             text(
                 "SELECT date, total_eur, invested_eur FROM net_worth_snapshot "
@@ -307,7 +307,7 @@ def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSna
         return [NetWorthSnapshot(date=r[0], total_eur=r[1], invested_eur=r[2]) for r in rows]
 
     if period == "1w":
-        # One data point per ISO week (latest date in each week), last 60 weeks
+        # One data point per ISO week (latest date in each week), last 90 weeks
         sql = text("""
             SELECT s.date, s.total_eur, s.invested_eur
             FROM net_worth_snapshot s
@@ -316,14 +316,14 @@ def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSna
               FROM net_worth_snapshot
               GROUP BY strftime('%Y-%W', date)
               ORDER BY max_date DESC
-              LIMIT 60
+              LIMIT 90
             ) g ON s.date = g.max_date
             ORDER BY s.date ASC
         """)
         rows = session.exec(sql).all()
         return [NetWorthSnapshot(date=r[0], total_eur=r[1], invested_eur=r[2]) for r in rows]
 
-    # 1m — one data point per calendar month (latest date in each month), last 60 months
+    # 1m — one data point per calendar month (latest date in each month), last 90 months
     sql = text("""
         SELECT s.date, s.total_eur, s.invested_eur
         FROM net_worth_snapshot s
@@ -332,7 +332,7 @@ def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSna
           FROM net_worth_snapshot
           GROUP BY strftime('%Y-%m', date)
           ORDER BY max_date DESC
-          LIMIT 60
+          LIMIT 90
         ) g ON s.date = g.max_date
         ORDER BY s.date ASC
     """)

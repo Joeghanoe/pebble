@@ -34,7 +34,7 @@ setup:
 # Uses embedded Python for backend, no pre-built sidecar binary needed
 dev:
 	@echo "==> 🚀 Starting Tauri development mode..."
-	TAURI_CONFIG='{"bundle":{"externalBin":[]}}' cargo tauri dev
+	cargo tauri dev
 
 # Run only the frontend dev server (useful when backend is already running)
 dev-frontend:
@@ -102,8 +102,9 @@ clean:
 	rm -rf frontend/dist frontend/node_modules
 	@echo "  - 🐍 Cleaning Python venv, data, and PyInstaller build..."
 	rm -rf fastapi/.venv fastapi/.data fastapi/build
-	@echo "  - 🔧 Cleaning Tauri binaries..."
+	@echo "  - 🔧 Cleaning Tauri build artifacts..."
 	rm -rf tauri/binaries/fastapi-server*
+	@rm -rf tauri/sidecar/fastapi-server && mkdir -p tauri/sidecar/fastapi-server && touch tauri/sidecar/fastapi-server/placeholder
 	@echo "  - 🗄️  Cleaning local databases..."
 	rm -rf .data/*.db* .data/*.db-wal .data/*.db-shm
 	@echo "  - 📄 Cleaning generated openapi.json..."

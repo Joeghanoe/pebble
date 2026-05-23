@@ -58,4 +58,6 @@ Cargo.lock
 # Tauri
 tauri/binaries/*
 !tauri/binaries/.gitkeep
+tauri/sidecar/fastapi-server/*
+!tauri/sidecar/fastapi-server/placeholder
 fastapi/build/

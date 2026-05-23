@@ -8,7 +8,7 @@ from app import crud
 from app.core.db import get_session
 from app.models import RefreshPricesResponse, RefreshResultItem
 from app.services.price_service_factory import get_price_service
-from app.services.snapshots import upsert_live_snapshot, run_price_correction_backfill, run_full_snapshot_recompute
+from app.services.snapshots import upsert_live_snapshot, run_snapshot_backfill, run_price_correction_backfill, run_full_snapshot_recompute
 
 router = APIRouter(prefix="/prices", tags=["prices"])
 
@@ -55,6 +55,7 @@ async def refresh_prices(session: Session = Depends(get_session)) -> dict:
 
     _last_refresh_at = datetime.now(timezone.utc).timestamp()
     upsert_live_snapshot(session)
+    await run_snapshot_backfill(session)
     return RefreshPricesResponse(throttled=False, results=results).model_dump()
 
 
