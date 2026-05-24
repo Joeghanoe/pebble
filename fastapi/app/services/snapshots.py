@@ -48,6 +48,42 @@ async def run_snapshot_backfill(session: Session) -> None:
         if monthly_cursor > today:
             break
 
+    # Phase 1.5: fill daily price gaps in the last 60 days so the 1D chart has
+    # per-day resolution.  For each asset, only fetch the range that is actually
+    # missing — if prices already reach today we skip the asset entirely.
+    daily_window_start = max(date_cls.fromisoformat(earliest), today - timedelta(days=60))
+    window_start_str = daily_window_start.isoformat()
+    today_str = today.isoformat()
+    yesterday_str = (today - timedelta(days=1)).isoformat()
+    earliest_gap: str | None = None  # oldest date we fetched new data for
+
+    for asset in assets:
+        row = session.exec(  # type: ignore[call-overload]
+            text("SELECT MAX(date) FROM price_cache WHERE asset_id = :aid AND date >= :start AND date <= :end")
+            .bindparams(aid=asset.id, start=window_start_str, end=today_str)
+        ).one()
+        last_in_window: str | None = row[0]
+
+        if last_in_window is not None and last_in_window >= yesterday_str:
+            continue  # already up to date (today or yesterday covers market close)
+
+        fetch_start = (
+            (date_cls.fromisoformat(last_in_window) + timedelta(days=1)).isoformat()
+            if last_in_window
+            else window_start_str
+        )
+        await price_service.fetch_historical_prices_range(session, asset, fetch_start, today_str)
+        if earliest_gap is None or fetch_start < earliest_gap:
+            earliest_gap = fetch_start
+
+    if earliest_gap:
+        # Wipe and regenerate only the snapshots where we have new price data
+        session.exec(  # type: ignore[call-overload]
+            text("DELETE FROM net_worth_snapshot WHERE date >= :start AND date <= :end")
+            .bindparams(start=earliest_gap, end=today_str)
+        )
+        session.commit()
+
     # Phase 2: generate a snapshot for every calendar day using the nearest
     # cached price (no additional API calls).  For days before the first cached
     # price entry, get_price_on_or_before returns None and we skip that day.

@@ -36,3 +36,24 @@ class CoinGeckoClient:
             return data.get("market_data", {}).get("current_price", {}).get("eur")
         except Exception:
             return None
+
+    async def get_historical_prices_range(self, coin_id: str, start_date: str, end_date: str) -> dict[str, float]:
+        """Fetch daily EUR prices for a date range in one call. Returns {YYYY-MM-DD: price_eur}."""
+        from datetime import datetime, timezone, timedelta
+
+        period1 = int(datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+        period2 = int((datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)).timestamp())
+        url = f"{self.BASE_URL}/coins/{coin_id}/market_chart/range?vs_currency=eur&from={period1}&to={period2}&precision=full"
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.get(url, headers=self._headers())
+            if not r.is_success:
+                return {}
+            data = r.json()
+            prices: dict[str, float] = {}
+            for ts_ms, price in data.get("prices", []):
+                date_str = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+                prices[date_str] = float(price)
+            return prices
+        except Exception:
+            return {}

@@ -34,6 +34,30 @@ class PriceService:
             return await self._fetch_live_etf(session, asset, today)
         return PriceResultUnavailable()
 
+    async def fetch_historical_prices_range(
+        self, session: Session, asset: Asset, start_date: str, end_date: str
+    ) -> None:
+        """Bulk-fetch and cache all daily prices for [start_date, end_date] in one API call."""
+        if asset.type == "crypto":
+            if asset.yahoo_ticker:
+                prices = await self.yahoo.get_historical_prices_range(asset.yahoo_ticker, start_date, end_date)
+                if prices:
+                    for date_str, usd_price in prices.items():
+                        rate = await self._get_rate_safe(date_str)
+                        upsert_price(session, asset.id, date_str, usd_price / rate, rate)  # type: ignore[arg-type]
+                    return
+            if asset.coingecko_id:
+                prices = await self.coingecko.get_historical_prices_range(asset.coingecko_id, start_date, end_date)
+                for date_str, price_eur in prices.items():
+                    rate = await self._get_rate_safe(date_str)
+                    upsert_price(session, asset.id, date_str, price_eur, rate)  # type: ignore[arg-type]
+        elif asset.type in ("etf", "stock") and asset.yahoo_ticker:
+            prices = await self.yahoo.get_historical_prices_range(asset.yahoo_ticker, start_date, end_date)
+            for date_str, price in prices.items():
+                rate = await self._get_rate_safe(date_str)
+                price_eur = price if is_eur_listing(asset.yahoo_ticker) else price / rate
+                upsert_price(session, asset.id, date_str, price_eur, rate)  # type: ignore[arg-type]
+
     async def fetch_historical_price(
         self, session: Session, asset: Asset, date: str
     ) -> PriceResultOk | PriceResultStale | PriceResultUnavailable:
