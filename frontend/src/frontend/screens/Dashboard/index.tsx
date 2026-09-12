@@ -67,7 +67,7 @@ export function Dashboard() {
       <SiteHeader name="Dashboard" />
       <div
         className={cn(
-          "space-y-2 p-6 transition-opacity duration-500 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card",
+          "space-y-2 p-4 transition-opacity duration-500 sm:p-6 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card",
           positionsLoading || netWorthLoading ? "opacity-0" : "opacity-100",
         )}
       >
@@ -85,10 +85,9 @@ export function Dashboard() {
           isRefreshing={isRefreshing}
         />
 
-        {/* Main two-column layout */}
-        <div className="grid grid-cols-4 items-start gap-6">
+        <div className="grid grid-cols-1 items-start gap-6">
           {/* ── Investment Performance table ── */}
-          <Card className="col-span-4 col-start-1 gap-3 py-4">
+          <Card className="gap-3 py-4">
             <CardHeader className="flex items-center gap-2 px-4 font-heading text-xl">
               Assets
             </CardHeader>
@@ -122,7 +121,7 @@ export function Dashboard() {
                       data-variant="default"
                       className="cn-item-media [&amp;_svg]:pointer-events-none cn-item-media-variant-default flex shrink-0 items-center justify-center"
                     >
-                      <div className="flex size-12 items-center justify-center rounded-lg border text-sm font-semibold">
+                      <div className="flex size-10 items-center justify-center rounded-lg border text-sm font-semibold sm:size-12">
                         {pos.asset.symbol.slice(0, 3)}
                       </div>
                     </div>
@@ -140,13 +139,13 @@ export function Dashboard() {
                         data-slot="item-description"
                         className="cn-item-description [&amp;&gt;a]:underline [&amp;&gt;a]:underline-offset-4 [&amp;&gt;a:hover]:text-primary line-clamp-2 font-number text-xs font-normal tracking-wider uppercase"
                       >
-                        {pos.units_held} Shares &middot; P&L:{" "}
+                        {formatUnits(pos.units_held)} Shares &middot; P&L:{" "}
                         <span className={pnlClass}>
                           {formatPct(pos.pnl_pct)}
                         </span>
                       </p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-6">
+                    <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-6">
                       <span
                         data-slot="badge"
                         data-variant="outline"

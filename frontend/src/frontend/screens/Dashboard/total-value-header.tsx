@@ -107,7 +107,7 @@ export function TotalValueHeader({
   } else {
     chartContent = (
       <div className="relative h-32 w-full">
-        <div className="ml-auto z-10 flex gap-1">
+        <div className="z-10 flex justify-end gap-1">
           {PERIODS.map(({ label, value }) => (
             <button
               key={value}
@@ -184,11 +184,11 @@ export function TotalValueHeader({
   }
 
   return (
-    <div className="grid h-28 grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 lg:h-28 lg:grid-cols-4 lg:gap-0">
       {/* Contains the total value of the portfolio and P&L */}
       <div
         className={cn(
-          "col-span-1 flex flex-col transition-opacity duration-300",
+          "flex flex-col transition-opacity duration-300 lg:col-span-1",
           positionsLoading ? "opacity-0" : "opacity-100",
         )}
       >
@@ -211,10 +211,10 @@ export function TotalValueHeader({
       </div>
 
       {/* Contains the chart over time */}
-      <div className="col-span-2">{chartContent}</div>
+      <div className="lg:col-span-2">{chartContent}</div>
 
       {/* Contains Sync Button (to refresh data) */}
-      <div className="col-span-1 flex flex-col items-center justify-center gap-2">
+      <div className="flex flex-row items-center justify-between gap-2 lg:col-span-1 lg:flex-col lg:justify-center">
         <Button
           variant="outline"
           size="lg"
@@ -225,7 +225,7 @@ export function TotalValueHeader({
           Refresh All
         </Button>
         {/* Last updated x minutes,hours ago in that exact format */}
-        <div className="ml-4 text-sm text-muted-foreground">
+        <div className="text-sm text-muted-foreground">
           {isRefreshing ? "Syncing..." : `Last updated ${lastUpdatedLabel}`}
         </div>
       </div>
