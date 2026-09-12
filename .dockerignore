@@ -1,0 +1,27 @@
+# The build context is the repo root for both images; keep out everything neither needs.
+.git
+.github
+.DS_Store
+
+# Node / Vite
+**/node_modules
+frontend/dist
+frontend/openapi.json
+
+# Python
+**/__pycache__
+**/*.py[cod]
+fastapi/.venv
+fastapi/build
+fastapi/dist
+fastapi/tests
+
+# The desktop shell is not part of either image.
+tauri
+
+# Local data and docs
+.data
+docs
+*.log
+.env
+.env.*

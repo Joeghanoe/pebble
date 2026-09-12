@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    tauri_fastapi_full_stack_template_lib::run()
+    pebble_lib::run()
 }

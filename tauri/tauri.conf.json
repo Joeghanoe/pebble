@@ -4,19 +4,17 @@
   "version": "0.0.1",
   "identifier": "com.pebble.desktop",
   "build": {
-    "beforeDevCommand": "cd ../frontend && bun run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "cd ../frontend && bun run build",
-    "frontendDist": "../frontend/dist"
+    "frontendDist": "shell"
   },
   "app": {
     "windows": [
       {
-        "title": "pebble",
+        "title": "Pebble",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
-        "minHeight": 600
+        "minHeight": 600,
+        "url": "https://REPLACE-ME.up.railway.app"
       }
     ],
     "security": {
@@ -26,9 +24,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": [
-      "binaries/fastapi-server"
-    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

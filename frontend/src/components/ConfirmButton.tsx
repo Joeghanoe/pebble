@@ -80,7 +80,9 @@ export function ConfirmButton({
           ) : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={running}>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel disabled={running}>
+            {cancelLabel}
+          </AlertDialogCancel>
           <AlertDialogAction
             onClick={handleConfirm}
             disabled={running}

@@ -24,7 +24,8 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
     }
 
     // 401 only happens if the proxy session expired mid-session.
-    if (error.status === 401) return "Your session expired. Reload to sign in again.";
+    if (error.status === 401)
+      return "Your session expired. Reload to sign in again.";
   }
 
   if (error instanceof Error && error.message) return error.message;

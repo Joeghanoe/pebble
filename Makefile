@@ -1,146 +1,107 @@
 # =============================================================================
-# Makefile for Tauri FastAPI Full Stack Template
+# Pebble
 # =============================================================================
 
-.PHONY: setup dev package dev-frontend fastapi init-db clean generate-client package-backend
+.PHONY: help setup up down db api web test test-api lint migrate revision generate-client desktop desktop-build clean
 
-# Project root directory
 PROJECT_ROOT := $(shell pwd)
 
-# =============================================================================
-# Setup
-# =============================================================================
+# Local Postgres from docker-compose. Override to point at something else.
+DATABASE_URL ?= postgres://pebble:pebble@localhost:5432/pebble
+TEST_DATABASE_URL ?= postgres://pebble:pebble@localhost:5432/pebble_test
 
-##@ Setup 📦
+##@ Setup
 
-# Install all dependencies (Rust, Frontend, Backend)
+# Install frontend and backend dependencies. The Tauri CLI is only needed if you
+# build the desktop shell; see `make desktop`.
 setup:
-	@echo "==> 📦 Installing dependencies..."
-	@echo "  - 🔧 Installing Tauri CLI..."
-	cargo install tauri-cli
-	@echo "  - ⚛️  Installing frontend dependencies (bun)..."
+	@echo "==> Installing frontend dependencies (bun)..."
 	cd frontend && bun install
-	@echo "  - 🐍 Installing backend dependencies (uv)..."
+	@echo "==> Installing backend dependencies (uv)..."
 	cd fastapi && uv sync
-	@echo "==> ✅ Setup complete!"
+	@echo "==> Done."
 
-# =============================================================================
-# Development
-# =============================================================================
+##@ Run
 
-##@ Development 🚀
+# The whole stack behind a local stand-in for oauth2-proxy, on http://localhost:3000.
+# No Google account needed: the edge stamps a fixed identity header.
+up:
+	docker compose up --build
 
-# Run the full app in development mode (Tauri + Frontend dev server)
-# Uses embedded Python for backend, no pre-built sidecar binary needed
-dev:
-	@echo "==> 🚀 Starting Tauri development mode..."
-	TAURI_CONFIG='{"bundle":{"externalBin":[]}}' cargo tauri dev
+down:
+	docker compose down
 
-# Run only the frontend dev server (useful when backend is already running)
-dev-frontend:
-	@echo "==> ⚛️  Starting frontend dev server on http://localhost:1420..."
+# Just Postgres, for running the API and web from source.
+db:
+	docker compose up postgres -d
+
+# API only, against the compose Postgres. REQUIRE_PROXY_IDENTITY=false because there
+# is no proxy in front of it here — never set that in a deployment.
+api:
+	cd fastapi && DATABASE_URL=$(DATABASE_URL) REQUIRE_PROXY_IDENTITY=false \
+		uv run uvicorn app.main:app --reload --port 1430
+
+# Frontend only. Vite proxies /api to the API on 1430.
+web:
 	cd frontend && bun run dev
 
-# Run only the FastAPI backend (for development/debugging)
-fastapi:
-	@echo "==> 🐍 Starting FastAPI backend on http://localhost:1430..."
-	cd fastapi && DATA_DIR=$(PROJECT_ROOT)/.data uv run uvicorn app.main:app --reload --port 1430
+##@ Test
 
-# =============================================================================
-# Code Generation
-# =============================================================================
+test: test-api
+	cd frontend && bun run lint
 
-##@ Code Generation 🔮
+# The API tests run against a real Postgres, not SQLite: they exist to pin the raw SQL
+# and the identity middleware as they behave in the deployment.
+test-api:
+	createdb -h localhost -U pebble pebble_test 2>/dev/null || true
+	cd fastapi && TEST_DATABASE_URL=$(TEST_DATABASE_URL) uv run pytest
 
-# Generate API clients (TypeScript + Rust) from FastAPI OpenAPI schema
-# This reads the backend models and generates typed client code
+lint:
+	cd fastapi && uv run ruff check app tests
+	cd frontend && bun run lint
+
+##@ Database
+
+# The API runs migrations on startup; this is for running them by hand.
+migrate:
+	cd fastapi && DATABASE_URL=$(DATABASE_URL) uv run alembic upgrade head
+
+# make revision m="add a column"
+revision:
+	cd fastapi && DATABASE_URL=$(DATABASE_URL) uv run alembic revision --autogenerate -m "$(m)"
+
+##@ Code generation
+
+# Regenerate the TypeScript client from the API's OpenAPI schema.
 generate-client:
 	@./scripts/generate-client.sh
 
-# =============================================================================
-# Database
-# =============================================================================
+##@ Desktop shell
 
-##@ Database 🗄️
+# A thin client over the deployment: the window loads the hosted URL, there is no
+# local backend. Set the URL in tauri/tauri.conf.json first.
+desktop:
+	cd tauri && cargo tauri dev
 
-# Initialize database (run migrations + create default user)
-init-db:
-	@echo "==> 🗄️  Initializing database..."
-	cd fastapi && DATA_DIR=$(PROJECT_ROOT)/.data uv run python -m app.prestart
-	@echo "==> ✅ Database initialized!"
+desktop-build:
+	cd tauri && cargo tauri build
 
-# =============================================================================
-# Package
-# =============================================================================
+##@ Maintenance
 
-##@ Package 📦
-
-# Package the FastAPI sidecar binary (PyInstaller)
-package-backend:
-	@echo "==> 📦 Packaging FastAPI sidecar binary..."
-	cd fastapi && uv run --group build build.py
-
-# Package the desktop application for production
-# This will create platform-specific installers in tauri/target/release/bundle/
-package: package-backend
-	@echo "==> 📦 Packaging Tauri desktop bundle..."
-	cargo tauri build
-	@echo "==> ✅ Package complete! Check tauri/target/release/bundle/ for output."
-
-# =============================================================================
-# Maintenance
-# =============================================================================
-
-##@ Maintenance 🧹
-
-# Clean all build artifacts and local database
 clean:
-	@echo "==> 🧹 Cleaning build artifacts..."
-	@echo "  - 🔨 Cleaning Rust cargo builds..."
+	@echo "==> Cleaning..."
 	cd tauri && cargo clean 2>/dev/null || true
-	@echo "  - ⚛️  Cleaning frontend dist and node_modules..."
 	rm -rf frontend/dist frontend/node_modules
-	@echo "  - 🐍 Cleaning Python venv, data, and PyInstaller build..."
-	rm -rf fastapi/.venv fastapi/.data fastapi/build
-	@echo "  - 🔧 Cleaning Tauri binaries..."
-	rm -rf tauri/binaries/fastapi-server*
-	@echo "  - 🗄️  Cleaning local databases..."
-	rm -rf .data/*.db* .data/*.db-wal .data/*.db-shm
-	@echo "  - 📄 Cleaning generated openapi.json..."
+	rm -rf fastapi/.venv fastapi/.pytest_cache
+	find . -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 	rm -f frontend/openapi.json openapi.json
-	@echo "==> ✅ Clean complete!"
+	@echo "==> Done."
 
-# =============================================================================
-# Help
-# =============================================================================
+##@ Help
 
-##@ Help ❓
-
-# Display this help message
 help:
+	@grep -E '^[a-zA-Z_-]+:.*?##@ .*$$|^##@' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?##@ "}; /^##@/ {printf "\n  \033[1m%s\033[0m\n", substr($$0, 5)} /^[a-zA-Z_-]+:/ {printf "    %-18s %s\n", $$1, $$2}'
 	@echo ""
-	@echo "  🦀 Tauri FastAPI Full Stack Template"
-	@echo ""
-	@echo "  Usage: make [target]"
-	@echo ""
-	@echo "  Setup 📦"
-	@echo "    setup              Install all dependencies"
-	@echo ""
-	@echo "  Development 🚀"
-	@echo "    dev                Run Tauri development mode"
-	@echo "    dev-frontend       Run frontend dev server only"
-	@echo "    fastapi            Run FastAPI backend only"
-	@echo ""
-	@echo "  Code Generation 🔮"
-	@echo "    generate-client    Generate TypeScript + Rust API clients"
-	@echo ""
-	@echo "  Database 🗄️"
-	@echo "    init-db            Initialize database"
-	@echo ""
-	@echo "  Package 📦"
-	@echo "    package            Package production bundle"
-	@echo "    package-backend    Package FastAPI backend binary"
-	@echo ""
-	@echo "  Maintenance 🧹"
-	@echo "    clean              Clean build artifacts"
+	@echo "  Run 'make up' for the whole stack on http://localhost:3000"
 	@echo ""

@@ -1,49 +1,28 @@
 #!/usr/bin/env bash
+#
+# Regenerate the TypeScript API client from the FastAPI app's OpenAPI schema.
+#
+# The Rust client this script also used to generate is gone: the desktop shell is a thin
+# client over the deployment now and never talks to the API from Rust.
+#
+# The schema is read straight out of the app object, so no server has to be running —
+# but importing app.main constructs the SQLAlchemy engine, which needs a DATABASE_URL
+# that parses (it is never connected to).
 
-set -e
+set -euo pipefail
 
-echo "==> 🔮 Generating API clients from FastAPI backend..."
+cd "$(dirname "$0")/.."
 
-# Generate OpenAPI schema from FastAPI app
-cd fastapi
-uv run python -c "import app.main; import json; print(json.dumps(app.main.app.openapi()))" > ../openapi.json
-cd ..
-mv openapi.json frontend/
+export DATABASE_URL="${DATABASE_URL:-postgres://pebble:pebble@localhost:5432/pebble}"
 
-# Generate TypeScript client
-echo "  - ⚛️  Generating TypeScript client..."
-cd frontend
-bun run generate-client
-cd ..
+echo "==> Reading OpenAPI schema from the FastAPI app..."
+(cd fastapi && uv run python -c \
+  "import app.main, json; print(json.dumps(app.main.app.openapi()))") > frontend/openapi.json
 
-# Format TypeScript files
-echo "  - 🎨 Formatting TypeScript files..."
-cd frontend
-bun run lint
-cd ..
+echo "==> Generating TypeScript client..."
+(cd frontend && bun run generate-client)
 
-# Generate Rust client
-echo "  - 🦀 Generating Rust client..."
-cd frontend
-bun run generate-rust-client
-cd ..
+echo "==> Formatting..."
+(cd frontend && bun run format)
 
-# Clean up unnecessary generated files
-echo "  - 🧹 Cleaning up generated files..."
-rm -rf tauri/src/client/docs
-rm -f tauri/src/client/.gitignore
-rm -f tauri/src/client/.travis.yml
-rm -f tauri/src/client/git_push.sh
-rm -rf tauri/src/client/.openapi-generator
-rm -f tauri/src/client/README.md
-rm -f tauri/src/client/.openapi-generator-ignore
-
-# Verify Rust client compiles
-echo "  - 🔨 Verifying Rust client compiles..."
-cd tauri
-if ! TAURI_CONFIG='{"bundle":{"externalBin":[]}}' cargo check --quiet 2>&1; then
-    echo "  ⚠️  Rust compilation had issues, but client was generated"
-fi
-cd ..
-
-echo "==> ✅ All clients generated successfully!"
+echo "==> Done. Review the diff in frontend/src/client/."

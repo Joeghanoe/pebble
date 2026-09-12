@@ -9,8 +9,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "preview": "vite preview",
-    "generate-client": "openapi-ts",
-    "generate-rust-client": "openapi-generator-cli generate -i openapi.json -g rust -o ../tauri/src/client --additional-properties=packageName=client"
+    "generate-client": "openapi-ts"
   },
   "dependencies": {
     "@choochmeque/tauri-plugin-biometry-api": "^0.2.6",
@@ -60,7 +59,6 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@hey-api/openapi-ts": "0.73.0",
-    "@openapitools/openapi-generator-cli": "^2.7.0",
     "@tanstack/router-devtools": "^1.142.11",
     "@tanstack/router-plugin": "^1.140.0",
     "@tauri-apps/cli": "^2.10.0",
