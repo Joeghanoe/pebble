@@ -8,6 +8,7 @@ from app import crud
 from app.core.db import get_session
 from app.models import RefreshPricesResponse, RefreshResultItem
 from app.services.price_service_factory import get_price_service
+from app.services.snapshots import record_snapshot_for_date, run_snapshot_backfill
 
 router = APIRouter(prefix="/prices", tags=["prices"])
 
@@ -51,6 +52,18 @@ async def refresh_prices(session: Session = Depends(get_session)) -> dict:
             symbol=asset.symbol,
             result=result.model_dump(),
         ))
+
+    # Fresh quotes are the only moment the portfolio's value is known, so this is
+    # where the history gets written. Nothing else in the app did, which is why
+    # `position_snapshot` was empty and every position chart came back with no
+    # points: the table existed and had no writer.
+    #
+    # Today's row first (cheap, and uses the quotes just fetched), then the
+    # month-end backfill, which may reach upstream for prices it has no cache
+    # entry for. Both are idempotent, and the 15-minute cooldown above bounds how
+    # often they run.
+    record_snapshot_for_date(session, datetime.now(timezone.utc).date().isoformat())
+    await run_snapshot_backfill(session)
 
     _last_refresh_at = datetime.now(timezone.utc).timestamp()
     return RefreshPricesResponse(throttled=False, results=results).model_dump()

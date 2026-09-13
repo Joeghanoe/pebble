@@ -14,30 +14,50 @@ export type SnapshotPeriod = "1d" | "1w" | "1m";
 
 /**
  * A timeframe is a *range*; the API's `period` is a *granularity*. The mapping
- * picks the coarsest granularity that still gives the range enough points, and
- * `points` then trims the tail.
+ * picks the coarsest granularity that still covers the range.
  *
- * `1D` is missing on purpose. Pebble stores one snapshot a day, so a one-day
- * window is a single point — there is no intraday series to draw.
+ * `1D` is missing on purpose. Pebble records at most one snapshot a day, so a
+ * one-day window is a single point — there is no intraday series to draw.
  */
-const RANGES: Record<Timeframe, { period: SnapshotPeriod; points: number }> = {
-  "1W": { period: "1d", points: 7 },
-  "1M": { period: "1d", points: 31 },
-  "1Y": { period: "1w", points: 53 },
-  ALL: { period: "1m", points: Number.POSITIVE_INFINITY },
+const RANGES: Record<Timeframe, { period: SnapshotPeriod; days: number }> = {
+  "1W": { period: "1d", days: 7 },
+  "1M": { period: "1d", days: 31 },
+  "1Y": { period: "1w", days: 366 },
+  ALL: { period: "1m", days: Number.POSITIVE_INFINITY },
 };
 
 export function timeframePeriod(tf: Timeframe): SnapshotPeriod {
   return RANGES[tf].period;
 }
 
-/** The tail of a series that the timeframe actually covers. */
-export function sliceTimeframe<T>(points: readonly T[], tf: Timeframe): T[] {
-  const { points: count } = RANGES[tf];
-  if (!Number.isFinite(count) || points.length <= count) {
+/**
+ * The part of a series the timeframe actually covers.
+ *
+ * By date rather than by a point count, because the cadence is not uniform:
+ * history before today is month-end (each missing price is a call upstream, so
+ * a daily walk over a multi-year ledger is thousands of them), while every
+ * price refresh adds a row for the day it ran. Counting points would label the
+ * last 31 month-ends "1M".
+ *
+ * A window that turns out to hold fewer than two points renders the chart's own
+ * empty state, which is the honest answer for a range the ledger cannot fill
+ * yet.
+ */
+export function sliceTimeframe<T extends { date: string }>(
+  points: readonly T[],
+  tf: Timeframe,
+): T[] {
+  const { days } = RANGES[tf];
+  if (!Number.isFinite(days) || points.length === 0) {
     return [...points];
   }
-  return points.slice(points.length - count);
+  // Measured back from the newest point, not from today: an app opened after a
+  // week away should still show that week, not an empty chart.
+  const newest = new Date(points[points.length - 1].date);
+  const cutoff = new Date(newest);
+  cutoff.setDate(cutoff.getDate() - days);
+  const from = cutoff.toISOString().slice(0, 10);
+  return points.filter((point) => point.date >= from);
 }
 
 const MONTHS = [
