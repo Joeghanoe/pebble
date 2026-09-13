@@ -1,0 +1,62 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A superseded run on the same branch has nothing left to tell anyone.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: make test
+    runs-on: ubuntu-latest
+
+    # The API tests run against a real Postgres rather than SQLite, deliberately:
+    # most of them exist to pin raw SQL and sequence behaviour that a different
+    # engine would not reproduce. Same image and credentials as docker-compose, so
+    # a failure here is reproducible with `make db` locally.
+    #
+    # POSTGRES_DB is the *test* database: `make test-api` opens with a `createdb`
+    # that tolerates failure, and having the database already present means the
+    # runner needs no postgresql-client at all.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pebble
+          POSTGRES_PASSWORD: pebble
+          POSTGRES_DB: pebble_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pebble"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: fastapi/uv.lock
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      # `make test` runs eslint through `bun run`, which does not install for you.
+      # Frozen: CI fails on a lockfile that does not match package.json rather than
+      # quietly resolving something a contributor never tested against.
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+        working-directory: frontend
+
+      - name: make test
+        run: make test
+        env:
+          TEST_DATABASE_URL: postgres://pebble:pebble@localhost:5432/pebble_test

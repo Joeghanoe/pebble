@@ -77,28 +77,7 @@ export function Settings() {
       <SiteHeader name="Settings" sublabel="local · v2.0.0" />
       <div className="pb-fade flex justify-center p-5">
         <div className="flex w-full max-w-[720px] flex-col gap-3.5">
-          <Group title="Portfolio" note="how numbers are shown">
-            <Row
-              label="Base currency"
-              description="Everything converts to this"
-            >
-              <PbSegmented
-                options={["EUR", "USD", "GBP"] as const}
-                value={prefs.baseCurrency}
-                onChange={(next) => {
-                  if (next === "EUR") {
-                    setPreference("baseCurrency", next);
-                    return;
-                  }
-                  // The price feed resolves everything into EUR before it is
-                  // stored, so switching the display currency would relabel the
-                  // same numbers rather than convert them.
-                  toast.info(
-                    "Pebble prices in EUR end to end. Another base currency needs a conversion layer in the API first.",
-                  );
-                }}
-              />
-            </Row>
+          <Group title="Portfolio" note="euro, and how numbers are shown">
             <Row
               label="Denominate in BTC"
               description="Show a sats value alongside every position"
