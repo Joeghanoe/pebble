@@ -9,7 +9,14 @@ that matters: one point per bucket, the latest in each, oldest first.
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import Asset, Exchange, NetWorthSnapshot, PositionSnapshot
+from app.models import (
+    Asset,
+    Exchange,
+    NetWorthSnapshot,
+    PositionSnapshot,
+    PriceCache,
+    Transaction,
+)
 
 
 def _seed(session: Session, *dates: str) -> None:
@@ -141,3 +148,74 @@ def test_position_history_daily_is_oldest_first(client: TestClient, session: Ses
 
 def test_position_history_without_snapshots_is_empty(client: TestClient, session: Session) -> None:
     assert client.get(f"/api/positions/{_asset(session)}/history").json()["points"] == []
+
+
+def test_a_refresh_writes_the_position_rows_behind_the_total(
+    client: TestClient, session: Session
+) -> None:
+    """The bug this endpoint was added for.
+
+    `net_worth_snapshot` came across from the desktop import and
+    `position_snapshot` did not, and nothing in the app wrote either — so every
+    position chart asked for its series and got an empty list back.
+    """
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date="2026-01-05", type="buy", units=2.0, eur_amount=100.0)
+    )
+    session.add(PriceCache(asset_id=asset, date="2026-01-05", price_eur=80.0, exchange_rate=1.1))
+    session.commit()
+
+    assert client.post("/api/prices/refresh").status_code == 200
+
+    points = client.get(f"/api/positions/{asset}/history?period=1d").json()["points"]
+    assert points, "a refresh must leave the position with a series to chart"
+    latest = points[-1]
+    assert latest["units_held"] == 2.0
+    assert latest["invested_eur"] == 100.0
+    assert latest["value_eur"] == latest["units_held"] * latest["price_eur"]
+
+
+def test_the_backfill_builds_position_rows_for_imported_months(
+    client: TestClient, session: Session
+) -> None:
+    """A month whose total was imported still needs its per-position rows.
+
+    Skipping on `net_worth_snapshot` alone is exactly what left the charts empty,
+    so the months carried over from the desktop ledger are the ones that matter.
+    """
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date="2026-01-05", type="buy", units=2.0, eur_amount=100.0)
+    )
+    session.add(PriceCache(asset_id=asset, date="2026-01-05", price_eur=80.0, exchange_rate=1.1))
+    # The imported total, with no rows behind it.
+    session.add(NetWorthSnapshot(date="2026-01-31", total_eur=160.0, invested_eur=100.0))
+    session.commit()
+
+    assert client.post("/api/prices/refresh").status_code == 200
+
+    dates = [
+        p["date"]
+        for p in client.get(f"/api/positions/{asset}/history?period=1d").json()["points"]
+    ]
+    assert "2026-01-31" in dates
+
+
+def test_a_position_held_later_gets_no_row_for_earlier_months(
+    client: TestClient, session: Session
+) -> None:
+    """Zero-unit rows would floor the chart at 0 for every month before the buy."""
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date="2026-03-05", type="buy", units=1.0, eur_amount=50.0)
+    )
+    session.add(PriceCache(asset_id=asset, date="2026-01-01", price_eur=40.0, exchange_rate=1.1))
+    session.commit()
+
+    assert client.post("/api/prices/refresh").status_code == 200
+
+    points = client.get(f"/api/positions/{asset}/history?period=1d").json()["points"]
+    assert points, "today's snapshot should still be recorded"
+    assert all(p["date"] >= "2026-03-05" for p in points)
+    assert all(p["units_held"] > 0 for p in points)

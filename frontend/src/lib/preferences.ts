@@ -8,11 +8,13 @@ import * as React from "react";
  * are pulled — not portfolio data, so they belong to the machine rather than to
  * the ledger and live in localStorage. Nothing here changes what the API stores.
  *
+ * There is no base-currency preference: Pebble prices in EUR end to end, from the
+ * feed through the snapshots to every figure on screen. A currency selector here
+ * would relabel those numbers, not convert them.
+ *
  * There is no save button by design: every control writes on change.
  */
 export interface Preferences {
-  /** Reserved: the API prices everything in EUR, so only EUR is selectable today. */
-  baseCurrency: "EUR" | "USD" | "GBP";
   /** Show a sats value alongside every position. */
   denominateInBtc: boolean;
   /** Eight decimals on crypto quantities. */
@@ -27,7 +29,6 @@ export interface Preferences {
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  baseCurrency: "EUR",
   denominateInBtc: true,
   fullPrecision: true,
   autoRefresh: true,

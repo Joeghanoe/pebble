@@ -448,13 +448,36 @@ def get_units_held_on_date(session: Session, asset_id: int, date: str) -> float:
     return float(result[0]) if result else 0.0
 
 
-def get_invested_eur_on_date(session: Session, date: str) -> float:
-    result = session.exec(
-        text(
-            """
-            SELECT COALESCE(SUM(CASE WHEN type = 'buy' THEN eur_amount ELSE -eur_amount END), 0)
-            FROM "transaction" WHERE date <= :date AND deleted_at IS NULL
-            """
-        ).bindparams(date=date)
-    ).one()
+def get_invested_eur_on_date(session: Session, date: str, asset_id: int | None = None) -> float:
+    """Net money put in up to `date` — the whole portfolio, or one asset of it.
+
+    Buys add and sells subtract, so this is cost basis rather than gross spend.
+    """
+    scope = "" if asset_id is None else "AND asset_id = :asset_id"
+    statement = text(
+        f"""
+        SELECT COALESCE(SUM(CASE WHEN type = 'buy' THEN eur_amount ELSE -eur_amount END), 0)
+        FROM "transaction" WHERE date <= :date AND deleted_at IS NULL {scope}
+        """
+    )
+    statement = (
+        statement.bindparams(date=date)
+        if asset_id is None
+        else statement.bindparams(date=date, asset_id=asset_id)
+    )
+    result = session.exec(statement).one()
     return float(result[0]) if result else 0.0
+
+
+def has_position_snapshots_on_date(session: Session, date: str) -> bool:
+    """Whether the per-position rows for a date have been written yet.
+
+    The backfill needs this separately from `get_snapshot`: `net_worth_snapshot`
+    was populated by the one-off import from the desktop ledger, but
+    `position_snapshot` was not, so a date can carry the portfolio total and none
+    of the rows behind it.
+    """
+    result = session.exec(
+        text("SELECT 1 FROM position_snapshot WHERE date = :date LIMIT 1").bindparams(date=date)
+    ).first()
+    return result is not None
