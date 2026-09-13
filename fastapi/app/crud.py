@@ -340,6 +340,50 @@ def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSna
     return [NetWorthSnapshot(date=r[0], total_eur=r[1], invested_eur=r[2]) for r in rows]
 
 
+def list_position_snapshots_aggregated(
+    session: Session, asset_id: int, period: str
+) -> list[PositionSnapshot]:
+    """`list_snapshots_aggregated`, scoped to one asset.
+
+    Same buckets, same 60-point ceiling, same lexicographic-date assumptions. The
+    grouping subquery has to filter by asset before taking MAX(date): without that,
+    a bucket whose latest net-worth snapshot predates this asset's would drop out.
+    """
+    if period == "1d":
+        rows = session.exec(
+            text(
+                "SELECT date, units_held, price_eur, value_eur, invested_eur "
+                "FROM position_snapshot WHERE asset_id = :asset_id "
+                "ORDER BY date DESC LIMIT 60"
+            ).bindparams(asset_id=asset_id)
+        ).all()
+        rows = list(reversed(rows))
+    else:
+        bucket = "to_char(date::date, 'IYYY-IW')" if period == "1w" else "substr(date, 1, 7)"
+        sql = text(f"""
+            SELECT s.date, s.units_held, s.price_eur, s.value_eur, s.invested_eur
+            FROM position_snapshot s
+            JOIN (
+              SELECT MAX(date) AS max_date
+              FROM position_snapshot
+              WHERE asset_id = :asset_id
+              GROUP BY {bucket}
+              ORDER BY max_date DESC
+              LIMIT 60
+            ) g ON s.date = g.max_date
+            WHERE s.asset_id = :asset_id
+            ORDER BY s.date ASC
+        """)
+        rows = list(session.exec(sql.bindparams(asset_id=asset_id)).all())
+
+    return [
+        PositionSnapshot(
+            date=r[0], asset_id=asset_id, units_held=r[1], price_eur=r[2], value_eur=r[3], invested_eur=r[4]
+        )
+        for r in rows
+    ]
+
+
 def get_snapshot(session: Session, date: str) -> NetWorthSnapshot | None:
     return session.get(NetWorthSnapshot, date)
 

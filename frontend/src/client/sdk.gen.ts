@@ -25,6 +25,8 @@ import type {
   GetNetWorthApiNetWorthGetData,
   GetNetWorthApiNetWorthGetResponse,
   GetPositionsApiPositionsGetResponse,
+  GetPositionHistoryApiPositionsAssetIdHistoryGetData,
+  GetPositionHistoryApiPositionsAssetIdHistoryGetResponse,
   RefreshPricesApiPricesRefreshPostResponse,
   CreateTransactionApiTransactionsPostData,
   CreateTransactionApiTransactionsPostResponse,
@@ -294,6 +296,37 @@ export class PositionsService {
     return __request(OpenAPI, {
       method: "GET",
       url: "/api/positions/",
+    });
+  }
+
+  /**
+   * Get Position History
+   * The value series behind one position's chart.
+   *
+   * Mirrors /net-worth: the same three granularities, the same fallback on an
+   * unknown period, and an empty list rather than a 404 for an asset with no
+   * snapshots yet — the chart renders its own empty state.
+   * @param data The data for the request.
+   * @param data.assetId
+   * @param data.period
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static getPositionHistoryApiPositionsAssetIdHistoryGet(
+    data: GetPositionHistoryApiPositionsAssetIdHistoryGetData,
+  ): CancelablePromise<GetPositionHistoryApiPositionsAssetIdHistoryGetResponse> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/positions/{asset_id}/history",
+      path: {
+        asset_id: data.assetId,
+      },
+      query: {
+        period: data.period,
+      },
+      errors: {
+        422: "Validation Error",
+      },
     });
   }
 }

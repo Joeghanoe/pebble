@@ -1,76 +1,31 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, Settings2, TrendingUp } from "lucide-react";
-import { PositionsMenu } from "@/frontend/components/PositionsMenu";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-} from "@/components/ui/sidebar";
+import { Outlet } from "@tanstack/react-router";
+import { SidebarBody } from "@/frontend/components/pebble/Sidebar";
+import { TransactionModalProvider } from "@/frontend/components/TransactionModalProvider";
 
+/**
+ * The persistent frame: a 244px position sidebar beside a fluid main column.
+ *
+ * The sidebar is the app's index — every position is one click away from every
+ * screen — so it is never collapsed on desktop. Below `lg` it drops out of the
+ * layout and the topbar's menu button opens the same body in a sheet; a 244px
+ * rail on a phone leaves nothing for the tables.
+ */
 export function RootLayout() {
-  const routerState = useRouterState();
-  const pathname = routerState.location.pathname;
-
-  const isPosition = pathname.startsWith("/position/");
-
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="offcanvas" variant="inset">
-        <SidebarHeader className="h-14 justify-center border-sidebar-border px-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <TrendingUp size={14} />
-            </div>
-            <span className="text-sm text-sidebar-foreground">
-              Pebble Tracker
-            </span>
-          </div>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Overview</SidebarGroupLabel>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/"}>
-                  <Link to="/" preload="intent">
-                    <LayoutDashboard size={16} />
-                    <span>Dashboard</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-          <SidebarGroup>
-            <SidebarGroupLabel>Positions</SidebarGroupLabel>
-            <SidebarMenu>
-              <PositionsMenu isPositionActive={isPosition} />
-            </SidebarMenu>
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter className="border-sidebar-border pb-4">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === "/settings"}>
-                <Link to="/settings" preload="intent">
-                  <Settings2 size={16} />
-                  <span>Settings</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
-      </Sidebar>
-      <SidebarInset>
-        <Outlet />
-      </SidebarInset>
-    </SidebarProvider>
+    <TransactionModalProvider>
+      <div className="flex min-h-screen">
+        <aside
+          className="sticky top-0 hidden h-screen w-[244px] shrink-0 flex-col overflow-y-auto border-r border-pb-subtle px-3 pt-3.5 pb-3 lg:flex"
+          style={{
+            background: "linear-gradient(180deg,#0D0B12 0%,#0A0910 100%)",
+          }}
+        >
+          <SidebarBody />
+        </aside>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Outlet />
+        </div>
+      </div>
+    </TransactionModalProvider>
   );
 }

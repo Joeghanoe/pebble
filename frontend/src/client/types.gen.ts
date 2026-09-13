@@ -135,6 +135,15 @@ export type GetPositionsApiPositionsGetResponse = {
   [key: string]: unknown;
 };
 
+export type GetPositionHistoryApiPositionsAssetIdHistoryGetData = {
+  assetId: number;
+  period?: string;
+};
+
+export type GetPositionHistoryApiPositionsAssetIdHistoryGetResponse = {
+  [key: string]: unknown;
+};
+
 export type RefreshPricesApiPricesRefreshPostResponse = {
   [key: string]: unknown;
 };

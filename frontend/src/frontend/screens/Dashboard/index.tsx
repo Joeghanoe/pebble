@@ -1,177 +1,432 @@
-import { cn } from "@/lib/utils";
-import { useState } from "react";
+import * as React from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { PositionsService, NetWorthService } from "@/client";
-import { formatEur, formatPct, formatUnits } from "@/lib/format";
-import { useRefreshPrices } from "@/hooks/use-refresh-prices";
-import type { GetPositionsResponse, GetNetWorthResponse } from "@/types/api";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { NetWorthService } from "@/client";
+import type { GetNetWorthResponse } from "@/types/api";
 import { SiteHeader } from "@/components/site-header";
-import { TotalValueHeader } from "./total-value-header";
+import { cn } from "@/lib/utils";
+import { usePortfolio, type HoldingRow } from "@/lib/portfolio";
+import { usePreferences } from "@/lib/preferences";
+import { CLASS_COLORS, type AssetClass } from "@/lib/asset-identity";
+import {
+  edgeLabel,
+  monthlyPnl,
+  sliceTimeframe,
+  timeframePeriod,
+  TIMEFRAMES,
+  type Timeframe,
+} from "@/lib/series";
+import {
+  formatBtc,
+  formatEur,
+  formatEurPrice,
+  formatPct,
+  formatUnits,
+} from "@/lib/format";
+import {
+  PbAssetTile,
+  PbBar,
+  PbCard,
+  PbCardHeader,
+  PbClassPill,
+  PbDonut,
+  PbEyebrow,
+  PbHeatmap,
+  PbLineChart,
+  PbPnlBadge,
+  PbSegmented,
+  pnlClass,
+} from "@/frontend/components/pebble";
+import { EmptyState } from "@/frontend/screens/EmptyState";
 
-type Period = "1d" | "1w" | "1m";
+const FILTERS = ["All", "Crypto", "ETF", "Cash"] as const;
+type Filter = (typeof FILTERS)[number];
 
+/**
+ * The dashboard answers one question — am I up or down, and on what — in four
+ * blocks that widen from the whole portfolio to a single month.
+ */
 export function Dashboard() {
-  const { refresh: refreshPrices, isPending: isRefreshing } =
-    useRefreshPrices();
-  const [period, setPeriod] = useState<Period>("1m");
+  const portfolio = usePortfolio();
+  const prefs = usePreferences();
+  const [timeframe, setTimeframe] = React.useState<Timeframe>("1M");
+  const [filter, setFilter] = React.useState<Filter>("All");
 
-  const { data: positionsData, isLoading: positionsLoading } = useQuery({
-    queryKey: ["positions"],
-    queryFn: () =>
-      PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
-    // Sort positions by current value descending
-    select: (data: GetPositionsResponse) => ({
-      positions: [...data.positions].sort(
-        (a, b) => b.current_value_eur - a.current_value_eur,
-      ),
-    }),
-  });
-
-  const { data: netWorthData, isLoading: netWorthLoading } = useQuery({
-    queryKey: ["net-worth", period],
+  const { data: netWorth } = useQuery({
+    queryKey: ["net-worth", timeframePeriod(timeframe)],
     queryFn: () =>
       NetWorthService.getNetWorthApiNetWorthGet({
-        period,
+        period: timeframePeriod(timeframe),
       }) as unknown as Promise<GetNetWorthResponse>,
   });
 
-  const positions = positionsData?.positions ?? [];
-  const snapshots = netWorthData?.snapshots ?? [];
+  // The heatmap always wants month-end points, whatever the chart is showing.
+  const { data: monthly } = useQuery({
+    queryKey: ["net-worth", "1m"],
+    queryFn: () =>
+      NetWorthService.getNetWorthApiNetWorthGet({
+        period: "1m",
+      }) as unknown as Promise<GetNetWorthResponse>,
+  });
 
-  const btcPosition = positions.find(
-    (pos) =>
-      pos.asset.symbol.toUpperCase() === "BTC" &&
-      pos.price_result.status !== "unavailable",
-  );
-  const btcEurPrice =
-    btcPosition && btcPosition.units_held > 0
-      ? btcPosition.current_value_eur / btcPosition.units_held
-      : null;
+  if (!portfolio.isLoading && portfolio.positions.length === 0) {
+    return <EmptyState />;
+  }
 
-  const totalInvested = positions.reduce(
-    (sum, p) => sum + p.total_invested_eur,
-    0,
-  );
-  const totalValue = positions.reduce((sum, p) => sum + p.current_value_eur, 0);
-  const totalValueBtc =
-    btcEurPrice && btcEurPrice > 0 ? totalValue / btcEurPrice : null;
-  const overallPnl =
-    totalInvested > 0
-      ? ((totalValue - totalInvested) / totalInvested) * 100
-      : 0;
+  const series = sliceTimeframe(netWorth?.snapshots ?? [], timeframe);
+  const rows =
+    filter === "All"
+      ? portfolio.positions
+      : portfolio.positions.filter((p) => p.klass === (filter as AssetClass));
 
   return (
     <>
-      <SiteHeader name="Dashboard" />
+      <SiteHeader name="Dashboard" sublabel="all accounts" />
       <div
         className={cn(
-          "space-y-2 p-4 transition-opacity duration-500 sm:p-6 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card",
-          positionsLoading || netWorthLoading ? "opacity-0" : "opacity-100",
+          "pb-fade flex flex-col gap-3.5 p-5 transition-opacity duration-500",
+          portfolio.isLoading ? "opacity-0" : "opacity-100",
         )}
       >
-        <TotalValueHeader
-          totalValue={totalValue}
-          totalValueBtc={totalValueBtc}
-          totalInvested={totalInvested}
-          overallPnl={overallPnl}
-          positionsLoading={positionsLoading}
-          netWorthLoading={netWorthLoading}
-          chartData={snapshots}
-          period={period}
-          onPeriodChange={setPeriod}
-          onRefresh={refreshPrices}
-          isRefreshing={isRefreshing}
+        <div className="grid grid-cols-1 gap-3.5 min-[980px]:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+          <TotalWorthCard
+            portfolio={portfolio}
+            series={series}
+            timeframe={timeframe}
+            onTimeframe={setTimeframe}
+          />
+          <AllocationCard portfolio={portfolio} />
+        </div>
+
+        <HoldingsTable
+          rows={rows}
+          total={portfolio.positions.length}
+          filter={filter}
+          onFilter={setFilter}
+          showBtc={prefs.denominateInBtc}
+          fullPrecision={prefs.fullPrecision}
+          dense={prefs.density === "dense"}
         />
 
-        <div className="grid grid-cols-1 items-start gap-6">
-          {/* ── Investment Performance table ── */}
-          <Card className="gap-3 py-4">
-            <CardHeader className="flex items-center gap-2 px-4 font-heading text-xl">
-              Assets
-            </CardHeader>
-            <CardContent className="cn-item-group group/item-group flex w-full flex-col space-y-2 px-4">
-              {positions.map((pos) => {
-                const valueBtc =
-                  btcEurPrice && btcEurPrice > 0
-                    ? pos.current_value_eur / btcEurPrice
-                    : null;
-                const valueBtcLabel =
-                  valueBtc === null
-                    ? "N/A BTC"
-                    : `${formatUnits(valueBtc)} BTC`;
-                let pnlClass = "";
-                if (pos.pnl_pct > 0) {
-                  pnlClass = "text-green-600";
-                } else if (pos.pnl_pct < 0) {
-                  pnlClass = "text-red-600";
-                }
-
-                return (
-                  <Link
-                    to="/position/$assetId"
-                    params={{ assetId: String(pos.asset.id) }}
-                    key={pos.asset.id}
-                    className="cn-item group/item cn-item-variant-muted cn-item-size-default flex w-full cursor-pointer flex-wrap items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 transition-colors duration-100 outline-none hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent [a]:transition-colors"
-                    preload="intent"
-                  >
-                    <div
-                      data-slot="item-media"
-                      data-variant="default"
-                      className="cn-item-media [&amp;_svg]:pointer-events-none cn-item-media-variant-default flex shrink-0 items-center justify-center"
-                    >
-                      <div className="flex size-10 items-center justify-center rounded-lg border text-sm font-semibold sm:size-12">
-                        {pos.asset.symbol.slice(0, 3)}
-                      </div>
-                    </div>
-                    <div
-                      data-slot="item-content"
-                      className="cn-item-content [&amp;+[data-slot=item-content]]:flex-none flex flex-1 flex-col"
-                    >
-                      <div
-                        data-slot="item-title"
-                        className="cn-item-title cn-font-heading line-clamp-1 flex w-fit items-center"
-                      >
-                        {pos.asset.name}
-                      </div>
-                      <p
-                        data-slot="item-description"
-                        className="cn-item-description [&amp;&gt;a]:underline [&amp;&gt;a]:underline-offset-4 [&amp;&gt;a:hover]:text-primary line-clamp-2 font-number text-xs font-normal tracking-wider uppercase"
-                      >
-                        {formatUnits(pos.units_held)} Shares &middot; P&L:{" "}
-                        <span className={pnlClass}>
-                          {formatPct(pos.pnl_pct)}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-6">
-                      <span
-                        data-slot="badge"
-                        data-variant="outline"
-                        className="cn-badge group/badge [&amp;&gt;svg]:pointer-events-none cn-badge-variant-outline inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap uppercase focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40"
-                      >
-                        {pos.asset.type}
-                      </span>
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="text-xs tracking-wider text-muted-foreground uppercase">
-                          Value
-                        </span>
-                        <span className="font-number font-medium tabular-nums">
-                          {formatEur(pos.current_value_eur)}
-                        </span>
-                        <span className="font-number text-xs text-muted-foreground uppercase tabular-nums">
-                          {valueBtcLabel}
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </div>
+        <PbHeatmap rows={monthlyPnl(monthly?.snapshots ?? [])} />
       </div>
     </>
+  );
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+
+function TotalWorthCard({
+  portfolio,
+  series,
+  timeframe,
+  onTimeframe,
+}: {
+  readonly portfolio: ReturnType<typeof usePortfolio>;
+  readonly series: readonly {
+    date: string;
+    total_eur: number;
+    invested_eur: number;
+  }[];
+  readonly timeframe: Timeframe;
+  readonly onTimeframe: (next: Timeframe) => void;
+}) {
+  const opening = series[0]?.total_eur ?? 0;
+  const closing = series[series.length - 1]?.total_eur ?? portfolio.totalValue;
+  const changeEur = series.length > 1 ? closing - opening : portfolio.pnlEur;
+  const changePct =
+    series.length > 1 && opening > 0
+      ? ((closing - opening) / opening) * 100
+      : portfolio.pnlPct;
+
+  const windowLabel: Record<Timeframe, string> = {
+    "1W": "vs. a week ago",
+    "1M": "vs. a month ago",
+    "1Y": "vs. a year ago",
+    ALL: "since the first transaction",
+  };
+
+  return (
+    <PbCard wash="purple" className="p-[18px]">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-[1_1_240px]">
+          <PbEyebrow>Total worth</PbEyebrow>
+          <div
+            className="mt-1.5 font-number leading-none font-medium tracking-[-0.03em] whitespace-nowrap tabular-nums"
+            style={{ fontSize: "clamp(28px, 4.2vw, 40px)" }}
+          >
+            {formatEur(portfolio.totalValue)}
+          </div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+            <span
+              className={cn(
+                "font-number text-[13px] whitespace-nowrap tabular-nums",
+                pnlClass(changeEur),
+              )}
+            >
+              {formatEur(changeEur)}
+            </span>
+            <PbPnlBadge value={changePct}>{formatPct(changePct)}</PbPnlBadge>
+            <span className="text-[11.5px] text-pb-faint">
+              {series.length > 1 ? windowLabel[timeframe] : "on cost"}
+            </span>
+          </div>
+          <div className="mt-2.5 font-number text-[11.5px] text-pb-muted">
+            {portfolio.totalBtc !== null && (
+              <>≡ {formatBtc(portfolio.totalBtc)} BTC · </>
+            )}
+            cost basis {formatEur(portfolio.totalInvested)}
+          </div>
+        </div>
+
+        <PbSegmented
+          options={TIMEFRAMES}
+          value={timeframe}
+          onChange={onTimeframe}
+        />
+      </div>
+
+      <PbLineChart
+        values={series.map((s) => s.total_eur)}
+        reference={series.map((s) => s.invested_eur)}
+        height={132}
+        viewBoxHeight={150}
+        variant="portfolio"
+        startLabel={series[0] ? edgeLabel(series[0].date, timeframe) : ""}
+        endLabel={
+          series.length > 1
+            ? edgeLabel(series[series.length - 1].date, timeframe)
+            : ""
+        }
+        legend="portfolio — · invested ┄"
+      />
+    </PbCard>
+  );
+}
+
+/* ── Allocation ──────────────────────────────────────────────────────────── */
+
+function AllocationCard({
+  portfolio,
+}: {
+  readonly portfolio: ReturnType<typeof usePortfolio>;
+}) {
+  return (
+    <PbCard className="flex flex-col gap-3.5 p-[18px]">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[12.5px] font-semibold">Allocation</h2>
+        <span className="font-number text-[10.5px] text-pb-faint">
+          by asset class
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-[18px]">
+        <PbDonut
+          segments={portfolio.allocation.map((entry) => ({
+            label: entry.klass,
+            color: CLASS_COLORS[entry.klass],
+            fraction: entry.fraction,
+          }))}
+          centerValue={portfolio.positions.length}
+          centerLabel="Assets"
+        />
+        <div className="flex min-w-[140px] flex-1 flex-col gap-2.5">
+          {portfolio.allocation.map((entry) => (
+            <div key={entry.klass}>
+              <div className="flex items-center gap-2">
+                <span
+                  className="size-[7px] shrink-0 rounded-[2px]"
+                  style={{ background: CLASS_COLORS[entry.klass] }}
+                />
+                <span className="flex-1 text-[12px] text-pb-text-2">
+                  {entry.klass}
+                </span>
+                <span className="font-number text-[11.5px] text-pb-text-3 tabular-nums">
+                  {(entry.fraction * 100).toFixed(1).replace(".", ",")}%
+                </span>
+              </div>
+              <PbBar
+                percent={entry.fraction * 100}
+                color={CLASS_COLORS[entry.klass]}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-auto grid grid-cols-2 gap-2">
+        <ExtremeTile label="Best" holding={portfolio.best} />
+        <ExtremeTile label="Worst" holding={portfolio.worst} />
+      </div>
+    </PbCard>
+  );
+}
+
+function ExtremeTile({
+  label,
+  holding,
+}: {
+  readonly label: string;
+  readonly holding: HoldingRow | null;
+}) {
+  return (
+    <div className="rounded-[10px] border border-[#201C2D] bg-pb-raised px-2.5 py-2.5">
+      <span className="block font-number text-[9.5px] tracking-[0.1em] text-pb-muted uppercase">
+        {label}
+      </span>
+      {holding ? (
+        <span className="mt-0.5 flex items-baseline justify-between gap-2">
+          <span className="truncate font-number text-[12.5px]">
+            {holding.asset.symbol}
+          </span>
+          <span
+            className={cn(
+              "font-number text-[12px] tabular-nums",
+              pnlClass(holding.pnl_pct),
+            )}
+          >
+            {formatPct(holding.pnl_pct)}
+          </span>
+        </span>
+      ) : (
+        <span className="mt-0.5 block font-number text-[12.5px] text-pb-faint">
+          —
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ── Holdings ────────────────────────────────────────────────────────────── */
+
+/** Header and rows share one grid template so the columns cannot drift apart. */
+const COLUMNS =
+  "minmax(0,2.1fr) 84px minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.15fr) 72px";
+
+function HoldingsTable({
+  rows,
+  total,
+  filter,
+  onFilter,
+  showBtc,
+  fullPrecision,
+  dense,
+}: {
+  readonly rows: readonly HoldingRow[];
+  readonly total: number;
+  readonly filter: Filter;
+  readonly onFilter: (next: Filter) => void;
+  readonly showBtc: boolean;
+  readonly fullPrecision: boolean;
+  readonly dense: boolean;
+}) {
+  return (
+    <PbCard>
+      <PbCardHeader
+        title="Holdings"
+        note={`${total} position${total === 1 ? "" : "s"}`}
+        className="border-b border-pb-subtle"
+      >
+        <PbSegmented
+          mono={false}
+          options={FILTERS}
+          value={filter}
+          onChange={onFilter}
+        />
+      </PbCardHeader>
+
+      {/* Below ~860px the seven columns cannot fit without crushing the numbers,
+          so the grid keeps its width and the card scrolls. */}
+      <div className="overflow-x-auto">
+        <div className="min-w-[760px]">
+          <div
+            className="grid gap-2.5 px-[18px] py-2 font-number text-[9.5px] tracking-[0.1em] text-pb-faint uppercase"
+            style={{ gridTemplateColumns: COLUMNS }}
+          >
+            <span>Asset</span>
+            <span>Class</span>
+            <span className="text-right">Quantity</span>
+            <span className="text-right">Price</span>
+            <span className="text-right">P&L</span>
+            <span className="text-right">Value</span>
+            <span className="text-right">Weight</span>
+          </div>
+
+          {rows.length === 0 && (
+            <p className="px-[18px] py-8 text-center text-[11.5px] text-pb-faint">
+              No {filter.toLowerCase()} positions.
+            </p>
+          )}
+
+          {rows.map((row) => (
+            <Link
+              key={row.asset.id}
+              to="/position/$assetId"
+              params={{ assetId: String(row.asset.id) }}
+              preload="intent"
+              className={cn(
+                "grid items-center gap-2.5 border-b border-pb-hairline px-[18px] transition-colors hover:bg-pb-row-hover",
+                dense ? "py-[9px]" : "py-3.5",
+              )}
+              style={{ gridTemplateColumns: COLUMNS }}
+            >
+              <span className="flex min-w-0 items-center gap-2.5">
+                <PbAssetTile symbol={row.asset.symbol} color={row.color} />
+                <span className="min-w-0">
+                  <span className="block truncate text-[12.5px] font-medium">
+                    {row.asset.name}
+                  </span>
+                  <span className="block font-number text-[10.5px] text-pb-muted">
+                    {row.asset.symbol}
+                  </span>
+                </span>
+              </span>
+
+              <span>
+                <PbClassPill
+                  label={row.klass.toUpperCase()}
+                  color={row.color}
+                />
+              </span>
+
+              <span className="text-right font-number text-[11.5px] text-pb-text-2 tabular-nums">
+                {formatUnits(row.units_held, fullPrecision)}
+              </span>
+
+              <span className="text-right font-number text-[11.5px] text-pb-text-2 tabular-nums">
+                {row.unitPrice === null ? "—" : formatEurPrice(row.unitPrice)}
+              </span>
+
+              <span
+                className={cn(
+                  "text-right font-number text-[11.5px] tabular-nums",
+                  pnlClass(row.pnl_pct),
+                )}
+              >
+                {formatPct(row.pnl_pct)}
+              </span>
+
+              <span className="text-right">
+                <span className="block font-number text-[13px] font-medium whitespace-nowrap tabular-nums">
+                  {formatEur(row.current_value_eur)}
+                </span>
+                <span className="block font-number text-[10px] whitespace-nowrap text-pb-faint tabular-nums">
+                  {showBtc && row.valueBtc !== null
+                    ? `₿ ${formatBtc(row.valueBtc)}`
+                    : `${row.weightPct.toFixed(1).replace(".", ",")}% of total`}
+                </span>
+              </span>
+
+              <span className="text-right">
+                <span className="font-number text-[10.5px] text-pb-text-3 tabular-nums">
+                  {row.weightPct.toFixed(1).replace(".", ",")}%
+                </span>
+                <PbBar percent={row.weightPct} color={row.color} />
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </PbCard>
   );
 }

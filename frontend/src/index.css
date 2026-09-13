@@ -1,115 +1,142 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/instrument-sans";
 @import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+ * Pebble is dark-first: there is one palette, and `.dark` is pinned on <html>.
+ * The shadcn variables below exist so the primitives Pebble still uses — dialog,
+ * select, sonner, alert-dialog — land on the same surfaces as the hand-built
+ * chrome instead of on shadcn's stock greys.
+ * ------------------------------------------------------------------------- */
+
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.148 0.004 228.8);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.148 0.004 228.8);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.148 0.004 228.8);
-  --primary: oklch(0.852 0.199 91.936);
-  --primary-foreground: oklch(0.421 0.095 57.708);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.963 0.002 197.1);
-  --muted-foreground: oklch(0.56 0.021 213.5);
-  --accent: oklch(0.963 0.002 197.1);
-  --accent-foreground: oklch(0.218 0.008 223.9);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.925 0.005 214.3);
-  --input: oklch(0.925 0.005 214.3);
-  --ring: oklch(0.723 0.014 214.4);
-  --chart-1: oklch(0.905 0.182 98.111);
-  --chart-2: oklch(0.795 0.184 86.047);
-  --chart-3: oklch(0.681 0.162 75.834);
-  --chart-4: oklch(0.554 0.135 66.442);
-  --chart-5: oklch(0.476 0.114 61.907);
+  --background: #08070c;
+  --foreground: #f1eef8;
+  --card: #101017;
+  --card-foreground: #f1eef8;
+  --popover: #0f0d15;
+  --popover-foreground: #f1eef8;
+  --primary: #f7931a;
+  --primary-foreground: #1a0f02;
+  --secondary: #15121f;
+  --secondary-foreground: #f1eef8;
+  --muted: #15121f;
+  --muted-foreground: #8e88a0;
+  --accent: #1b1729;
+  --accent-foreground: #f1eef8;
+  --destructive: #f87171;
+  --border: #221e30;
+  --input: #241f33;
+  --ring: #6d28d9;
   --radius: 0.625rem;
-  --sidebar: oklch(0.987 0.002 197.1);
-  --sidebar-foreground: oklch(0.148 0.004 228.8);
-  --sidebar-primary: oklch(0.681 0.162 75.834);
-  --sidebar-primary-foreground: oklch(0.987 0.026 102.212);
-  --sidebar-accent: oklch(0.963 0.002 197.1);
-  --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
-  --sidebar-border: oklch(0.925 0.005 214.3);
-  --sidebar-ring: oklch(0.723 0.014 214.4);
+  --sidebar: #0d0b12;
+  --sidebar-foreground: #9e97b4;
+  --sidebar-primary: #f7931a;
+  --sidebar-primary-foreground: #1a0f02;
+  --sidebar-accent: #1b1729;
+  --sidebar-accent-foreground: #f1eef8;
+  --sidebar-border: #1c1926;
+  --sidebar-ring: #6d28d9;
 }
 
-.dark {
-  --background: oklch(0.148 0.004 228.8);
-  --foreground: oklch(0.987 0.002 197.1);
-  --card: oklch(0.218 0.008 223.9);
-  --card-foreground: oklch(0.987 0.002 197.1);
-  --popover: oklch(0.218 0.008 223.9);
-  --popover-foreground: oklch(0.987 0.002 197.1);
-  --primary: oklch(0.795 0.184 86.047);
-  --primary-foreground: oklch(0.421 0.095 57.708);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.275 0.011 216.9);
-  --muted-foreground: oklch(0.723 0.014 214.4);
-  --accent: oklch(0.275 0.011 216.9);
-  --accent-foreground: oklch(0.987 0.002 197.1);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.56 0.021 213.5);
-  --chart-1: oklch(0.905 0.182 98.111);
-  --chart-2: oklch(0.795 0.184 86.047);
-  --chart-3: oklch(0.681 0.162 75.834);
-  --chart-4: oklch(0.554 0.135 66.442);
-  --chart-5: oklch(0.476 0.114 61.907);
-  --sidebar: oklch(0.218 0.008 223.9);
-  --sidebar-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-primary: oklch(0.795 0.184 86.047);
-  --sidebar-primary-foreground: oklch(0.987 0.026 102.212);
-  --sidebar-accent: oklch(0.275 0.011 216.9);
-  --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.56 0.021 213.5);
+/* ── Pebble design tokens ──────────────────────────────────────────────────
+   Named for their role, not their value. `pb-` keeps them out of the way of the
+   shadcn scale, which is still what the dialog and select primitives read.
+
+   Deliberately a plain `@theme`, not `@theme inline`: utilities then compile to
+   `var(--color-pb-bg)` rather than the literal, which is what lets the Midnight
+   variant below re-point a token without restating every rule. */
+@theme {
+  /* Surfaces */
+  --color-pb-bg: #08070c;
+  --color-pb-surface: #101017;
+  --color-pb-raised: #15121f;
+  --color-pb-modal: #0f0d15;
+  --color-pb-modal-foot: #0c0a12;
+  --color-pb-sidebar-top: #0d0b12;
+  --color-pb-sidebar-bottom: #0a0910;
+  --color-pb-row-hover: #141120;
+  --color-pb-nav-hover: #181524;
+  --color-pb-nav-active: #1b1729;
+  --color-pb-track: #191524;
+  --color-pb-heat-null: #0e0c14;
+  --color-pb-segment-active: #2a2440;
+
+  /* Borders */
+  --color-pb-hairline: #16131f;
+  --color-pb-subtle: #1c1926;
+  --color-pb-line: #221e30;
+  --color-pb-input: #241f33;
+  --color-pb-strong: #2a2440;
+  --color-pb-bright: #3a3350;
+
+  /* Text */
+  --color-pb-text: #f1eef8;
+  --color-pb-text-2: #c9c3dc;
+  --color-pb-text-3: #8e88a0;
+  --color-pb-muted: #6f6885;
+  --color-pb-faint: #565070;
+  --color-pb-faintest: #4a4460;
+  --color-pb-ghost: #2e2940;
+
+  /* Accent: BTC orange is reserved for primary actions and BTC identity. */
+  --color-pb-accent: #f7931a;
+  --color-pb-accent-deep: #b45309;
+  --color-pb-accent-ink: #1a0f02;
+
+  /* Purple: chrome and data visualisation only. */
+  --color-pb-purple: #8b5cf6;
+  --color-pb-purple-light: #a78bfa;
+  --color-pb-purple-pale: #c084fc;
+  --color-pb-purple-label: #9f92c4;
+  --color-pb-blue: #6d9bf6;
+  --color-pb-cash: #3f3a55;
+
+  /* Semantic P&L, independent of both accents. */
+  --color-pb-up: #34d399;
+  --color-pb-down: #f87171;
+  --color-pb-flat: #8e88a0;
 }
 
+/* The shadcn scale, still read by the dialog, select, sheet and toaster
+   primitives. `inline` so each utility resolves through the :root variables
+   above rather than pinning a literal. */
 @theme inline {
-  --font-sans: "Geist Variable", sans-serif;
-  --font-heading: "Geist Variable", serif;
+  --font-sans: "Instrument Sans Variable", system-ui, sans-serif;
+  --font-heading: "Instrument Sans Variable", system-ui, sans-serif;
   --font-number: "JetBrains Mono Variable", monospace;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
+
   --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -119,14 +146,111 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Theme variants. `Dark` is the palette above and needs no block. `Midnight`
+   drops the canvas and the sidebar to near-black; everything layered on top is
+   unchanged, so the two read as the same design at different depths. */
+:root[data-pb-theme="midnight"] {
+  --color-pb-bg: #050409;
+  --color-pb-sidebar-top: #08070c;
+  --color-pb-sidebar-bottom: #050409;
+  --background: #050409;
+}
+
+@media (prefers-color-scheme: light) {
+  /* "System" on a light desktop still renders dark — Pebble has no light
+     palette — but lifts the canvas a touch so it is not a black hole beside
+     light windows. */
+  :root[data-pb-theme="system"] {
+    --color-pb-bg: #0c0b12;
+    --background: #0c0b12;
+  }
+}
+
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-pb-line outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-pb-bg text-pb-text;
+    font-size: 13px;
+    line-height: 1.45;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
   }
   html {
     @apply font-sans;
+    color-scheme: dark;
+  }
+}
+
+/* ── Motion ────────────────────────────────────────────────────────────────
+   Four named animations, used by class rather than by inline style so a
+   `prefers-reduced-motion` opt-out has one place to live. */
+
+@keyframes pbFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pbPop {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pbSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pbDraw {
+  from {
+    stroke-dashoffset: 1400;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@utility pb-fade {
+  animation: pbFade 0.32s ease both;
+}
+
+@utility pb-pop {
+  animation: pbPop 0.22s ease both;
+}
+
+@utility pb-spin {
+  animation: pbSpin 0.8s linear infinite;
+}
+
+/* The draw-on is a dash offset, so the dasharray has to be long enough to cover
+   the longest path either chart produces. 1400 clears both viewBoxes. */
+@utility pb-draw {
+  stroke-dasharray: 1400;
+  animation: pbDraw 1.1s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-fade,
+  .pb-pop,
+  .pb-spin,
+  .pb-draw {
+    animation: none;
+  }
+  .pb-draw {
+    stroke-dasharray: none;
   }
 }
