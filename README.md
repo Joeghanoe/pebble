@@ -122,6 +122,51 @@ becomes a sheet below 768px, the stat grids stack, and the transaction log drops
 derivable columns so the delete control stays on screen instead of behind a horizontal
 scroll.
 
+## Importing the desktop app's data
+
+The desktop build kept everything in a SQLite file in the app data directory. To move
+that ledger into the deployment:
+
+```bash
+export DATABASE_URL='postgresql://postgres:PASSWORD@HOST:PORT/railway'
+uv run scripts/import_local_data.py \
+  ~/Library/Application\ Support/com.pebble.desktop/portfolio.db
+```
+
+It reports and exits; add `--write` to actually import. `uv run` reads the script's
+inline dependencies, so there is nothing to install first.
+
+`DATABASE_URL` has to be the **public** endpoint, which means giving the Postgres
+service a TCP proxy (Railway dashboard → Postgres → Settings → Networking → TCP Proxy,
+port 5432). The `DATABASE_URL` the api uses points at `postgres.railway.internal` and
+resolves only inside Railway. Exposing Postgres on a public port is a real decision —
+it is password-protected and over TLS, but it is reachable from the internet — so
+remove the proxy again when the import is done if you do not want it there.
+
+| Flag | Effect |
+|---|---|
+| *(none)* | Read the file, check it, print counts. Writes nothing. |
+| `--write` | Upsert the rows by primary key. Re-runnable; anything already in Postgres but absent from the file is left alone. |
+| `--replace` | Empty the tables first, for an exact mirror of the file. |
+| `--force` | Import despite failed checks. They will probably be rejected anyway. |
+
+Two things it does that a hand-rolled insert loop tends to miss:
+
+- **The seeded exchanges exist in both databases.** Migration 001 puts `Crypto` (id 1)
+  and `Manual` (id 2) into every Pebble database, so a plain `INSERT` collides on the
+  primary key before it reaches your own rows. Rows are upserted by id, and the local
+  file wins.
+- **Explicit ids do not advance a Postgres sequence.** Import ids 1–9 and leave it
+  there, and the next position you add in the app is handed id 1 again — a duplicate
+  key error, and the same fault migration 002 exists to repair. Every sequence is
+  realigned to `max(id)` at the end.
+
+It also checks what SQLite never enforced. That engine ignores declared column widths
+and had no enum for `type`, so a long-lived file can hold a `type` of `commodity` or a
+date of `11 March 2024`; those are reported up front rather than failing the import
+halfway through. Dangling foreign keys are caught the same way. The whole load runs in
+one transaction, so a refusal leaves the hosted ledger untouched.
+
 ## Desktop shell
 
 `tauri/` is a thin client: the window loads the hosted deployment. It no longer runs a

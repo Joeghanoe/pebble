@@ -30,8 +30,9 @@ the phone was the point; offline was the cost.
   A stacked card layout would show everything on a phone instead of dropping two columns.
 - `/api/export/` returns the whole ledger as JSON in one response. Fine at a personal
   scale; it would want streaming or pagination if the transaction count grew a lot.
-- There is no import. `scripts/migrate-from-backup.py` exists for the original SQLite
-  data but nothing reads the JSON that `/api/export/` produces, so an export cannot be
-  restored through the app.
+- `scripts/import_local_data.py` loads a desktop SQLite file into the hosted Postgres,
+  but nothing reads the JSON that `/api/export/` produces, so an export still cannot be
+  restored through the app. An import endpoint taking that JSON would close the loop and
+  remove the need to expose Postgres on a public port at all.
 - No frontend unit tests. The delete paths were verified by driving Chromium by hand;
   those checks are not committed anywhere.
