@@ -19,6 +19,24 @@ the whole project, so a resource that exists in Railway but not here reads as "d
 The deprecated Config as Code (`railway.json` / `railway.toml`) is not used anywhere in
 this repo.
 
+## The live project
+
+| | |
+|---|---|
+| Project | **Pebble** (`f8b385ac-8c43-4f26-89d8-d18bcfb18e2d`) |
+| Environment | `production` (`67d80bc4-84ff-4e2c-8768-acc4a138cb9b`) |
+| Public URL | https://proxy-production-b867.up.railway.app |
+| Region | `europe-west4-drams3a` |
+
+The four resources were created with the MCP rather than `railway config apply`, so
+run `railway config plan` before your first apply and reconcile any drift — the file is
+written to match what is deployed, but only a plan will prove it.
+
+`api` and `web` currently build from the branch `claude/pebble-mobile-port-deletion-pwem9w`,
+because the Dockerfiles and `infra/` do not exist on `main` until PR #2 merges. **Point
+both services back at `main` after merging** (`SOURCE.branch` here, and the service
+source in the dashboard).
+
 ## Topology
 
 ```
@@ -32,7 +50,7 @@ Only `proxy` has a public domain. `api` trusts `X-Forwarded-Email` from the prox
 rejects requests without it, so it must never get a public domain: give it one and anyone
 can forge the header. `web` has no reason to be public either.
 
-`postgres` is Railway's **managed** Postgres (`postgres("postgres")` in `railway.ts`),
+`Postgres` is Railway's **managed** Postgres (`postgres("Postgres")` in `railway.ts`),
 not a `postgres:17` image on a volume. That is what provides the service's **Data** tab in
 the dashboard — browse and edit rows without a `psql` client — along with managed backups
 and the connection string. `DATABASE_URL` on `api` is a reference to that service and is
@@ -81,6 +99,22 @@ rather than an app full of empty panels.
 
 The API runs its Alembic migrations on start (`MIGRATE_ON_STARTUP=true`); nothing else
 touches the schema.
+
+## The api must listen dual-stack
+
+Two different callers reach `api`, and they do not arrive the same way: oauth2-proxy
+comes over the IPv6 private network, and Railway's healthcheck probe does not. A
+listener bound only to IPv6 — which is exactly what `uvicorn --host ::` gives you, since
+it leaves `IPV6_V6ONLY` at the kernel default — serves the proxy fine and never answers
+the probe. The deploy then shows a clean startup and full migration log and still fails
+with `Healthcheck failure`, which is a confusing place to end up.
+
+`fastapi/app/serve.py` is the container entrypoint for this reason: it binds one
+`AF_INET6` socket with `IPV6_V6ONLY` explicitly cleared, so a single listener accepts
+both families. `infra/web.nginx.conf.template` solves the same problem the declarative
+way, with both `listen ${PORT}` and `listen [::]:${PORT}`.
+
+If you ever swap the entrypoint back to the uvicorn CLI, expect this failure to return.
 
 ## Header contract with the API
 

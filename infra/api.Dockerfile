@@ -36,7 +36,13 @@ RUN useradd --create-home --uid 1001 pebble && chown -R pebble:pebble /app
 USER pebble
 
 EXPOSE 8080
-# Railway injects $PORT; 8080 is the fallback for a plain `docker run`. Shell form so
-# the variable is expanded. One worker on purpose: the price-refresh cooldown in
-# routes/prices.py is a module-level global, so a second worker would get its own.
-CMD ["sh", "-c", "exec uvicorn app.main:app --host :: --port ${PORT:-8080} --workers 1"]
+# app.serve rather than the uvicorn CLI: it binds ONE dual-stack socket, which the CLI
+# cannot do with a single --host. Railway reaches this service two ways — oauth2-proxy
+# over the IPv6 private network, and the platform healthcheck, which does not arrive on
+# IPv6 — and `--host ::` answered only the first, so deploys ran fine and failed their
+# healthcheck anyway. See app/serve.py.
+#
+# One process on purpose: the price-refresh cooldown in routes/prices.py is a
+# module-level global, so a second worker would keep its own and the throttle would not
+# hold. $PORT is read by app.serve, defaulting to 8080.
+CMD ["python", "-m", "app.serve"]

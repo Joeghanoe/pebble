@@ -38,7 +38,11 @@ export default defineRailway(() => {
   // Railway's managed Postgres, not a bare `postgres:17` image. That is what gets the
   // dashboard's data explorer (the service's Data tab), managed backups and the
   // connect string — worth more here than the ability to pin the image ourselves.
-  const db = postgres("postgres");
+  //
+  // Capitalised because that is what Railway's Postgres template names the service, and
+  // the name is what `${{Postgres.DATABASE_URL}}` resolves against. A service cannot be
+  // renamed after it deploys, so the file matches the project rather than the reverse.
+  const db = postgres("Postgres");
 
   // Serves the built SPA. No public domain: it is only reachable through the proxy.
   const web = service("web", {
@@ -56,6 +60,9 @@ export default defineRailway(() => {
   const api = service("api", {
     source: github(SOURCE.repo, { branch: SOURCE.branch, checkSuites: false }),
     build: { builder: "DOCKERFILE", dockerfilePath: "infra/api.Dockerfile", watchPatterns: WATCH.api },
+    // Served by app.serve on a dual-stack socket. A v6-only listener (which is what
+    // `uvicorn --host ::` gives you) passes private-network traffic and fails this
+    // probe, so the deploy looks healthy in the logs and never goes live.
     healthcheck: "/api/health",
     healthcheckTimeout: 120,
     deploy: { restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 5, ...limits(1, 1) },
