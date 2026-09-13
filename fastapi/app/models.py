@@ -195,5 +195,17 @@ class GetNetWorthResponse(SQLModel):
     snapshots: list[SnapshotRow]
 
 
+class PositionHistoryPoint(SQLModel):
+    date: str
+    units_held: float
+    price_eur: float
+    value_eur: float
+    invested_eur: float
+
+
+class GetPositionHistoryResponse(SQLModel):
+    points: list[PositionHistoryPoint]
+
+
 class Message(SQLModel):
     message: str

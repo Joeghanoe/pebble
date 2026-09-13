@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import "./index.css";
 import { RouterProvider } from "@tanstack/react-router";
-import { ThemeProvider } from "@/components/theme-provider.tsx";
+import { PreferencesEffects } from "@/lib/preferences";
 import { AccessGate } from "@/components/AccessGate";
 import { Toaster } from "@/components/ui/sonner";
 import { router } from "./router";
@@ -22,12 +22,11 @@ OpenAPI.BASE = "";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <AccessGate>
-          <RouterProvider router={router} context={{ queryClient }} />
-        </AccessGate>
-        <Toaster position="top-right" />
-      </ThemeProvider>
+      <PreferencesEffects />
+      <AccessGate>
+        <RouterProvider router={router} context={{ queryClient }} />
+      </AccessGate>
+      <Toaster position="top-right" />
     </QueryClientProvider>
   </StrictMode>,
 );

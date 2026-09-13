@@ -13,11 +13,16 @@ export const indexRoute = createRoute({
       queryFn: () =>
         PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
     });
-    void queryClient.prefetchQuery({
-      queryKey: ["net-worth"],
-      queryFn: () =>
-        NetWorthService.getNetWorthApiNetWorthGet() as unknown as Promise<GetNetWorthResponse>,
-    });
+    // 1d backs the default 1M timeframe; 1m backs the heatmap, always.
+    for (const period of ["1d", "1m"] as const) {
+      void queryClient.prefetchQuery({
+        queryKey: ["net-worth", period],
+        queryFn: () =>
+          NetWorthService.getNetWorthApiNetWorthGet({
+            period,
+          }) as unknown as Promise<GetNetWorthResponse>,
+      });
+    }
   },
   component: Dashboard,
 });

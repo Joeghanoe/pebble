@@ -3,6 +3,7 @@ import { rootRoute } from "./__root";
 import { PositionDetail } from "@/frontend/screens/PositionDetail";
 import { PositionsService, TransactionsService } from "@/client";
 import type {
+  GetPositionHistoryResponse,
   GetPositionsResponse,
   GetTransactionsResponse,
 } from "@/types/api";
@@ -16,6 +17,14 @@ export const positionRoute = createRoute({
       queryKey: ["positions"],
       queryFn: () =>
         PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
+    });
+    void queryClient.prefetchQuery({
+      queryKey: ["position-history", id, "1d"],
+      queryFn: () =>
+        PositionsService.getPositionHistoryApiPositionsAssetIdHistoryGet({
+          assetId: id,
+          period: "1d",
+        }) as unknown as Promise<GetPositionHistoryResponse>,
     });
     void queryClient.prefetchQuery({
       queryKey: ["transactions", id],

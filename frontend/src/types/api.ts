@@ -3,10 +3,12 @@ import type { PriceResult } from "./price";
 
 export type Position = {
   asset: Asset;
+  exchange: Exchange;
   current_value_eur: number;
   total_invested_eur: number;
   units_held: number;
   pnl_pct: number;
+  realized_pnl: number;
   price_result: PriceResult;
 };
 
@@ -18,6 +20,20 @@ export type NetWorthSnapshot = {
 
 export type GetPositionsResponse = {
   positions: Position[];
+  /** When the price cache was last written. Null before the first refresh. */
+  last_updated: string | null;
+};
+
+export type PositionHistoryPoint = {
+  date: string;
+  units_held: number;
+  price_eur: number;
+  value_eur: number;
+  invested_eur: number;
+};
+
+export type GetPositionHistoryResponse = {
+  points: PositionHistoryPoint[];
 };
 
 export type GetNetWorthResponse = {
