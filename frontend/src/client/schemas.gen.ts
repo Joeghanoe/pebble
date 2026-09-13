@@ -16,6 +16,7 @@ export const AssetCreateSchema = {
     },
     type: {
       type: "string",
+      enum: ["crypto", "etf", "cash", "stock"],
       title: "Type",
     },
     exchange_id: {
@@ -26,6 +27,7 @@ export const AssetCreateSchema = {
       anyOf: [
         {
           type: "string",
+          maxLength: 50,
         },
         {
           type: "null",
@@ -37,6 +39,7 @@ export const AssetCreateSchema = {
       anyOf: [
         {
           type: "string",
+          maxLength: 100,
         },
         {
           type: "null",
@@ -56,6 +59,8 @@ export const AssetUpdateSchema = {
       anyOf: [
         {
           type: "string",
+          maxLength: 50,
+          minLength: 1,
         },
         {
           type: "null",
@@ -67,6 +72,8 @@ export const AssetUpdateSchema = {
       anyOf: [
         {
           type: "string",
+          maxLength: 255,
+          minLength: 1,
         },
         {
           type: "null",
@@ -78,6 +85,7 @@ export const AssetUpdateSchema = {
       anyOf: [
         {
           type: "string",
+          enum: ["crypto", "etf", "cash", "stock"],
         },
         {
           type: "null",
@@ -100,6 +108,7 @@ export const AssetUpdateSchema = {
       anyOf: [
         {
           type: "string",
+          maxLength: 50,
         },
         {
           type: "null",
@@ -111,6 +120,7 @@ export const AssetUpdateSchema = {
       anyOf: [
         {
           type: "string",
+          maxLength: 100,
         },
         {
           type: "null",
@@ -133,6 +143,7 @@ export const ExchangeCreateSchema = {
     },
     type: {
       type: "string",
+      enum: ["crypto", "broker", "manual"],
       title: "Type",
     },
   },
@@ -155,18 +166,6 @@ export const HTTPValidationErrorSchema = {
   title: "HTTPValidationError",
 } as const;
 
-export const SecretSetSchema = {
-  properties: {
-    value: {
-      type: "string",
-      title: "Value",
-    },
-  },
-  type: "object",
-  required: ["value"],
-  title: "SecretSet",
-} as const;
-
 export const TransactionCreateSchema = {
   properties: {
     asset_id: {
@@ -175,10 +174,12 @@ export const TransactionCreateSchema = {
     },
     date: {
       type: "string",
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$",
       title: "Date",
     },
     type: {
       type: "string",
+      enum: ["buy", "sell"],
       title: "Type",
     },
     units: {
@@ -212,6 +213,7 @@ export const TransactionUpdateSchema = {
       anyOf: [
         {
           type: "string",
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
         },
         {
           type: "null",
@@ -223,6 +225,7 @@ export const TransactionUpdateSchema = {
       anyOf: [
         {
           type: "string",
+          enum: ["buy", "sell"],
         },
         {
           type: "null",
@@ -296,17 +299,4 @@ export const ValidationErrorSchema = {
   type: "object",
   required: ["loc", "msg", "type"],
   title: "ValidationError",
-} as const;
-
-export const WindowStateRequestSchema = {
-  properties: {
-    action: {
-      type: "string",
-      title: "Action",
-    },
-  },
-  type: "object",
-  required: ["action"],
-  title: "WindowStateRequest",
-  description: "Request model for window state control.",
 } as const;

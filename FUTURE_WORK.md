@@ -1,119 +1,38 @@
-# Future Work
+# Future work
 
-> This document tracks potential improvements and features for the Tauri + FastAPI Full Stack Template.
->
-> **Status**: Integration is complete. The template is functional with:
-> - FastAPI backend with SQLite and optional auth
-> - React frontend with TanStack Router and shadcn/ui
-> - Tauri desktop app with PyInstaller sidecar packaging
-> - OpenAPI codegen for TypeScript + Rust
+Known gaps, roughly in the order they would start to hurt.
 
-## Completed
+## Worth doing next
 
-- [x] Backend setup with SQLite and optional auth
-- [x] Frontend migration with TanStack Router and shadcn/ui
-- [x] API client generation (TypeScript + Rust via openapi-generator)
-- [x] Makefile with dev/build/clean commands
-- [x] Database location defaults to `project_root/.data` in development
-- [x] PyInstaller spec file for packaging Python backend
-- [x] Graceful shutdown with SIGTERM/SIGKILL handling
-- [x] Full build pipeline (AppImage, .deb, .rpm tested on Linux)
-- [x] README with setup and customization instructions
+| Task | Why |
+|---|---|
+| **Move the price-refresh cooldown into Postgres** | It is a module-level global in `api/routes/prices.py`, so the 15-minute throttle is per process. That pins the api service to one uvicorn worker and one replica. Until it moves, scaling up silently multiplies the rate at which Pebble hits CoinGecko and Yahoo. |
+| **Snapshot backfill on a schedule** | `services/snapshots.py` can build the net-worth history, but nothing calls it periodically, so the dashboard chart only has points for days something happened to run. A Railway cron hitting an authenticated endpoint would fill it. |
+| **Shorten the FastAPI operation ids** | They generate client methods like `deleteTransactionApiTransactionsTxIdDeleteDelete`. A `generate_unique_id_function` on the app would fix every name at once, at the cost of one large mechanical diff through the frontend. |
+| **Restrict sign-in to one address at the proxy** | `OAUTH2_PROXY_EMAIL_DOMAINS` is `*` because the only way to name specific addresses is `--authenticated-emails-file`, and a stock image has nowhere to read one from. Today the Google consent screen's test-user list and `ALLOWED_EMAILS` on the api are the two gates. A small image that bakes in the file would make the proxy itself exact. |
 
----
+## Deliberately not done
 
-## Remaining Tasks
+**Per-user scoping.** Pebble is single-tenant: no user table, no `user_id` on any row,
+every query unscoped. That is a decision, not an omission — the security boundary is the
+proxy plus `ALLOWED_EMAILS`, and adding scoping now would be premature for a personal
+ledger. It does mean sharing the deployment is not a configuration change: it needs a
+migration over live financial data and a scope on every query and raw SQL statement,
+which is the kind of change that leaks someone's portfolio if one query is missed.
 
-### Medium Priority
+**Offline use.** The desktop shell was a full local stack (FastAPI sidecar, SQLite in the
+app data directory) and is now a window onto the deployment. One ledger reachable from
+the phone was the point; offline was the cost.
 
-| Task | Description |
-|------|-------------|
-| **Password recovery routes** | Remove or redesign `recover-password.tsx` and `reset-password.tsx` (email system was removed) |
-| **Operation ID cleanup** | Shorten FastAPI operation IDs for cleaner client codegen (currently auto-generated long names) |
-| **Route cleanup** | Remove unused password recovery routes from backend |
+## Smaller things
 
-### Low Priority
-
-| Task | Description |
-|------|-------------|
-| **Multi-platform testing** | Test build on macOS and Windows |
-| **User settings page** | UI for enabling/disabling auth, changing port, etc. |
-| **Better error handling** | Show user-friendly error messages when backend fails to start |
-| **File-based logging** | Write sidecar logs to file in production (currently console only) |
-| **Settings persistence** | Allow users to configure and save preferences |
-| **Auto-update** | Integrate Tauri's updater plugin |
-
----
-
-## Reference Architecture
-
-For reference, the original integration plan is preserved below:
-
-### Sidecar Architecture
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                      Tauri Application                        │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │                    Rust Core (Tauri)                     │ │
-│  │                                                         │ │
-│  │  • Spawn FastAPI sidecar on app start                   │ │
-│  │  • Monitor sidecar health (port 1430)                   │ │
-│  │  • Kill sidecar on app close                            │ │
-│  │  • Provide app_data_dir path to sidecar                 │ │
-│  │  • Handle native OS integrations                        │ │
-│  └─────────────────────────────────────────────────────────┘ │
-│                            │                                  │
-│                   spawn/manage                                │
-│                            ▼                                  │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │              FastAPI Sidecar (PyInstaller)              │ │
-│  │                                                         │ │
-│  │  • Runs on 127.0.0.1:1430                              │ │
-│  │  • SQLite database in app_data_dir                      │ │
-│  │  • Receives config via env vars (DATA_DIR, HOST, PORT)  │ │
-│  │  • Health endpoint: /api/v1/health                      │ │
-│  └─────────────────────────────────────────────────────────┘ │
-│                            ▲                                  │
-│                    HTTP requests                              │
-│                            │                                  │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │                  React Frontend (Webview)               │ │
-│  │                                                         │ │
-│  │  • TanStack Router for routing                          │ │
-│  │  • TanStack Query for server state                     │ │
-│  │  • shadcn/ui components                                │ │
-│  │  • API calls to http://127.0.0.1:1430                  │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Development vs Production
-
-| Aspect | Development | Production |
-|--------|-------------|------------|
-| **Backend** | Runs via `uvicorn --reload` (separate terminal) | Bundled PyInstaller binary spawned by Tauri |
-| **Frontend** | Vite dev server (HMR) | Built static files |
-| **Database** | `.data/app.db` (project root) | `~/.local/share/com.example.tauri-fastapi-full-stack-template/app.db` |
-| **Auth** | Optional (AUTH_REQUIRED=false) | Optional (AUTH_REQUIRED=false) |
-
-### Data Model Flow
-
-```
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│  FastAPI Models │  →   │  OpenAPI Schema │  →   │  TypeScript &   │
-│  (SQLModel)     │      │  (openapi.json) │      │  Rust Types     │
-└─────────────────┘      └─────────────────┘      │  (auto-gen)     │
-                                                   └─────────────────┘
-```
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AUTH_REQUIRED` | `false` | Enable authentication requirement |
-| `SECRET_KEY` | auto-generated | JWT signing key |
-| `HOST` | `127.0.0.1` | Backend bind address |
-| `PORT` | `1430` | Backend port |
-| `DATA_DIR` | `.data` (dev) / app_data_dir (prod) | Database location |
+- The transaction log's `Current Value` and `Profit/Loss` columns are hidden below 640px.
+  A stacked card layout would show everything on a phone instead of dropping two columns.
+- `/api/export/` returns the whole ledger as JSON in one response. Fine at a personal
+  scale; it would want streaming or pagination if the transaction count grew a lot.
+- `scripts/import_local_data.py` loads a desktop SQLite file into the hosted Postgres,
+  but nothing reads the JSON that `/api/export/` produces, so an export still cannot be
+  restored through the app. An import endpoint taking that JSON would close the loop and
+  remove the need to expose Postgres on a public port at all.
+- No frontend unit tests. The delete paths were verified by driving Chromium by hand;
+  those checks are not committed anywhere.

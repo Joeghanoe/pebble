@@ -3,16 +3,18 @@
 export type AssetCreate = {
   symbol: string;
   name: string;
-  type: string;
+  type: "crypto" | "etf" | "cash" | "stock";
   exchange_id: number;
   yahoo_ticker?: string | null;
   coingecko_id?: string | null;
 };
 
+export type type = "crypto" | "etf" | "cash" | "stock";
+
 export type AssetUpdate = {
   symbol?: string | null;
   name?: string | null;
-  type?: string | null;
+  type?: "crypto" | "etf" | "cash" | "stock" | null;
   exchange_id?: number | null;
   yahoo_ticker?: string | null;
   coingecko_id?: string | null;
@@ -20,29 +22,29 @@ export type AssetUpdate = {
 
 export type ExchangeCreate = {
   name: string;
-  type: string;
+  type: "crypto" | "broker" | "manual";
 };
+
+export type type2 = "crypto" | "broker" | "manual";
 
 export type HTTPValidationError = {
   detail?: Array<ValidationError>;
 };
 
-export type SecretSet = {
-  value: string;
-};
-
 export type TransactionCreate = {
   asset_id: number;
   date: string;
-  type: string;
+  type: "buy" | "sell";
   units: number;
   eur_amount: number;
   notes?: string | null;
 };
 
+export type type3 = "buy" | "sell";
+
 export type TransactionUpdate = {
   date?: string | null;
-  type?: string | null;
+  type?: "buy" | "sell" | null;
   units?: number | null;
   eur_amount?: number | null;
   notes?: string | null;
@@ -52,13 +54,6 @@ export type ValidationError = {
   loc: Array<string | number>;
   msg: string;
   type: string;
-};
-
-/**
- * Request model for window state control.
- */
-export type WindowStateRequest = {
-  action: string;
 };
 
 export type ListAssetsApiAssetsGetResponse = {
@@ -90,7 +85,17 @@ export type UpdateAssetApiAssetsAssetIdPutResponse = {
   [key: string]: unknown;
 };
 
+export type DeleteAssetApiAssetsAssetIdDeleteData = {
+  assetId: number;
+};
+
+export type DeleteAssetApiAssetsAssetIdDeleteResponse = {
+  [key: string]: unknown;
+};
+
 export type RootGetResponse = unknown;
+
+export type HealthCheckApiHealthGetResponse = unknown;
 
 export type ListExchangesApiExchangesGetResponse = {
   [key: string]: unknown;
@@ -114,6 +119,10 @@ export type DeleteExchangeApiExchangesExchangeIdDeleteResponse = {
 
 export type ExportDbApiExportGetResponse = unknown;
 
+export type GetMeApiMeGetResponse = {
+  [key: string]: unknown;
+};
+
 export type GetNetWorthApiNetWorthGetData = {
   period?: string;
 };
@@ -127,23 +136,6 @@ export type GetPositionsApiPositionsGetResponse = {
 };
 
 export type RefreshPricesApiPricesRefreshPostResponse = {
-  [key: string]: unknown;
-};
-
-export type SetSecretApiSecretsNamePostData = {
-  name: string;
-  requestBody: SecretSet;
-};
-
-export type SetSecretApiSecretsNamePostResponse = {
-  [key: string]: unknown;
-};
-
-export type DeleteSecretApiSecretsNameDeleteData = {
-  name: string;
-};
-
-export type DeleteSecretApiSecretsNameDeleteResponse = {
   [key: string]: unknown;
 };
 
@@ -178,16 +170,4 @@ export type DeleteTransactionApiTransactionsTxIdDeleteDeleteData = {
 
 export type DeleteTransactionApiTransactionsTxIdDeleteDeleteResponse = {
   [key: string]: unknown;
-};
-
-export type WindowHealthCheckApiHealthGetResponse = {
-  [key: string]: string;
-};
-
-export type ToggleWindowStateApiWindowPostData = {
-  requestBody: WindowStateRequest;
-};
-
-export type ToggleWindowStateApiWindowPostResponse = {
-  [key: string]: string;
 };

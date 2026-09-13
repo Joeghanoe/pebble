@@ -34,3 +34,13 @@ def update_asset(asset_id: int, body: AssetUpdate, session: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Not found")
     updated = crud.update_asset(session, asset, body)
     return {"asset": updated}
+
+
+@router.delete("/{asset_id}")
+def delete_asset(asset_id: int, session: Session = Depends(get_session)) -> dict:
+    """Delete a position outright, with its transactions, cached prices and snapshots."""
+    asset = crud.get_asset(session, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    crud.delete_asset(session, asset)
+    return {"ok": True}

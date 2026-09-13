@@ -11,21 +11,21 @@ import type {
   GetAssetApiAssetsAssetIdGetResponse,
   UpdateAssetApiAssetsAssetIdPutData,
   UpdateAssetApiAssetsAssetIdPutResponse,
+  DeleteAssetApiAssetsAssetIdDeleteData,
+  DeleteAssetApiAssetsAssetIdDeleteResponse,
   RootGetResponse,
+  HealthCheckApiHealthGetResponse,
   ListExchangesApiExchangesGetResponse,
   CreateExchangeApiExchangesPostData,
   CreateExchangeApiExchangesPostResponse,
   DeleteExchangeApiExchangesExchangeIdDeleteData,
   DeleteExchangeApiExchangesExchangeIdDeleteResponse,
   ExportDbApiExportGetResponse,
+  GetMeApiMeGetResponse,
   GetNetWorthApiNetWorthGetData,
   GetNetWorthApiNetWorthGetResponse,
   GetPositionsApiPositionsGetResponse,
   RefreshPricesApiPricesRefreshPostResponse,
-  SetSecretApiSecretsNamePostData,
-  SetSecretApiSecretsNamePostResponse,
-  DeleteSecretApiSecretsNameDeleteData,
-  DeleteSecretApiSecretsNameDeleteResponse,
   CreateTransactionApiTransactionsPostData,
   CreateTransactionApiTransactionsPostResponse,
   ListTransactionsApiTransactionsAssetIdGetData,
@@ -34,9 +34,6 @@ import type {
   UpdateTransactionApiTransactionsTxIdUpdatePutResponse,
   DeleteTransactionApiTransactionsTxIdDeleteDeleteData,
   DeleteTransactionApiTransactionsTxIdDeleteDeleteResponse,
-  WindowHealthCheckApiHealthGetResponse,
-  ToggleWindowStateApiWindowPostData,
-  ToggleWindowStateApiWindowPostResponse,
 } from "./types.gen";
 
 export class AssetsService {
@@ -119,12 +116,35 @@ export class AssetsService {
       },
     });
   }
+
+  /**
+   * Delete Asset
+   * Delete a position outright, with its transactions, cached prices and snapshots.
+   * @param data The data for the request.
+   * @param data.assetId
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static deleteAssetApiAssetsAssetIdDelete(
+    data: DeleteAssetApiAssetsAssetIdDeleteData,
+  ): CancelablePromise<DeleteAssetApiAssetsAssetIdDeleteResponse> {
+    return __request(OpenAPI, {
+      method: "DELETE",
+      url: "/api/assets/{asset_id}",
+      path: {
+        asset_id: data.assetId,
+      },
+      errors: {
+        422: "Validation Error",
+      },
+    });
+  }
 }
 
 export class DefaultService {
   /**
    * Root
-   * Root endpoint - basic info.
+   * Unauthenticated. Reachable directly on the private network, so it says nothing.
    * @returns unknown Successful Response
    * @throws ApiError
    */
@@ -132,6 +152,19 @@ export class DefaultService {
     return __request(OpenAPI, {
       method: "GET",
       url: "/",
+    });
+  }
+
+  /**
+   * Health Check
+   * Health check for Railway. Unauthenticated: the platform probes it without a proxy.
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static healthCheckApiHealthGet(): CancelablePromise<HealthCheckApiHealthGetResponse> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/health",
     });
   }
 }
@@ -196,6 +229,11 @@ export class ExchangesService {
 export class ExportService {
   /**
    * Export Db
+   * Download the whole ledger as JSON.
+   *
+   * The desktop build handed over the SQLite file itself, which is not a thing a hosted
+   * Postgres deployment has. Soft-deleted transactions are included on purpose: this is
+   * a backup, and dropping them would make the export lossy.
    * @returns unknown Successful Response
    * @throws ApiError
    */
@@ -203,6 +241,21 @@ export class ExportService {
     return __request(OpenAPI, {
       method: "GET",
       url: "/api/export/",
+    });
+  }
+}
+
+export class MeService {
+  /**
+   * Get Me
+   * Who the proxy says is calling, so the SPA can show the account and a sign-out link.
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static getMeApiMeGet(): CancelablePromise<GetMeApiMeGetResponse> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/me/",
     });
   }
 }
@@ -255,55 +308,6 @@ export class PricesService {
     return __request(OpenAPI, {
       method: "POST",
       url: "/api/prices/refresh",
-    });
-  }
-}
-
-export class SecretsService {
-  /**
-   * Set Secret
-   * @param data The data for the request.
-   * @param data.name
-   * @param data.requestBody
-   * @returns unknown Successful Response
-   * @throws ApiError
-   */
-  public static setSecretApiSecretsNamePost(
-    data: SetSecretApiSecretsNamePostData,
-  ): CancelablePromise<SetSecretApiSecretsNamePostResponse> {
-    return __request(OpenAPI, {
-      method: "POST",
-      url: "/api/secrets/{name}",
-      path: {
-        name: data.name,
-      },
-      body: data.requestBody,
-      mediaType: "application/json",
-      errors: {
-        422: "Validation Error",
-      },
-    });
-  }
-
-  /**
-   * Delete Secret
-   * @param data The data for the request.
-   * @param data.name
-   * @returns unknown Successful Response
-   * @throws ApiError
-   */
-  public static deleteSecretApiSecretsNameDelete(
-    data: DeleteSecretApiSecretsNameDeleteData,
-  ): CancelablePromise<DeleteSecretApiSecretsNameDeleteResponse> {
-    return __request(OpenAPI, {
-      method: "DELETE",
-      url: "/api/secrets/{name}",
-      path: {
-        name: data.name,
-      },
-      errors: {
-        422: "Validation Error",
-      },
     });
   }
 }
@@ -393,46 +397,6 @@ export class TransactionsService {
       path: {
         tx_id: data.txId,
       },
-      errors: {
-        422: "Validation Error",
-      },
-    });
-  }
-}
-
-export class WindowService {
-  /**
-   * Window Health Check
-   * Check if the Tauri window socket server is available.
-   * @returns string Successful Response
-   * @throws ApiError
-   */
-  public static healthCheckApiHealthGet(): CancelablePromise<WindowHealthCheckApiHealthGetResponse> {
-    return __request(OpenAPI, {
-      method: "GET",
-      url: "/api/health",
-    });
-  }
-
-  /**
-   * Toggle Window State
-   * Toggle window maximize/restore state via Unix socket to Tauri.
-   *
-   * This endpoint communicates with the Rust backend through a Unix socket
-   * to control the window state (maximize/restore).
-   * @param data The data for the request.
-   * @param data.requestBody
-   * @returns string Successful Response
-   * @throws ApiError
-   */
-  public static toggleWindowStateApiWindowPost(
-    data: ToggleWindowStateApiWindowPostData,
-  ): CancelablePromise<ToggleWindowStateApiWindowPostResponse> {
-    return __request(OpenAPI, {
-      method: "POST",
-      url: "/api/window",
-      body: data.requestBody,
-      mediaType: "application/json",
       errors: {
         422: "Validation Error",
       },

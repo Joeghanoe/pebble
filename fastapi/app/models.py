@@ -1,5 +1,6 @@
-from typing import Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
+from pydantic import StringConstraints
 from sqlmodel import Field, SQLModel
 
 
@@ -40,7 +41,8 @@ class Transaction(SQLModel, table=True):
     notes: Optional[str] = Field(default=None)
     source: str = Field(default="manual", max_length=20)  # manual | imported
     external_id: Optional[str] = Field(default=None)
-    deleted_at: Optional[str] = Field(default=None, max_length=30)
+    # ISO 8601 UTC, whole seconds. 40 rather than 30: see migration 003.
+    deleted_at: Optional[str] = Field(default=None, max_length=40)
 
 
 class PriceCache(SQLModel, table=True):
@@ -75,49 +77,57 @@ class PositionSnapshot(SQLModel, table=True):
 # API Request Models
 # ============================================================================
 
+# These were plain `str` with the allowed values in a comment. Postgres enforces the
+# declared column widths that SQLite ignored, so an over-long value now fails the
+# INSERT and surfaces as a 500; spelling the sets out turns that into a 422 and makes
+# the generated TypeScript client a union instead of `string`.
+AssetType = Literal["crypto", "etf", "cash", "stock"]
+ExchangeType = Literal["crypto", "broker", "manual"]
+TransactionType = Literal["buy", "sell"]
+
+# 'YYYY-MM-DD'. The column is 10 characters wide and every comparison in the raw SQL
+# relies on ISO dates sorting lexicographically, so a free-form string is not safe here.
+IsoDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+
 
 class AssetCreate(SQLModel):
     symbol: str = Field(min_length=1, max_length=50)
     name: str = Field(min_length=1, max_length=255)
-    type: str  # crypto | etf | cash | stock
+    type: AssetType
     exchange_id: int
-    yahoo_ticker: Optional[str] = None
-    coingecko_id: Optional[str] = None
+    yahoo_ticker: Optional[str] = Field(default=None, max_length=50)
+    coingecko_id: Optional[str] = Field(default=None, max_length=100)
 
 
 class AssetUpdate(SQLModel):
-    symbol: Optional[str] = None
-    name: Optional[str] = None
-    type: Optional[str] = None
+    symbol: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    type: Optional[AssetType] = None
     exchange_id: Optional[int] = None
-    yahoo_ticker: Optional[str] = None
-    coingecko_id: Optional[str] = None
+    yahoo_ticker: Optional[str] = Field(default=None, max_length=50)
+    coingecko_id: Optional[str] = Field(default=None, max_length=100)
 
 
 class ExchangeCreate(SQLModel):
     name: str = Field(min_length=1, max_length=255)
-    type: str  # crypto | broker | manual
+    type: ExchangeType
 
 
 class TransactionCreate(SQLModel):
     asset_id: int
-    date: str
-    type: str  # buy | sell
+    date: IsoDate
+    type: TransactionType
     units: float
     eur_amount: float
     notes: Optional[str] = None
 
 
 class TransactionUpdate(SQLModel):
-    date: Optional[str] = None
-    type: Optional[str] = None
+    date: Optional[IsoDate] = None
+    type: Optional[TransactionType] = None
     units: Optional[float] = None
     eur_amount: Optional[float] = None
     notes: Optional[str] = None
-
-
-class SecretSet(SQLModel):
-    value: str
 
 
 # ============================================================================

@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.main import api_router
 from app.core.config import settings
+from app.core.identity import ProxyIdentityMiddleware
 from app.core.logging import setup_logging
 from app.prestart import main as prestart
 
@@ -14,10 +15,8 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
     """Application lifespan handler - runs on startup and shutdown."""
-    # Startup: Run migrations and initialize data
     prestart()
     yield
-    # Shutdown: Nothing to clean up for now
 
 
 app = FastAPI(
@@ -26,51 +25,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware for local development
-# In production Tauri app, requests come from tauri://localhost
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:1420",  # Vite dev server
-        "http://127.0.0.1:1420",
-        "tauri://localhost",      # Tauri webview
-        "https://tauri.localhost",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Identity. Every request except / and /api/health must carry the address oauth2-proxy
+# forwards. There is deliberately no CORS middleware: the SPA is served from the same
+# origin as the API (both sit behind the proxy), so a browser never makes a cross-origin
+# request to it, and an allowance here would only widen who can drive the API.
+app.add_middleware(ProxyIdentityMiddleware)
 
 
 @app.get("/")
 def root():
-    """Root endpoint - basic info."""
-    return {
-        "name": settings.PROJECT_NAME,
-        "version": "0.1.0",
-        "auth_required": settings.AUTH_REQUIRED,
-    }
+    """Unauthenticated. Reachable directly on the private network, so it says nothing."""
+    return {"name": settings.PROJECT_NAME, "version": "0.1.0"}
 
 
 @app.get(f"{settings.API_V1_STR}/health")
 def health_check():
-    """Health check endpoint for sidecar readiness."""
+    """Health check for Railway. Unauthenticated: the platform probes it without a proxy."""
     return {"status": "healthy"}
 
 
-# Include API routes
-from app.api.main import api_router
-
 app.include_router(api_router, prefix=settings.API_V1_STR)
-
-
-if __name__ == "__main__":
-    # Run uvicorn when executed directly (for PyInstaller binary)
-    import uvicorn
-
-    uvicorn.run(
-        app,  # Pass app object directly, not string, for PyInstaller compatibility
-        host=settings.HOST,
-        port=settings.PORT,
-        log_level="info",
-    )

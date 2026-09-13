@@ -1,7 +1,8 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
-import { ArrowLeft, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, RefreshCw, Trash2, X } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +18,9 @@ import {
   TransactionsService,
   ExchangesService,
 } from "@/client";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { api } from "@/lib/api";
+import { apiErrorMessage } from "@/lib/errors";
 import {
   formatEur,
   formatEurPrice,
@@ -101,16 +104,24 @@ export function PositionDetail() {
       });
       void queryClient.invalidateQueries({ queryKey: ["positions"] });
     },
+    onError: (error) =>
+      toast.error(apiErrorMessage(error, "Could not delete that transaction.")),
+  });
+
+  const deletePosition = useMutation({
+    mutationFn: () => api.deleteAsset(assetId),
+    onSuccess: async () => {
+      toast.success("Position deleted.");
+      await queryClient.invalidateQueries({ queryKey: ["positions"] });
+      void navigate({ to: "/" });
+    },
+    onError: (error) =>
+      toast.error(apiErrorMessage(error, "Could not delete that position.")),
   });
 
   const exchanges = exchangesData?.exchanges ?? [];
   const position = positionsData?.positions.find((p) => p.asset.id === assetId);
   const transactions = txData?.transactions ?? [];
-
-  async function handleDeleteTx(id: number) {
-    if (!confirm("Delete this transaction?")) return;
-    deleteTx.mutate(id);
-  }
 
   const symbol = position?.asset.symbol ?? "…";
   const unitsHeld = position?.units_held ?? 0;
@@ -199,24 +210,41 @@ export function PositionDetail() {
           assetId={assetId}
           trigger={
             <Button variant="outline" size="sm">
-              + Add Transaction
+              <span className="hidden sm:inline">+ Add Transaction</span>
+              <span className="sm:hidden">+ Add</span>
             </Button>
           }
         />
+        <ConfirmButton
+          title={`Delete ${symbol}?`}
+          description="The position goes, and so do its transactions, cached prices and snapshots. This cannot be undone."
+          confirmLabel="Delete position"
+          onConfirm={() => deletePosition.mutateAsync()}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-destructive"
+            title="Delete position"
+          >
+            <Trash2 size={13} />
+          </Button>
+        </ConfirmButton>
       </SiteHeader>
 
       <div
         className={cn(
-          "flex flex-col gap-4 p-6 transition-opacity duration-500",
+          "flex flex-col gap-4 p-4 transition-opacity duration-500 sm:p-6",
           positionsLoading || txLoading ? "opacity-0" : "opacity-100",
         )}
       >
-        {/* Position header — mirrors TotalValueHeader layout */}
-        <div className="grid grid-cols-4 items-start gap-6">
+        {/* Position header — mirrors TotalValueHeader layout. One column on a phone:
+            the sparkline goes last so the numbers stay above the fold. */}
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-4 lg:gap-6">
           {/* Key metrics */}
-          <div className="col-span-1 flex flex-col gap-1">
+          <div className="flex flex-col gap-1 lg:col-span-1">
             <h1 className="text-base text-muted-foreground">Current Value</h1>
-            <span className="font-number text-4xl">
+            <span className="font-number text-3xl sm:text-4xl">
               {positionsLoading ? (
                 <Skeleton className="h-6 w-24" />
               ) : (
@@ -262,8 +290,8 @@ export function PositionDetail() {
           {/* Sparkline — only rendered when there's data (grid adjusts automatically) */}
           <div
             className={cn(
-              "col-span-2",
-              valueChartData.length <= 1 && "opacity-0",
+              "hidden lg:col-span-2 lg:block",
+              valueChartData.length <= 1 && "lg:opacity-0",
             )}
           >
             <ChartContainer
@@ -308,8 +336,8 @@ export function PositionDetail() {
             </ChartContainer>
           </div>
 
-          {/* Secondary stats */}
-          <div className="col-span-1 flex flex-col gap-1">
+          {/* Secondary stats. Side by side on a phone rather than a tall stack. */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:col-span-1 lg:flex lg:flex-col lg:gap-1">
             <div className="flex flex-col gap-0.5">
               <span className="text-xs tracking-wider text-muted-foreground uppercase">
                 Holdings
@@ -363,7 +391,7 @@ export function PositionDetail() {
             className={cn(
               "grid gap-4",
               pnlChartData.length > 1 && frequencyData.length > 1
-                ? "grid-cols-2"
+                ? "grid-cols-1 lg:grid-cols-2"
                 : "grid-cols-1",
             )}
           >
@@ -484,7 +512,9 @@ export function PositionDetail() {
 
         {/* Transaction Log */}
         <Card className="gap-3 overflow-hidden py-0">
-          <CardContent className="p-0">
+          {/* The log is six columns of numbers. Below `sm` the derivable "Current
+              Value" column is dropped and the rest scrolls rather than crushing. */}
+          <CardContent className="overflow-x-auto p-0">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -497,10 +527,10 @@ export function PositionDetail() {
                   <TableHead className="px-3 py-2 text-right whitespace-nowrap">
                     Paid (€)
                   </TableHead>
-                  <TableHead className="px-3 py-2 text-right whitespace-nowrap">
+                  <TableHead className="hidden px-3 py-2 text-right whitespace-nowrap sm:table-cell">
                     Current Value (€)
                   </TableHead>
-                  <TableHead className="px-3 py-2 text-right whitespace-nowrap">
+                  <TableHead className="hidden px-3 py-2 text-right whitespace-nowrap sm:table-cell">
                     Profit/Loss
                   </TableHead>
                   <TableHead className="w-8 px-3 py-2" />
@@ -519,10 +549,10 @@ export function PositionDetail() {
                       <TableCell className="px-3 py-2 text-right">
                         <Skeleton className="ml-auto h-4 w-20" />
                       </TableCell>
-                      <TableCell className="px-3 py-2 text-right">
+                      <TableCell className="hidden px-3 py-2 text-right sm:table-cell">
                         <Skeleton className="ml-auto h-4 w-20" />
                       </TableCell>
-                      <TableCell className="px-3 py-2 text-right">
+                      <TableCell className="hidden px-3 py-2 text-right sm:table-cell">
                         <Skeleton className="ml-auto h-5 w-14 rounded" />
                       </TableCell>
                       <TableCell className="px-3 py-2" />
@@ -538,7 +568,7 @@ export function PositionDetail() {
                     </TableCell>
                   </TableRow>
                 )}
-                {enrichedTx.reverse().map((tx: EnrichedTransaction) => (
+                {[...enrichedTx].reverse().map((tx: EnrichedTransaction) => (
                   <TableRow key={tx.id}>
                     <TableCell className="px-3 py-2 font-number whitespace-nowrap tabular-nums">
                       {tx.date}
@@ -555,14 +585,14 @@ export function PositionDetail() {
                     <TableCell className="px-3 py-2 text-right font-number whitespace-nowrap tabular-nums">
                       {formatEur(tx.eur_amount)}
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-right font-number whitespace-nowrap tabular-nums">
+                    <TableCell className="hidden px-3 py-2 text-right font-number whitespace-nowrap tabular-nums sm:table-cell">
                       {tx.currentVal !== null ? (
                         formatEur(tx.currentVal)
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-right whitespace-nowrap">
+                    <TableCell className="hidden px-3 py-2 text-right whitespace-nowrap sm:table-cell">
                       {tx.type === "sell" && tx.realized_pnl !== null ? (
                         <span
                           className={cn(
@@ -592,15 +622,27 @@ export function PositionDetail() {
                       )}
                     </TableCell>
                     <TableCell className="px-3 py-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDeleteTx(tx.id)}
-                        title="Delete"
+                      <ConfirmButton
+                        title="Delete this transaction?"
+                        description={
+                          <>
+                            {tx.type === "sell" ? "Sell" : "Buy"} of{" "}
+                            {formatUnits(tx.units)} {symbol} for{" "}
+                            {formatEur(tx.eur_amount)} on {tx.date}. Holdings
+                            and invested totals are recalculated without it.
+                          </>
+                        }
+                        onConfirm={() => deleteTx.mutateAsync(tx.id)}
                       >
-                        <X size={12} />
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-destructive sm:size-6"
+                          title="Delete"
+                        >
+                          <X size={12} />
+                        </Button>
+                      </ConfirmButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -617,12 +659,12 @@ export function PositionDetail() {
                     <TableCell className="px-3 py-2 text-right font-number font-semibold whitespace-nowrap tabular-nums">
                       {formatEur(totalPaid)}
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-right font-number font-semibold whitespace-nowrap tabular-nums">
+                    <TableCell className="hidden px-3 py-2 text-right font-number font-semibold whitespace-nowrap tabular-nums sm:table-cell">
                       {totalCurrentVal !== null
                         ? formatEur(totalCurrentVal)
                         : "—"}
                     </TableCell>
-                    <TableCell className="px-3 py-2 text-right whitespace-nowrap">
+                    <TableCell className="hidden px-3 py-2 text-right whitespace-nowrap sm:table-cell">
                       {totalPct !== null ? (
                         <Badge
                           className={cn(

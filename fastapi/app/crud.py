@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import delete, text
 from sqlmodel import Session, select
 
 from app.models import (
@@ -36,11 +36,16 @@ def create_exchange(session: Session, exchange_in: ExchangeCreate) -> Exchange:
     return exchange
 
 
-def delete_exchange(session: Session, exchange_id: int) -> None:
-    exchange = session.get(Exchange, exchange_id)
-    if exchange:
-        session.delete(exchange)
-        session.commit()
+def get_exchange(session: Session, exchange_id: int) -> Exchange | None:
+    return session.get(Exchange, exchange_id)
+
+
+def delete_exchange(session: Session, exchange: Exchange) -> None:
+    """Delete an exchange. Callers must check `list_assets_by_exchange` first:
+    an exchange still referenced by an asset fails the foreign key, and the
+    route turns that into a 409 rather than letting it surface as a 500."""
+    session.delete(exchange)
+    session.commit()
 
 
 # ============================================================================
@@ -50,6 +55,14 @@ def delete_exchange(session: Session, exchange_id: int) -> None:
 
 def list_assets(session: Session) -> list[Asset]:
     return list(session.exec(select(Asset).order_by(Asset.symbol)).all())
+
+
+def list_assets_by_exchange(session: Session, exchange_id: int) -> list[Asset]:
+    return list(
+        session.exec(
+            select(Asset).where(Asset.exchange_id == exchange_id).order_by(Asset.symbol)
+        ).all()
+    )
 
 
 def get_asset(session: Session, asset_id: int) -> Asset | None:
@@ -71,6 +84,21 @@ def update_asset(session: Session, asset: Asset, asset_in: AssetUpdate) -> Asset
     session.commit()
     session.refresh(asset)
     return asset
+
+
+def delete_asset(session: Session, asset: Asset) -> None:
+    """Delete an asset and everything hanging off it, in one transaction.
+
+    Transactions are soft-deleted elsewhere so a mistaken row can come back, but an
+    asset carries its whole history: leaving orphaned transactions and cached prices
+    behind would keep the position out of `/positions` while still counting towards
+    the net-worth snapshots. Nothing references an asset except these three tables.
+    """
+    asset_id = asset.id
+    for table in (Transaction, PriceCache, PositionSnapshot):
+        session.exec(delete(table).where(table.asset_id == asset_id))  # type: ignore[call-overload, arg-type]
+    session.delete(asset)
+    session.commit()
 
 
 # ============================================================================
@@ -156,7 +184,9 @@ def update_transaction(session: Session, tx: Transaction, tx_in: TransactionUpda
 
 
 def soft_delete_transaction(session: Session, tx: Transaction) -> None:
-    tx.deleted_at = datetime.now(timezone.utc).isoformat()
+    # Whole seconds: microsecond precision is meaningless for a manual delete and pushed
+    # the ISO string to 32 characters, over the column's width (see migration 003).
+    tx.deleted_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     session.add(tx)
     session.commit()
 
@@ -279,13 +309,21 @@ def get_max_price_date(session: Session) -> str | None:
 
 
 def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSnapshot]:
+    """Last 60 points of net worth: daily, or the last snapshot in each week/month.
+
+    `date` is stored as a 'YYYY-MM-DD' string, so lexicographic ordering is already
+    chronological and the month bucket is a plain prefix. The week bucket needs a real
+    date, hence the cast. This used SQLite's strftime('%Y-%W') before the move to
+    Postgres; ISO weeks differ from %W in the first days of January, which shifts at
+    most one bucket boundary a year on a chart of the last 60 weeks.
+    """
     if period == "1d":
         rows = session.exec(
             text("SELECT date, total_eur, invested_eur FROM net_worth_snapshot ORDER BY date DESC LIMIT 60")
         ).all()
         return [NetWorthSnapshot(date=r[0], total_eur=r[1], invested_eur=r[2]) for r in reversed(rows)]
 
-    bucket = "strftime('%Y-%W', date)" if period == "1w" else "strftime('%Y-%m', date)"
+    bucket = "to_char(date::date, 'IYYY-IW')" if period == "1w" else "substr(date, 1, 7)"
     sql = text(f"""
         SELECT s.date, s.total_eur, s.invested_eur
         FROM net_worth_snapshot s

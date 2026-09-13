@@ -1,0 +1,32 @@
+server {
+    # Dual-stack: Railway's private network is IPv6-only, local Docker is IPv4.
+    listen ${PORT};
+    listen [::]:${PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # The API is reached only through oauth2-proxy, which routes /api/ to the api service
+    # before anything hits this server. A request arriving here means someone opened web
+    # directly; answer plainly instead of serving index.html as if it were JSON.
+    location /api/ {
+        default_type application/json;
+        return 404 '{"detail":"Not the app entry point. Open Pebble through the proxy domain, not the web service."}';
+    }
+
+    # Hashed assets are immutable; the document is not.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # The SPA uses browser history, not hash routing, so /position/3 and /settings are
+    # real paths the server has to answer with the document (see frontend/src/router.ts).
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ /index.html;
+    }
+}
