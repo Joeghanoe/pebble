@@ -5,6 +5,16 @@ class YahooClient:
     BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 
     async def get_live_price(self, ticker: str) -> float | None:
+        quote = await self.get_live_quote(ticker)
+        return quote[0] if quote else None
+
+    async def get_live_quote(self, ticker: str) -> tuple[float, str] | None:
+        """Live price plus the currency Yahoo reports it in.
+
+        The currency matters: the `.L` suffix alone does not tell you whether a
+        London listing quotes in USD (VUAA.L) or pence, so guessing from the
+        ticker is how you end up off by 100x.
+        """
         url = f"{self.BASE_URL}/{ticker}?interval=1d&range=1d"
         try:
             async with httpx.AsyncClient(timeout=10) as client:
@@ -15,7 +25,12 @@ class YahooClient:
             result = (data.get("chart", {}).get("result") or [None])[0]
             if not result:
                 return None
-            return result.get("meta", {}).get("regularMarketPrice")
+            meta = result.get("meta", {})
+            price = meta.get("regularMarketPrice")
+            currency = meta.get("currency")
+            if price is None or not currency:
+                return None
+            return float(price), str(currency).upper()
         except Exception:
             return None
 

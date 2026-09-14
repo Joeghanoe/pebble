@@ -19,8 +19,10 @@ export const api = {
   getMe: (): Promise<{ email: string }> =>
     MeService.getMeApiMeGet() as unknown as Promise<{ email: string }>,
 
-  refreshPrices: (): Promise<RefreshPricesResponse> =>
-    PricesService.refreshPricesApiPricesRefreshPost() as unknown as Promise<RefreshPricesResponse>,
+  refreshPrices: (force = false): Promise<RefreshPricesResponse> =>
+    PricesService.refreshPricesApiPricesRefreshPost({
+      force,
+    }) as unknown as Promise<RefreshPricesResponse>,
 
   createTransaction: (body: {
     assetId: number;

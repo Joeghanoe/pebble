@@ -41,7 +41,7 @@ export function SiteHeader({
   const { lastUpdated } = usePortfolio();
   const prefs = usePreferences();
   const { openTransaction } = useTransactionModal();
-  const { refresh, refreshNow, isPending, isCoolingDown } = useRefreshPrices();
+  const { refresh, refreshAuto, isPending, throttledUntil } = useRefreshPrices();
 
   // Auto-refresh is a preference, so the interval lives here rather than in the
   // query client: turning it off has to actually stop the polling.
@@ -50,11 +50,11 @@ export function SiteHeader({
       return undefined;
     }
     const id = window.setInterval(
-      () => refreshNow(),
+      () => refreshAuto(),
       prefs.refreshIntervalMinutes * 60_000,
     );
     return () => window.clearInterval(id);
-  }, [prefs.autoRefresh, prefs.refreshIntervalMinutes, refreshNow]);
+  }, [prefs.autoRefresh, prefs.refreshIntervalMinutes, refreshAuto]);
 
   return (
     <header
@@ -99,21 +99,19 @@ export function SiteHeader({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {children}
         <span className="hidden items-center gap-1.5 md:flex">
           <PbDot color={lastUpdated ? "#34D399" : "#6F6885"} size={5} />
           <span className="font-number text-[11px] text-pb-faint">
-            {lastUpdated
-              ? `${formatSyncStamp(lastUpdated)}`
-              : "no quotes"}
+            {lastUpdated ? `${formatSyncStamp(lastUpdated)}` : "no quotes"}
           </span>
         </span>
+        {children}
         <PbGhostButton
           onClick={refresh}
           disabled={isPending}
           title={
-            isCoolingDown
-              ? "Quotes were pulled in the last few minutes"
+            throttledUntil
+              ? `Quotes were just pulled; retry after ${new Date(throttledUntil).toLocaleTimeString()}`
               : "Pull fresh quotes"
           }
         >

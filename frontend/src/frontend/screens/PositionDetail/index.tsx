@@ -72,7 +72,7 @@ export function PositionDetail() {
   const queryClient = useQueryClient();
   const prefs = usePreferences();
   const { openTransaction } = useTransactionModal();
-  const [timeframe, setTimeframe] = React.useState<Timeframe>("1M");
+  const [timeframe, setTimeframe] = React.useState<Timeframe>("ALL");
 
   const portfolio = usePortfolio();
   const position = portfolio.positions.find((p) => p.asset.id === assetId);
@@ -223,7 +223,6 @@ export function PositionDetail() {
                   <PbPnlBadge value={position?.pnl_pct ?? 0}>
                     {formatPct(position?.pnl_pct ?? 0)}
                   </PbPnlBadge>
-                  <span className="text-[11.5px] text-pb-faint">on cost</span>
                 </div>
               </div>
               <PbSegmented

@@ -144,6 +144,13 @@ export type GetPositionHistoryApiPositionsAssetIdHistoryGetResponse = {
   [key: string]: unknown;
 };
 
+export type RefreshPricesApiPricesRefreshPostData = {
+  /**
+   * Bypass the routine cooldown. For an explicit user-initiated refresh.
+   */
+  force?: boolean;
+};
+
 export type RefreshPricesApiPricesRefreshPostResponse = {
   [key: string]: unknown;
 };

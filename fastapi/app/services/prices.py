@@ -1,3 +1,5 @@
+import logging
+
 from sqlmodel import Session
 
 from app.clients.coingecko import CoinGeckoClient
@@ -6,6 +8,11 @@ from app.clients.yahoo import YahooClient
 from app.crud import get_latest_price, upsert_price
 from app.models import Asset, PriceResultOk, PriceResultStale, PriceResultUnavailable
 from app.services.currency import CurrencyService
+
+logger = logging.getLogger(__name__)
+
+# Only used when FX is unreachable and nothing has been cached yet.
+FALLBACK_EUR_USD = 1.1
 
 
 class PriceService:
@@ -76,12 +83,39 @@ class PriceService:
     ) -> PriceResultOk | PriceResultStale | PriceResultUnavailable:
         if not asset.yahoo_ticker:
             return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
+
         price = await self.stooq.get_live_price(asset.yahoo_ticker)
         if price is not None:
             rate = await self._get_rate_safe(today)
             price_eur = price if is_eur_listing(asset.yahoo_ticker) else price / rate
             upsert_price(session, asset.id, today, price_eur, rate)  # type: ignore[arg-type]
             return PriceResultOk(price_eur=price_eur, date=today, exchange_rate=rate)
+
+        # Stooq simply does not carry some listings (exus.de and vuaa.uk both
+        # 404), which left those positions frozen on whatever price they last
+        # had. Yahoo covers them, and reports the quote currency, so fall back
+        # to it rather than reporting the holding as stale.
+        quote = await self.yahoo.get_live_quote(asset.yahoo_ticker)
+        if quote is not None:
+            price, currency = quote
+            rate = await self._get_rate_safe(today)
+            if currency == "EUR":
+                price_eur = price
+            elif currency == "USD":
+                price_eur = price / rate
+            else:
+                # No rate for anything else, and a wrong conversion is worse
+                # than an honest gap.
+                logger.warning(
+                    "%s quotes in %s; no EUR conversion available",
+                    asset.yahoo_ticker,
+                    currency,
+                )
+                return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
+            upsert_price(session, asset.id, today, price_eur, rate)  # type: ignore[arg-type]
+            return PriceResultOk(price_eur=price_eur, date=today, exchange_rate=rate)
+
+        logger.warning("no live price for %s from stooq or yahoo", asset.yahoo_ticker)
         return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
 
     def _stale_or_unavailable(
@@ -100,4 +134,8 @@ class PriceService:
         try:
             return await self.currency.get_eur_usd_rate(date)
         except Exception:
-            return 1.1
+            # This used to fail silently, so a broken FX lookup looked exactly
+            # like a working one while every USD holding was converted at a
+            # number somebody typed in once.
+            logger.warning("EUR/USD lookup failed for %s; using fallback rate", date, exc_info=True)
+            return self.currency.last_known_rate() or FALLBACK_EUR_USD

@@ -345,7 +345,7 @@ export function PbStatTile({
   readonly valueStyle?: React.CSSProperties;
 }) {
   return (
-    <div className="flex flex-col gap-[5px] rounded-[13px] border border-pb-line bg-pb-surface px-3.5 py-[13px]">
+    <div className="flex flex-col gap-[5px] rounded-[13px] border border-pb-line bg-pb-surface px-3.5 py-[13px] capitalize">
       <span className="font-number text-[9.5px] tracking-[0.11em] text-pb-muted uppercase">
         {eyebrow}
       </span>

@@ -1,8 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  LayoutGrid,
-  Plus, SlidersHorizontal
-} from "lucide-react";
+import { LayoutGrid, Plus, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/lib/portfolio";
 import { usePreferences } from "@/lib/preferences";
@@ -32,30 +29,15 @@ export function SidebarBody({
     <div className="flex flex-1 flex-col gap-[18px]">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-1.5 py-0.5 leading-[1.15]">
-        <span
-          className="flex size-7 shrink-0 items-center justify-center"
-        >
+        <span className="flex size-7 shrink-0 items-center justify-center">
           <img
-            src="assets/images/app-icon.svg"
+            src="/assets/images/app-icon.svg"
             alt="Pebble logo"
             className="h-4.5 w-4.5"
           />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[13.5px] font-semibold">Pebble</span>
-          <span className="block font-number text-[10px] tracking-[0.08em] text-pb-muted uppercase">
-            Tracker
-          </span>
-        </span>
-        <span
-          className="flex items-center gap-1 rounded-full px-[7px] py-[3px]"
-          style={{
-            background: "rgba(52,211,153,.1)",
-            border: "1px solid rgba(52,211,153,.18)",
-          }}
-        >
-          <PbDot color="#34D399" size={5} />
-          <span className="font-number text-[9.5px] text-pb-up">LIVE</span>
         </span>
       </div>
 

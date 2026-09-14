@@ -12,3 +12,13 @@ class CurrencyService:
         rate = await self._client.get_rate(date)
         self._cache[date] = rate
         return rate
+
+    def last_known_rate(self) -> float | None:
+        """The most recent rate actually fetched, for when the API is down.
+
+        Yesterday's real rate beats a constant: FX moves a fraction of a percent
+        a day, while the old hardcoded 1.1 was ~4% off by the time it was hit.
+        """
+        if not self._cache:
+            return None
+        return self._cache[max(self._cache)]

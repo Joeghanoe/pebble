@@ -27,6 +27,7 @@ import type {
   GetPositionsApiPositionsGetResponse,
   GetPositionHistoryApiPositionsAssetIdHistoryGetData,
   GetPositionHistoryApiPositionsAssetIdHistoryGetResponse,
+  RefreshPricesApiPricesRefreshPostData,
   RefreshPricesApiPricesRefreshPostResponse,
   CreateTransactionApiTransactionsPostData,
   CreateTransactionApiTransactionsPostResponse,
@@ -334,13 +335,23 @@ export class PositionsService {
 export class PricesService {
   /**
    * Refresh Prices
+   * @param data The data for the request.
+   * @param data.force Bypass the routine cooldown. For an explicit user-initiated refresh.
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static refreshPricesApiPricesRefreshPost(): CancelablePromise<RefreshPricesApiPricesRefreshPostResponse> {
+  public static refreshPricesApiPricesRefreshPost(
+    data: RefreshPricesApiPricesRefreshPostData = {},
+  ): CancelablePromise<RefreshPricesApiPricesRefreshPostResponse> {
     return __request(OpenAPI, {
       method: "POST",
       url: "/api/prices/refresh",
+      query: {
+        force: data.force,
+      },
+      errors: {
+        422: "Validation Error",
+      },
     });
   }
 }

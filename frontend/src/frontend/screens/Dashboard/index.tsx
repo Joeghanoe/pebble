@@ -49,7 +49,7 @@ type Filter = (typeof FILTERS)[number];
 export function Dashboard() {
   const portfolio = usePortfolio();
   const prefs = usePreferences();
-  const [timeframe, setTimeframe] = React.useState<Timeframe>("1M");
+  const [timeframe, setTimeframe] = React.useState<Timeframe>("ALL");
   const [filter, setFilter] = React.useState<Filter>("All");
 
   const { data: netWorth } = useQuery({
@@ -81,7 +81,7 @@ export function Dashboard() {
 
   return (
     <>
-      <SiteHeader name="Dashboard"/>
+      <SiteHeader name="Dashboard" />
       <div
         className={cn(
           "pb-fade flex flex-col gap-3.5 p-5 transition-opacity duration-500",
