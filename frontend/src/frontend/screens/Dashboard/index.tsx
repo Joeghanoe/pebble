@@ -199,6 +199,10 @@ function TotalWorthCard({
             : ""
         }
         legend="portfolio — · invested ┄"
+        dates={series.map((point) => point.date)}
+        formatValue={formatEur}
+        seriesLabel="portfolio"
+        referenceLabel="invested"
       />
     </PbCard>
   );

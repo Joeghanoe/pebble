@@ -131,6 +131,30 @@ export function curve(
   return { line, area: `${line} L${width},${height} L0,${height} Z` };
 }
 
+/**
+ * Where a point lands inside the chart box.
+ *
+ * Exported so a hover readout can put its marker exactly on the drawn line:
+ * these are the same two expressions `curve` uses, and duplicating them at the
+ * call site is how a crosshair ends up a pixel off the curve it is pointing at.
+ */
+export function scaleX(index: number, count: number, width: number): number {
+  if (count <= 1) {
+    return 0;
+  }
+  return (index / (count - 1)) * width;
+}
+
+export function scaleY(
+  value: number,
+  height: number,
+  pad: number,
+  domain: readonly [number, number],
+): number {
+  const range = domain[1] - domain[0] || 1;
+  return pad + (1 - (value - domain[0]) / range) * (height - pad * 2);
+}
+
 /** The shared vertical scale across however many series a chart draws. */
 export function sharedDomain(
   ...series: readonly (readonly number[])[]

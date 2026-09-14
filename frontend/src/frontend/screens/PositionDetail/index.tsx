@@ -251,6 +251,10 @@ export function PositionDetail() {
               }
               legend="price — · avg cost ┄"
               emptyMessage="Snapshots start once prices have been refreshed"
+              dates={series.map((point) => point.date)}
+              formatValue={formatEurPrice}
+              seriesLabel="price"
+              referenceLabel="avg cost"
             />
           </PbCard>
 
