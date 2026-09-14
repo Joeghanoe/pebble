@@ -1,10 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutGrid,
-  Plus,
-  PlusCircle,
-  SlidersHorizontal,
-  TrendingUp,
+  Plus, SlidersHorizontal
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/lib/portfolio";
@@ -36,14 +33,13 @@ export function SidebarBody({
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-1.5 py-0.5 leading-[1.15]">
         <span
-          className="flex size-7 shrink-0 items-center justify-center rounded-[9px]"
-          style={{
-            background: "linear-gradient(145deg,#F7931A,#B45309)",
-            boxShadow:
-              "0 0 0 1px rgba(247,147,26,.35), 0 6px 16px -8px rgba(247,147,26,.8)",
-          }}
+          className="flex size-7 shrink-0 items-center justify-center"
         >
-          <TrendingUp size={15} strokeWidth={2.6} color="#1A0F02" />
+          <img
+            src="assets/images/app-icon.svg"
+            alt="Pebble logo"
+            className="h-4.5 w-4.5"
+          />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[13.5px] font-semibold">Pebble</span>
@@ -74,14 +70,14 @@ export function SidebarBody({
         >
           Dashboard
         </NavItem>
-        <NavItem
+        {/* <NavItem
           to="/get-started"
           onNavigate={onNavigate}
           active={pathname === "/get-started"}
           icon={<PlusCircle size={15} strokeWidth={1.8} />}
         >
           Get started
-        </NavItem>
+        </NavItem> */}
       </nav>
 
       {/* Positions */}

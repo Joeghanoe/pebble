@@ -59,7 +59,7 @@ export function EmptyState() {
 
   return (
     <>
-      <SiteHeader name="Get started" sublabel="no positions yet" />
+      <SiteHeader name="Get started" />
       <div className="pb-fade flex flex-1 items-center justify-center p-5">
         <div className="flex max-w-[560px] flex-col items-center gap-[18px] text-center">
           <span className="relative flex size-[88px] items-center justify-center">

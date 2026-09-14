@@ -127,7 +127,7 @@ export function PositionDetail() {
   if (!position && !portfolio.isLoading) {
     return (
       <>
-        <SiteHeader name="Not found" sublabel="no such position" onBack />
+        <SiteHeader name="Not found" onBack />
         <div className="p-5 text-[12.5px] text-pb-text-3">
           That position is not in the portfolio any more.
         </div>
@@ -171,7 +171,7 @@ export function PositionDetail() {
 
   return (
     <>
-      <SiteHeader name={symbol} sublabel={position?.asset.name} onBack>
+      <SiteHeader name={symbol} onBack>
         {position && (
           <EditPositionModal
             asset={position.asset}

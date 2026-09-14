@@ -28,12 +28,10 @@ import {
  */
 export function SiteHeader({
   name,
-  sublabel,
   onBack,
   children,
 }: {
   readonly name: string;
-  readonly sublabel?: string;
   /** Renders the back chevron. Position detail only. */
   readonly onBack?: boolean;
   readonly children?: React.ReactNode;
@@ -98,11 +96,6 @@ export function SiteHeader({
 
       <div className="flex min-w-0 items-baseline gap-2">
         <h1 className="truncate text-[14.5px] font-semibold">{name}</h1>
-        {sublabel && (
-          <span className="hidden truncate font-number text-[11px] text-pb-faint sm:block">
-            {sublabel}
-          </span>
-        )}
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -111,8 +104,8 @@ export function SiteHeader({
           <PbDot color={lastUpdated ? "#34D399" : "#6F6885"} size={5} />
           <span className="font-number text-[11px] text-pb-faint">
             {lastUpdated
-              ? `synced ${formatSyncStamp(lastUpdated)}`
-              : "never synced"}
+              ? `${formatSyncStamp(lastUpdated)}`
+              : "no quotes"}
           </span>
         </span>
         <PbGhostButton

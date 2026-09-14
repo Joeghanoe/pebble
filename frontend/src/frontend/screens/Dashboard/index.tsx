@@ -81,7 +81,7 @@ export function Dashboard() {
 
   return (
     <>
-      <SiteHeader name="Dashboard" sublabel="all accounts" />
+      <SiteHeader name="Dashboard"/>
       <div
         className={cn(
           "pb-fade flex flex-col gap-3.5 p-5 transition-opacity duration-500",

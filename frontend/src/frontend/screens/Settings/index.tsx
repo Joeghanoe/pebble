@@ -74,7 +74,7 @@ export function Settings() {
 
   return (
     <>
-      <SiteHeader name="Settings" sublabel="local · v2.0.0" />
+      <SiteHeader name="Settings" />
       <div className="pb-fade flex justify-center p-5">
         <div className="flex w-full max-w-[720px] flex-col gap-3.5">
           <Group title="Portfolio" note="euro, and how numbers are shown">

@@ -90,12 +90,32 @@ export function formatSats(btc: number): string {
   return signed(btc, grouped(Math.round(btc * 1e8), 0, 0));
 }
 
-/** `13/09 · 18:42` — the topbar's sync stamp. */
+/** Human-readable relative age: `1m ago`, `5m ago`, `1h ago`, ... */
 export function formatSyncStamp(iso: string): string {
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) {
     return iso;
   }
+
+  const diffMs = Date.now() - parsed.getTime();
+  if (diffMs <= 0) {
+    return "now";
+  }
+
+  const minuteMs = 60 * 1000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+
+  if (diffMs < hourMs) {
+    return `${Math.max(1, Math.round(diffMs / minuteMs))}m ago`;
+  }
+  if (diffMs < dayMs) {
+    return `${Math.max(1, Math.round(diffMs / hourMs))}h ago`;
+  }
+  if (diffMs < 7 * dayMs) {
+    return `${Math.max(1, Math.round(diffMs / dayMs))}d ago`;
+  }
+
   const pad = (n: number) => String(n).padStart(2, "0");
   const day = `${pad(parsed.getDate())}/${pad(parsed.getMonth() + 1)}`;
   // A date-only snapshot ('YYYY-MM-DD') parses to midnight UTC; printing "00:00"
