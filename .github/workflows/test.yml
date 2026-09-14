@@ -14,15 +14,21 @@ jobs:
   test:
     name: make test
     runs-on: ubuntu-latest
+    # A hung step otherwise runs until someone notices and cancels it. The suite
+    # finishes in seconds; ten minutes is generous and still fails fast.
+    timeout-minutes: 10
 
     # The API tests run against a real Postgres rather than SQLite, deliberately:
     # most of them exist to pin raw SQL and sequence behaviour that a different
     # engine would not reproduce. Same image and credentials as docker-compose, so
     # a failure here is reproducible with `make db` locally.
     #
-    # POSTGRES_DB is the *test* database: `make test-api` opens with a `createdb`
-    # that tolerates failure, and having the database already present means the
-    # runner needs no postgresql-client at all.
+    # POSTGRES_DB is the *test* database, so `make test-api`'s opening `createdb`
+    # has nothing to do and its failure is tolerated.
+    #
+    # The healthcheck names that database explicitly: `pg_isready -U pebble` alone
+    # defaults to a database matching the user, which does not exist here, so it
+    # logged a FATAL every five seconds for the life of the job.
     services:
       postgres:
         image: postgres:17-alpine
@@ -32,7 +38,7 @@ jobs:
           POSTGRES_DB: pebble_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U pebble"
+          --health-cmd "pg_isready -U pebble -d pebble_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -56,7 +62,11 @@ jobs:
         run: bun install --frozen-lockfile
         working-directory: frontend
 
+      # PGPASSWORD so `createdb` can authenticate rather than stopping to ask. The
+      # Makefile now feeds it /dev/null as well, so the worst case is a fast
+      # failure instead of the four-minute hang that cancelled the first run.
       - name: make test
         run: make test
         env:
           TEST_DATABASE_URL: postgres://pebble:pebble@localhost:5432/pebble_test
+          PGPASSWORD: pebble

@@ -33,18 +33,25 @@ import {
   formatUnits,
   formatUsdPrice,
 } from "@/lib/format";
-import { enrichTransactions } from "@/lib/position-analytics";
+import {
+  buildPnlChartData,
+  enrichTransactions,
+  getOpenBuyTransactions,
+} from "@/lib/position-analytics";
+import { buildCadence } from "@/lib/cadence";
 import { SiteHeader } from "@/components/site-header";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { EditPositionModal } from "@/frontend/components/EditPositionModal";
 import { useTransactionModal } from "@/frontend/components/TransactionModalProvider";
 import {
+  PbCadenceChart,
   PbCard,
   PbCardHeader,
   PbEyebrow,
   PbGhostButton,
   PbLineChart,
   PbPnlBadge,
+  PbPnlByBuyChart,
   PbSegmented,
   PbStatTile,
   pnlClass,
@@ -141,6 +148,16 @@ export function PositionDetail() {
 
   const enriched = enrichTransactions(transactions, unitPrice);
   const buys = transactions.filter((t) => t.type === "buy").length;
+
+  // Lots a sell has already closed are not still "open buys", so FIFO decides
+  // which of them the profit chart is still talking about.
+  const soldUnits = transactions
+    .filter((t) => t.type === "sell")
+    .reduce((sum, t) => sum + t.units, 0);
+  const pnlByBuy = buildPnlChartData(
+    getOpenBuyTransactions(enriched, soldUnits),
+  );
+  const cadence = buildCadence(transactions);
   const averageCost =
     position && position.units_held > 0
       ? position.total_invested_eur / position.units_held
@@ -296,6 +313,13 @@ export function PositionDetail() {
               />
             )}
           </div>
+        </div>
+
+        {/* The pair the release build had below the hero: which buys are in
+            profit, and how steadily they were made. */}
+        <div className="grid grid-cols-1 gap-3.5 min-[980px]:grid-cols-2">
+          <PbPnlByBuyChart points={pnlByBuy} />
+          <PbCadenceChart cadence={cadence} />
         </div>
 
         {/* Ledger */}

@@ -52,8 +52,14 @@ test: test-api
 
 # The API tests run against a real Postgres, not SQLite: they exist to pin the raw SQL
 # and the identity middleware as they behave in the deployment.
+#
+# createdb runs with -w (never prompt). Against a password-protected server it would
+# otherwise stop and ask, and because stderr is hidden the prompt is invisible -- which
+# is how this hung a CI runner for four minutes before anyone cancelled it. Redirecting
+# stdin does not help: createdb reads the prompt from /dev/tty, not stdin. With -w it
+# fails immediately instead, and pytest then reports the real problem.
 test-api:
-	createdb -h localhost -U pebble pebble_test 2>/dev/null || true
+	createdb -w -h localhost -U pebble pebble_test 2>/dev/null || true
 	cd fastapi && TEST_DATABASE_URL=$(TEST_DATABASE_URL) uv run pytest
 
 lint:
