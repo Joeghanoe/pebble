@@ -19,7 +19,7 @@ def get_price_service() -> PriceService:
     coingecko = CoinGeckoClient(api_key)
     stooq = StooqClient()
     yahoo = YahooClient()
-    currency = CurrencyService(FrankfurterClient())
+    currency = CurrencyService(FrankfurterClient(), yahoo)
 
     _price_service = PriceService(coingecko, stooq, yahoo, currency)
     return _price_service

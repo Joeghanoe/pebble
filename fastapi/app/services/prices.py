@@ -11,7 +11,7 @@ from app.services.currency import CurrencyService
 
 logger = logging.getLogger(__name__)
 
-# Only used when FX is unreachable and nothing has been cached yet.
+# Last resort: both Frankfurter and Yahoo unreachable, and nothing cached yet.
 FALLBACK_EUR_USD = 1.1
 
 
