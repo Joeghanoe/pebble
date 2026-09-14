@@ -57,10 +57,10 @@ function median(values: number[]): number | null {
 /**
  * The rhythm of buying into a position: how often, and where it slipped.
  *
- * The measure is the gap before each buy rather than the running buy count,
- * because the question is "where did I stop" and a gap answers it by height —
- * a tall bar is a month missed. A cumulative count answers it by slope, which
- * means differentiating a line by eye.
+ * Each buy carries the gap before it, so the chart can plot the dates and still
+ * name what it is showing: the slope between two marks *is* that gap, and the
+ * summary figures — usual gap, longest gap, days since the last buy — are the
+ * same numbers stated outright for the reader who wants one.
  *
  * Sells are left out. This is about the habit of putting money in; taking some
  * back out is a different decision and would read as a break in a streak that
