@@ -4,26 +4,29 @@ import { edgeLabel } from "@/lib/series";
 import { PbCard, PbCardHeader } from "./primitives";
 
 const VIEW_WIDTH = 640;
-const VIEW_HEIGHT = 120;
+const VIEW_HEIGHT = 130;
+const PAD = 10;
 
 /**
- * How consistently money went into a position, and where it stopped.
+ * When each buy happened: buy number across, date up.
  *
- * One bar per buy, in order, its height the gap since the previous one. A row
- * of even bars is a habit kept; a spike is a month skipped. The dashed line is
- * the usual rhythm, so "consistent" reads as bars sitting on it rather than as
- * a judgement the chart has to spell out.
+ * The shape is the point, and the rule is the one written on the spreadsheet
+ * this replaces — the more linear the better. Buying on a steady rhythm plots a
+ * straight line, so the dashed reference is exactly that: the straight run from
+ * the first buy to the last. Where the real line sags below it you were buying
+ * faster than your average; where it climbs above, a gap opened.
  *
- * Purple throughout, per the accent contract: orange belongs to actions, and
- * red means a loss. Not buying for a while is neither — a lapse is drawn in the
- * paler purple rather than in a warning colour.
+ * Segments are straight rather than smoothed. A curve through these points
+ * would round off the corner where a gap starts, which is the one feature worth
+ * seeing.
+ *
+ * Purple throughout, per the accent contract: orange belongs to actions and red
+ * means a loss. A month not bought is neither, so a lapse is marked with the
+ * paler purple rather than a warning colour.
  */
 export function PbCadenceChart({ cadence }: { readonly cadence: Cadence }) {
   const { bars, medianGapDays, longestGapDays, daysSinceLast, isLapsedNow } =
     cadence;
-
-  // The first bar has no gap to show, so the drawn series is everything after it.
-  const drawn = bars.filter((bar) => bar.gapDays !== null);
 
   return (
     <PbCard className="p-[18px]">
@@ -36,24 +39,17 @@ export function PbCadenceChart({ cadence }: { readonly cadence: Cadence }) {
             : `${cadence.buys} buys · ${describeCadence(medianGapDays)}`
         }
       >
-        <div className="flex items-center gap-3 font-number text-[9.5px] text-pb-faint">
-          <span className="flex items-center gap-1.5">
-            <span className="block h-[9px] w-2 rounded-[2px] bg-pb-purple" />
-            on rhythm
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="block h-[9px] w-2 rounded-[2px] bg-pb-purple-pale" />
-            lapse
-          </span>
-        </div>
+        <span className="font-number text-[9.5px] text-pb-faint">
+          the more linear the better
+        </span>
       </PbCardHeader>
 
-      {drawn.length === 0 ? (
+      {bars.length < 2 ? (
         <p className="py-6 text-center text-[11.5px] text-pb-faint">
           A second buy is needed before there is a rhythm to measure.
         </p>
       ) : (
-        <Bars cadence={cadence} />
+        <Line cadence={cadence} />
       )}
 
       <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-pb-hairline pt-3 sm:grid-cols-3">
@@ -82,68 +78,89 @@ export function PbCadenceChart({ cadence }: { readonly cadence: Cadence }) {
   );
 }
 
-function Bars({ cadence }: { readonly cadence: Cadence }) {
-  const drawn = cadence.bars.filter((bar) => bar.gapDays !== null);
-  const max = Math.max(...drawn.map((bar) => bar.gapDays!), 1);
+function Line({ cadence }: { readonly cadence: Cadence }) {
+  const { bars } = cadence;
 
-  // A gap of one bar-width keeps the marks readable however many there are; the
-  // viewBox stretches to the card, so this is proportion rather than pixels.
-  const slot = VIEW_WIDTH / drawn.length;
-  const barWidth = Math.max(slot * 0.55, 1.5);
-  const medianY =
-    cadence.medianGapDays === null
-      ? null
-      : VIEW_HEIGHT - (cadence.medianGapDays / max) * VIEW_HEIGHT;
+  // Buy number across, so the marks are evenly spaced however irregular the
+  // dates are; date up, so the slope between two marks is the gap between them.
+  const times = bars.map((bar) => Date.parse(`${bar.date}T00:00:00Z`));
+  const first = times[0];
+  const last = times[times.length - 1];
+  const span = last - first || 1;
+
+  const x = (index: number) => (index / (bars.length - 1)) * VIEW_WIDTH;
+  const y = (time: number) =>
+    PAD + (1 - (time - first) / span) * (VIEW_HEIGHT - PAD * 2);
+
+  const points = bars.map((bar, index) => ({
+    bar,
+    x: x(index),
+    y: y(times[index]),
+  }));
+  const path = points
+    .map(
+      (point, index) =>
+        `${index === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`,
+    )
+    .join(" ");
 
   return (
     <>
       <svg
         viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
         preserveAspectRatio="none"
-        className="block h-[110px] w-full"
+        className="block h-[118px] w-full"
         role="img"
-        aria-label={`Gap between buys, ${drawn.length} bars, usually about ${
-          cadence.medianGapDays ?? 0
-        } days`}
+        aria-label={`When each of ${bars.length} buys happened. A straight line means a steady rhythm; ${
+          cadence.longestGapDays ?? 0
+        } days was the longest gap.`}
       >
-        {medianY !== null && (
-          <line
-            x1="0"
-            y1={medianY}
-            x2={VIEW_WIDTH}
-            y2={medianY}
-            stroke="#3A3350"
-            strokeWidth={1.4}
-            strokeDasharray="3 4"
+        {/* Perfectly even pacing: the straight run between the first buy and
+            the last. The real line is read against this, not against zero. */}
+        <line
+          x1={x(0)}
+          y1={y(first)}
+          x2={x(bars.length - 1)}
+          y2={y(last)}
+          stroke="#3A3350"
+          strokeWidth={1.4}
+          strokeDasharray="3 4"
+          vectorEffect="non-scaling-stroke"
+        />
+
+        <path
+          d={path}
+          fill="none"
+          stroke="#8B5CF6"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+
+        {points.map(({ bar, x: cx, y: cy }, index) => (
+          <circle
+            key={bar.date + index}
+            cx={cx}
+            cy={cy}
+            r={bar.isLapse ? 4 : 3}
+            fill={bar.isLapse ? "#C084FC" : "#8B5CF6"}
             vectorEffect="non-scaling-stroke"
-          />
-        )}
-        {drawn.map((bar, index) => {
-          const height = Math.max((bar.gapDays! / max) * VIEW_HEIGHT, 2);
-          return (
-            <rect
-              key={bar.date + index}
-              x={index * slot + (slot - barWidth) / 2}
-              y={VIEW_HEIGHT - height}
-              width={barWidth}
-              height={height}
-              rx={1}
-              fill={bar.isLapse ? "#C084FC" : "#8B5CF6"}
-              opacity={bar.isLapse ? 1 : 0.85}
-            >
-              <title>
-                {`${bar.date} — ${bar.gapDays} days after the previous buy${
-                  bar.isLapse ? " (a lapse)" : ""
-                }`}
-              </title>
-            </rect>
-          );
-        })}
+          >
+            <title>
+              {bar.gapDays === null
+                ? `${bar.date} — first buy`
+                : `${bar.date} — ${bar.gapDays} days after the previous buy${
+                    bar.isLapse ? " (a lapse)" : ""
+                  }`}
+            </title>
+          </circle>
+        ))}
       </svg>
       <div className="mt-1.5 flex items-center justify-between gap-2 font-number text-[10px] text-pb-faintest">
-        <span>{edgeLabel(drawn[0].date, "ALL")}</span>
-        <span className="truncate">days between buys · usual ┄</span>
-        <span>{edgeLabel(drawn[drawn.length - 1].date, "ALL")}</span>
+        <span>{edgeLabel(bars[0].date, "ALL")}</span>
+        <span className="truncate">buy 1 → {bars.length} · even pace ┄</span>
+        <span>{edgeLabel(bars[bars.length - 1].date, "ALL")}</span>
       </div>
     </>
   );
