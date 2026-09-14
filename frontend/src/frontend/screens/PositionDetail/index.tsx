@@ -18,6 +18,7 @@ import { apiErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/lib/portfolio";
 import { usePreferences } from "@/lib/preferences";
+import { priceFreshness } from "@/lib/priceFreshness";
 import {
   edgeLabel,
   sliceTimeframe,
@@ -146,6 +147,8 @@ export function PositionDetail() {
       ? priceResult.price_eur * priceResult.exchange_rate
       : null;
 
+  const freshness = priceFreshness(priceResult, position?.asset.type ?? "");
+
   const enriched = enrichTransactions(transactions, unitPrice);
   const buys = transactions.filter((t) => t.type === "buy").length;
 
@@ -272,16 +275,14 @@ export function PositionDetail() {
               value={unitPrice === null ? "—" : formatEurPrice(unitPrice)}
               valueClassName="text-pb-accent"
               caption={
-                priceResult?.status === "stale" ? (
-                  <span className="text-pb-down">
-                    stale · {priceResult.last_known_date}
-                  </span>
-                ) : unitPrice === null ? (
+                freshness === null ? (
                   "no feed configured"
+                ) : freshness.overdue ? (
+                  <span className="text-pb-down">{freshness.label}</span>
                 ) : priceUsd === null ? (
-                  "live"
+                  freshness.label
                 ) : (
-                  `live · ${formatUsdPrice(priceUsd)}`
+                  `${freshness.label} · ${formatUsdPrice(priceUsd)}`
                 )
               }
             />

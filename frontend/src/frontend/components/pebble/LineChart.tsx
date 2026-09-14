@@ -95,15 +95,25 @@ export function PbLineChart({
     setActive(Math.min(values.length - 1, Math.max(0, index)));
   }
 
+  /**
+   * The crosshair in fractions of the box, not viewBox units.
+   *
+   * It is drawn in the DOM rather than in the SVG for two reasons. The box is
+   * stretched (`preserveAspectRatio="none"`), so an SVG circle would render as
+   * an ellipse; and the newest point sits at x = WIDTH exactly, where the
+   * viewBox clips half of any mark placed on it — which is why the reading for
+   * today had no dot. A DOM overlay is free to overflow into the card padding.
+   */
   const marker =
     active === null || !domain
       ? null
       : {
-          x: scaleX(active, values.length, WIDTH),
-          y: scaleY(values[active], viewBoxHeight, PAD, domain),
+          x: scaleX(active, values.length, WIDTH) / WIDTH,
+          y: scaleY(values[active], viewBoxHeight, PAD, domain) / viewBoxHeight,
           refY:
             reference && reference[active] !== undefined
-              ? scaleY(reference[active], viewBoxHeight, PAD, domain)
+              ? scaleY(reference[active], viewBoxHeight, PAD, domain) /
+                viewBoxHeight
               : null,
         };
 
@@ -157,39 +167,31 @@ export function PbLineChart({
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
-
-          {marker && (
-            <g>
-              <line
-                x1={marker.x}
-                y1={0}
-                x2={marker.x}
-                y2={viewBoxHeight}
-                stroke="#3A3350"
-                strokeWidth={1}
-                vectorEffect="non-scaling-stroke"
-              />
-              {marker.refY !== null && (
-                <circle
-                  cx={marker.x}
-                  cy={marker.refY}
-                  r={3}
-                  fill={variant === "portfolio" ? "#8E88A0" : "#8B5CF6"}
-                  vectorEffect="non-scaling-stroke"
-                />
-              )}
-              <circle
-                cx={marker.x}
-                cy={marker.y}
-                r={3.5}
-                fill={mainColor}
-                stroke="#08070C"
-                strokeWidth={1.5}
-                vectorEffect="non-scaling-stroke"
-              />
-            </g>
-          )}
         </svg>
+
+        {marker && (
+          <div className="pointer-events-none absolute inset-0 z-[1]">
+            <span
+              className="absolute top-0 bottom-0 w-px bg-pb-strong"
+              style={{ left: `${marker.x * 100}%` }}
+            />
+            {marker.refY !== null && (
+              <Dot
+                x={marker.x}
+                y={marker.refY}
+                size={6}
+                color={variant === "portfolio" ? "#8E88A0" : "#8B5CF6"}
+              />
+            )}
+            <Dot
+              x={marker.x}
+              y={marker.y}
+              size={7}
+              color={mainColor}
+              ring="#08070C"
+            />
+          </div>
+        )}
 
         {hoverable && active !== null && (
           <Readout
@@ -221,6 +223,37 @@ export function PbLineChart({
         <span>{endLabel}</span>
       </div>
     </>
+  );
+}
+
+/** A round mark on the crosshair, sized in pixels so the stretch cannot flatten it. */
+function Dot({
+  x,
+  y,
+  size,
+  color,
+  ring,
+}: {
+  readonly x: number;
+  readonly y: number;
+  readonly size: number;
+  readonly color: string;
+  readonly ring?: string;
+}) {
+  return (
+    <span
+      className="absolute block rounded-full"
+      style={{
+        left: `${x * 100}%`,
+        top: `${y * 100}%`,
+        width: size,
+        height: size,
+        marginLeft: -size / 2,
+        marginTop: -size / 2,
+        background: color,
+        boxShadow: ring ? `0 0 0 1.5px ${ring}` : undefined,
+      }}
+    />
   );
 }
 
