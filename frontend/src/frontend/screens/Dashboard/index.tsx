@@ -116,6 +116,14 @@ export function Dashboard() {
 
 /* ── Hero ────────────────────────────────────────────────────────────────── */
 
+const DENOMINATIONS = ["EUR", "BTC"] as const;
+type Denomination = (typeof DENOMINATIONS)[number];
+
+/** `₿ 0,50530868`. The BTC view's answer to `formatEur`. */
+function formatBtcAmount(btc: number): string {
+  return `₿ ${formatBtc(btc)}`;
+}
+
 function TotalWorthCard({
   portfolio,
   series,
@@ -127,18 +135,62 @@ function TotalWorthCard({
     date: string;
     total_eur: number;
     invested_eur: number;
+    btc_eur: number | null;
   }[];
   readonly timeframe: Timeframe;
   readonly onTimeframe: (next: Timeframe) => void;
 }) {
+  const [denomination, setDenomination] = React.useState<Denomination>("EUR");
+
+  // Every point needs the BTC price of its own day to convert — today's rate
+  // applied to all of history would draw the portfolio's EUR shape, not its
+  // shape against bitcoin. Points from before the first BTC price drop out.
+  const btcSeries = series.flatMap((point) =>
+    point.btc_eur && point.btc_eur > 0
+      ? [
+          {
+            date: point.date,
+            total: point.total_eur / point.btc_eur,
+            invested: point.invested_eur / point.btc_eur,
+          },
+        ]
+      : [],
+  );
+  // No BTC holding, no rate, no view — an absent toggle beats one that switches
+  // to an empty chart.
+  const canDenominateInBtc =
+    portfolio.totalBtc !== null && portfolio.btcEurPrice !== null;
+  const inBtc = denomination === "BTC" && canDenominateInBtc;
+
+  const points = inBtc
+    ? btcSeries
+    : series.map((point) => ({
+        date: point.date,
+        total: point.total_eur,
+        invested: point.invested_eur,
+      }));
+
+  const format = inBtc ? formatBtcAmount : formatEur;
+
   // The headline number is profit against what was put in — the same question the
   // position screen answers per asset. The timeframe delta is a second reading:
   // it says how the last week or month moved, not whether the portfolio is ahead.
-  const opening = series[0]?.total_eur ?? 0;
-  const closing = series[series.length - 1]?.total_eur ?? portfolio.totalValue;
-  const windowEur = closing - opening;
-  const windowPct = opening > 0 ? (windowEur / opening) * 100 : 0;
-  const hasWindow = series.length > 1;
+  //
+  // In BTC the percentage is the same figure: dividing worth and cost by one
+  // rate cancels it. Only the window below, which uses each day's own rate, tells
+  // you anything the EUR view does not.
+  const rate = portfolio.btcEurPrice ?? 1;
+  const totalWorth = inBtc ? (portfolio.totalBtc ?? 0) : portfolio.totalValue;
+  const pnl = inBtc ? portfolio.pnlEur / rate : portfolio.pnlEur;
+  const invested = inBtc
+    ? portfolio.totalInvested / rate
+    : portfolio.totalInvested;
+
+  const opening = points[0]?.total ?? 0;
+  const closing = points[points.length - 1]?.total ?? totalWorth;
+  const windowChange = closing - opening;
+  const windowPct = opening > 0 ? (windowChange / opening) * 100 : 0;
+  const hasWindow = points.length > 1;
 
   const windowLabel: Record<Timeframe, string> = {
     "1W": "vs. a week ago",
@@ -156,22 +208,22 @@ function TotalWorthCard({
             className="mt-1.5 font-number leading-none font-medium tracking-[-0.03em] whitespace-nowrap tabular-nums"
             style={{ fontSize: "clamp(28px, 4.2vw, 40px)" }}
           >
-            {formatEur(portfolio.totalValue)}
+            {format(totalWorth)}
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
             <span
               className={cn(
                 "font-number text-[13px] whitespace-nowrap tabular-nums",
-                pnlClass(portfolio.pnlEur),
+                pnlClass(pnl),
               )}
             >
-              {formatEur(portfolio.pnlEur)}
+              {format(pnl)}
             </span>
             <PbPnlBadge value={portfolio.pnlPct}>
               {formatPct(portfolio.pnlPct)}
             </PbPnlBadge>
             <span className="text-[11.5px] text-pb-faint">
-              {portfolio.pnlEur < 0 ? "net loss on cost" : "net profit on cost"}
+              {pnl < 0 ? "net loss on cost" : "net profit on cost"}
             </span>
           </div>
           {hasWindow && (
@@ -179,10 +231,10 @@ function TotalWorthCard({
               <span
                 className={cn(
                   "font-number text-[11.5px] whitespace-nowrap tabular-nums",
-                  pnlClass(windowEur),
+                  pnlClass(windowChange),
                 )}
               >
-                {formatEur(windowEur)}
+                {format(windowChange)}
               </span>
               <span
                 className={cn(
@@ -194,39 +246,56 @@ function TotalWorthCard({
               </span>
               <span className="text-[11.5px] text-pb-faint">
                 {windowLabel[timeframe]}
+                {inBtc && " in BTC"}
               </span>
             </div>
           )}
           <div className="mt-2.5 font-number text-[11.5px] text-pb-muted">
-            {portfolio.totalBtc !== null && (
-              <>≡ {formatBtc(portfolio.totalBtc)} BTC · </>
+            {inBtc ? (
+              <>≡ {formatEur(portfolio.totalValue)} · </>
+            ) : (
+              portfolio.totalBtc !== null && (
+                <>≡ {formatBtc(portfolio.totalBtc)} BTC · </>
+              )
             )}
-            cost basis {formatEur(portfolio.totalInvested)}
+            cost basis {format(invested)}
           </div>
         </div>
 
-        <PbSegmented
-          options={TIMEFRAMES}
-          value={timeframe}
-          onChange={onTimeframe}
-        />
+        <div className="flex flex-col items-end gap-2">
+          <PbSegmented
+            options={TIMEFRAMES}
+            value={timeframe}
+            onChange={onTimeframe}
+          />
+          {canDenominateInBtc && (
+            <PbSegmented
+              options={DENOMINATIONS}
+              value={denomination}
+              onChange={setDenomination}
+            />
+          )}
+        </div>
       </div>
 
       <PbLineChart
-        values={series.map((s) => s.total_eur)}
-        reference={series.map((s) => s.invested_eur)}
+        values={points.map((point) => point.total)}
+        reference={points.map((point) => point.invested)}
         height={132}
         viewBoxHeight={150}
-        variant="portfolio"
-        startLabel={series[0] ? edgeLabel(series[0].date, timeframe) : ""}
+        variant={inBtc ? "position" : "portfolio"}
+        startLabel={points[0] ? edgeLabel(points[0].date, timeframe) : ""}
         endLabel={
-          series.length > 1
-            ? edgeLabel(series[series.length - 1].date, timeframe)
+          points.length > 1
+            ? edgeLabel(points[points.length - 1].date, timeframe)
             : ""
         }
         legend="portfolio — · invested ┄"
-        dates={series.map((point) => point.date)}
-        formatValue={formatEur}
+        emptyMessage={
+          inBtc ? "No BTC price for this range yet" : "Not enough history yet"
+        }
+        dates={points.map((point) => point.date)}
+        formatValue={format}
         seriesLabel="portfolio"
         referenceLabel="invested"
       />

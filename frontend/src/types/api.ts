@@ -16,6 +16,12 @@ export type NetWorthSnapshot = {
   date: string;
   total_eur: number;
   invested_eur: number;
+  /**
+   * The BTC price that day, for denominating the series in BTC. Null before the
+   * first BTC price, and for a portfolio that holds none — points the BTC view
+   * leaves out rather than dividing by a rate that did not exist.
+   */
+  btc_eur: number | null;
 };
 
 export type GetPositionsResponse = {

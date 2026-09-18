@@ -81,7 +81,13 @@ def test_values_travel_with_the_selected_dates(client: TestClient, session: Sess
 
     snapshots = client.get("/api/net-worth/?period=1m").json()["snapshots"]
     assert len(snapshots) == 1
-    assert snapshots[0] == {"date": "2026-01-31", "total_eur": 1001.0, "invested_eur": 501.0}
+    assert snapshots[0] == {
+        "date": "2026-01-31",
+        "total_eur": 1001.0,
+        "invested_eur": 501.0,
+        # Seeded rows hold no BTC, so the series carries no rate to denominate by.
+        "btc_eur": None,
+    }
 
 
 def test_an_unknown_period_falls_back_to_monthly(client: TestClient, session: Session) -> None:
@@ -344,7 +350,7 @@ def test_gap_fill_writes_a_row_for_every_missed_day(
     session.add(NetWorthSnapshot(date=days[-1], total_eur=100.0, invested_eur=100.0))
     session.commit()
 
-    service = _FakePriceService({day: 60.0 for day in days})
+    service = _FakePriceService(dict.fromkeys(days, 60.0))
     _use_fake_prices(monkeypatch, service)
 
     written = asyncio.run(_gap_fill(session, window_days=10))
@@ -520,3 +526,73 @@ def test_gap_fill_will_not_stretch_one_price_across_weeks(
     assert written == 6, "the day itself plus the five it may carry into"
     dates = [row.date for row in session.exec(text("SELECT date FROM net_worth_snapshot")).all()]
     assert max(dates) == (date_cls.fromisoformat(first) + timedelta(days=5)).isoformat()
+
+
+# ── BTC denomination ──────────────────────────────────────────────────────────
+
+
+def test_snapshots_carry_the_btc_price_of_each_day(
+    client: TestClient, session: Session
+) -> None:
+    """The BTC view divides the series by the price on each date, so the price has
+    to travel with the point rather than being today's applied to all of history.
+    """
+    btc = _asset(session, "BTC")
+    session.add(
+        Transaction(asset_id=btc, date="2026-01-05", type="buy", units=1.0, eur_amount=50000.0)
+    )
+    session.add(PriceCache(asset_id=btc, date="2026-01-31", price_eur=60000.0, exchange_rate=1.1))
+    session.add(PriceCache(asset_id=btc, date="2026-02-28", price_eur=80000.0, exchange_rate=1.1))
+    session.add(NetWorthSnapshot(date="2026-01-31", total_eur=60000.0, invested_eur=50000.0))
+    session.add(NetWorthSnapshot(date="2026-02-28", total_eur=80000.0, invested_eur=50000.0))
+    session.commit()
+
+    by_date = {
+        s["date"]: s["btc_eur"]
+        for s in client.get("/api/net-worth/?period=1d").json()["snapshots"]
+    }
+    assert by_date == {"2026-01-31": 60000.0, "2026-02-28": 80000.0}
+
+
+def test_the_btc_price_carries_forward_to_a_day_without_one(
+    client: TestClient, session: Session
+) -> None:
+    """A date the feed skipped is not a date bitcoin had no price — the same rule
+    the snapshot writer values a position by.
+    """
+    btc = _asset(session, "BTC")
+    session.add(
+        Transaction(asset_id=btc, date="2026-01-05", type="buy", units=1.0, eur_amount=50000.0)
+    )
+    session.add(PriceCache(asset_id=btc, date="2026-01-31", price_eur=60000.0, exchange_rate=1.1))
+    session.add(NetWorthSnapshot(date="2026-02-28", total_eur=60000.0, invested_eur=50000.0))
+    session.commit()
+
+    snapshot = client.get("/api/net-worth/?period=1d").json()["snapshots"][0]
+    assert snapshot["btc_eur"] == 60000.0
+
+
+def test_a_day_before_any_btc_price_has_none(client: TestClient, session: Session) -> None:
+    """Null rather than zero: the BTC view leaves that point out instead of
+    dividing by a price that did not exist yet.
+    """
+    btc = _asset(session, "BTC")
+    session.add(PriceCache(asset_id=btc, date="2026-02-28", price_eur=60000.0, exchange_rate=1.1))
+    session.add(NetWorthSnapshot(date="2026-01-31", total_eur=1000.0, invested_eur=1000.0))
+    session.commit()
+
+    snapshot = client.get("/api/net-worth/?period=1d").json()["snapshots"][0]
+    assert snapshot["btc_eur"] is None
+
+
+def test_a_portfolio_without_btc_reports_no_btc_price(
+    client: TestClient, session: Session
+) -> None:
+    """No BTC holding, no BTC view — better an unavailable toggle than a made-up rate."""
+    eth = _asset(session, "ETH")
+    session.add(PriceCache(asset_id=eth, date="2026-01-31", price_eur=3000.0, exchange_rate=1.1))
+    session.add(NetWorthSnapshot(date="2026-01-31", total_eur=3000.0, invested_eur=2000.0))
+    session.commit()
+
+    snapshot = client.get("/api/net-worth/?period=1d").json()["snapshots"][0]
+    assert snapshot["btc_eur"] is None

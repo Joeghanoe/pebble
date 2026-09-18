@@ -189,6 +189,10 @@ class SnapshotRow(SQLModel):
     date: str
     total_eur: float
     invested_eur: float
+    # The BTC price that day, so the client can denominate the series in BTC.
+    # None when nothing priced BTC on or before that date, which is a point the
+    # BTC view has to leave out rather than guess at.
+    btc_eur: float | None = None
 
 
 class GetNetWorthResponse(SQLModel):

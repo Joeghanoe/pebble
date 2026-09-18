@@ -345,6 +345,44 @@ def get_cash_balance_by_date(session: Session, dates: list[str]) -> dict[str, fl
     return {row[0]: float(row[1]) for row in rows}
 
 
+def get_btc_eur_by_date(session: Session, dates: list[str]) -> dict[str, float]:
+    """The BTC price on each of `dates`, for denominating a series in BTC.
+
+    Carried forward from the last price on or before each date, the same rule the
+    snapshot writer values a position by — a date the feed skipped is not a date
+    bitcoin had no price.
+
+    Empty when the portfolio holds no BTC: without a price there is no BTC view,
+    and a fabricated one would be worse than the toggle being unavailable.
+    """
+    if not dates:
+        return {}
+
+    asset_id = session.exec(
+        text(
+            "SELECT id FROM asset WHERE UPPER(symbol) = 'BTC' AND type = 'crypto' "
+            "ORDER BY id LIMIT 1"
+        )
+    ).first()
+    if not asset_id:
+        return {}
+
+    rows = session.exec(
+        text(
+            """
+            SELECT d.date, p.price_eur
+            FROM unnest(CAST(:dates AS text[])) AS d(date)
+            LEFT JOIN LATERAL (
+              SELECT price_eur FROM price_cache
+              WHERE asset_id = :asset_id AND date <= d.date
+              ORDER BY date DESC LIMIT 1
+            ) p ON TRUE
+            """
+        ).bindparams(dates=dates, asset_id=asset_id[0])
+    ).all()
+    return {row[0]: float(row[1]) for row in rows if row[1] is not None}
+
+
 def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSnapshot]:
     """Last 60 points of net worth: daily, or the last snapshot in each week/month.
 
