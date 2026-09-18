@@ -257,6 +257,9 @@ export function PositionDetail() {
               formatValue={formatEurPrice}
               seriesLabel="price"
               referenceLabel="avg cost"
+              // Both lines are per-unit here, so the gap is profit on one unit,
+              // not on the position. "P&L" would read as the whole holding.
+              deltaLabel="vs cost"
             />
           </PbCard>
 

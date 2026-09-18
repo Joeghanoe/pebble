@@ -1,6 +1,9 @@
 // src/frontend/components/pebble/LineChart.tsx
 import * as React from "react";
 import { curve, scaleX, scaleY, sharedDomain } from "@/lib/series";
+import { formatPct } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { pnlClass } from "./pnl";
 
 export interface LineChartProps {
   /** The series that owns the gradient fill and the draw-on. */
@@ -23,6 +26,11 @@ export interface LineChartProps {
   readonly formatValue?: (value: number) => string;
   readonly seriesLabel?: string;
   readonly referenceLabel?: string;
+  /**
+   * What the gap between the two lines is called in the readout. Only shown
+   * when there is a reference to measure against.
+   */
+  readonly deltaLabel?: string;
 }
 
 const WIDTH = 640;
@@ -55,6 +63,7 @@ export function PbLineChart({
   formatValue,
   seriesLabel = "price",
   referenceLabel = "avg cost",
+  deltaLabel = "P&L",
 }: LineChartProps) {
   const uid = React.useId().replaceAll(":", "");
   const [active, setActive] = React.useState<number | null>(null);
@@ -213,6 +222,12 @@ export function PbLineChart({
                   ]
                 : []),
             ]}
+            delta={delta(
+              values[active],
+              reference?.[active],
+              format,
+              deltaLabel,
+            )}
           />
         )}
       </div>
@@ -224,6 +239,43 @@ export function PbLineChart({
       </div>
     </>
   );
+}
+
+/**
+ * The gap between the two lines on the hovered day, in currency and in percent.
+ *
+ * The lines already show which is on top; what they cannot show is by how much,
+ * and a gap that looks the same at either end of a rising chart is rarely the
+ * same return. Percent is measured against the reference — profit over what was
+ * put in, the same base the cards use — so the reading matches the headline
+ * when you hover the newest point.
+ *
+ * Null without a reference, and at a reference of zero: there is no return on
+ * nothing, and dividing by it would print Infinity.
+ */
+function delta(
+  value: number,
+  against: number | undefined,
+  format: (value: number) => string,
+  label: string,
+): DeltaReading | null {
+  if (against === undefined || against === 0) {
+    return null;
+  }
+  const difference = value - against;
+  return {
+    label,
+    amount: format(difference),
+    pct: formatPct((difference / Math.abs(against)) * 100),
+    tone: pnlClass(difference),
+  };
+}
+
+interface DeltaReading {
+  readonly label: string;
+  readonly amount: string;
+  readonly pct: string;
+  readonly tone: string;
 }
 
 /** A round mark on the crosshair, sized in pixels so the stretch cannot flatten it. */
@@ -269,10 +321,12 @@ function Readout({
   fraction,
   date,
   rows,
+  delta,
 }: {
   readonly fraction: number;
   readonly date: string;
   readonly rows: readonly { label: string; value: string; color: string }[];
+  readonly delta?: DeltaReading | null;
 }) {
   const flip = fraction > 0.5;
   return (
@@ -304,6 +358,23 @@ function Readout({
           </span>
         </span>
       ))}
+      {delta && (
+        // Ruled off rather than listed as a third line: it is derived from the
+        // two above, not another series.
+        <span className="mt-1.5 flex items-baseline justify-between gap-3 border-t border-pb-hairline pt-1.5">
+          <span className="text-[10.5px] whitespace-nowrap text-pb-text-3">
+            {delta.label}
+          </span>
+          <span
+            className={cn(
+              "font-number text-[11.5px] whitespace-nowrap tabular-nums",
+              delta.tone,
+            )}
+          >
+            {delta.amount} · {delta.pct}
+          </span>
+        </span>
+      )}
     </div>
   );
 }
