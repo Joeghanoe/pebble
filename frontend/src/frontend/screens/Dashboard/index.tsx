@@ -131,13 +131,14 @@ function TotalWorthCard({
   readonly timeframe: Timeframe;
   readonly onTimeframe: (next: Timeframe) => void;
 }) {
+  // The headline number is profit against what was put in — the same question the
+  // position screen answers per asset. The timeframe delta is a second reading:
+  // it says how the last week or month moved, not whether the portfolio is ahead.
   const opening = series[0]?.total_eur ?? 0;
   const closing = series[series.length - 1]?.total_eur ?? portfolio.totalValue;
-  const changeEur = series.length > 1 ? closing - opening : portfolio.pnlEur;
-  const changePct =
-    series.length > 1 && opening > 0
-      ? ((closing - opening) / opening) * 100
-      : portfolio.pnlPct;
+  const windowEur = closing - opening;
+  const windowPct = opening > 0 ? (windowEur / opening) * 100 : 0;
+  const hasWindow = series.length > 1;
 
   const windowLabel: Record<Timeframe, string> = {
     "1W": "vs. a week ago",
@@ -161,16 +162,41 @@ function TotalWorthCard({
             <span
               className={cn(
                 "font-number text-[13px] whitespace-nowrap tabular-nums",
-                pnlClass(changeEur),
+                pnlClass(portfolio.pnlEur),
               )}
             >
-              {formatEur(changeEur)}
+              {formatEur(portfolio.pnlEur)}
             </span>
-            <PbPnlBadge value={changePct}>{formatPct(changePct)}</PbPnlBadge>
+            <PbPnlBadge value={portfolio.pnlPct}>
+              {formatPct(portfolio.pnlPct)}
+            </PbPnlBadge>
             <span className="text-[11.5px] text-pb-faint">
-              {series.length > 1 ? windowLabel[timeframe] : "on cost"}
+              {portfolio.pnlEur < 0 ? "net loss on cost" : "net profit on cost"}
             </span>
           </div>
+          {hasWindow && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <span
+                className={cn(
+                  "font-number text-[11.5px] whitespace-nowrap tabular-nums",
+                  pnlClass(windowEur),
+                )}
+              >
+                {formatEur(windowEur)}
+              </span>
+              <span
+                className={cn(
+                  "font-number text-[11.5px] tabular-nums",
+                  pnlClass(windowPct),
+                )}
+              >
+                {formatPct(windowPct)}
+              </span>
+              <span className="text-[11.5px] text-pb-faint">
+                {windowLabel[timeframe]}
+              </span>
+            </div>
+          )}
           <div className="mt-2.5 font-number text-[11.5px] text-pb-muted">
             {portfolio.totalBtc !== null && (
               <>≡ {formatBtc(portfolio.totalBtc)} BTC · </>
