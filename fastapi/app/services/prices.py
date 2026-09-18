@@ -67,6 +67,57 @@ class PriceService:
 
         return PriceResultUnavailable()
 
+    async def backfill_price_range(
+        self, session: Session, asset: Asset, start: str, end: str
+    ) -> int:
+        """Cache every daily price an upstream has for `start`..`end`.
+
+        One request per asset for the whole window, where `fetch_historical_price`
+        is one per day. Returns how many dates were written.
+
+        Days the source has no price for are left alone rather than filled: a
+        market that was closed has no close, and the snapshot writer already
+        carries the last known price forward for those.
+        """
+        await self.currency.warm_range(start, end)
+
+        if asset.type == "crypto":
+            if not asset.coingecko_id:
+                return 0
+            prices = await self.coingecko.get_historical_range(asset.coingecko_id, start, end)
+            written = 0
+            for date, price in sorted(prices.items()):
+                rate = await self._get_rate_safe(date)
+                upsert_price(session, asset.id, date, price, rate)  # type: ignore[arg-type]
+                written += 1
+            return written
+
+        if asset.type in ("etf", "stock"):
+            if not asset.yahoo_ticker:
+                return 0
+            # Stooq leads for the same reason it does on live quotes, and Yahoo
+            # covers the listings it does not carry.
+            prices = await self.stooq.get_historical_range(asset.yahoo_ticker, start, end)
+            if not prices:
+                prices = await self.yahoo.get_historical_range(asset.yahoo_ticker, start, end)
+            if not prices:
+                logger.warning(
+                    "no daily history for %s in %s..%s", asset.yahoo_ticker, start, end
+                )
+                return 0
+
+            in_eur = is_eur_listing(asset.yahoo_ticker)
+            written = 0
+            for date, price in sorted(prices.items()):
+                rate = await self._get_rate_safe(date)
+                upsert_price(  # type: ignore[arg-type]
+                    session, asset.id, date, price if in_eur else price / rate, rate
+                )
+                written += 1
+            return written
+
+        return 0
+
     async def _fetch_live_crypto(
         self, session: Session, asset: Asset, today: str
     ) -> PriceResultOk | PriceResultStale | PriceResultUnavailable:

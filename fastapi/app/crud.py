@@ -308,6 +308,43 @@ def get_max_price_date(session: Session) -> str | None:
 # ============================================================================
 
 
+def get_cash_balance_by_date(session: Session, dates: list[str]) -> dict[str, float]:
+    """Cash held on each of `dates`, from the ledger alone.
+
+    `net_worth_snapshot.total_eur` counts only assets with a price feed, because
+    that is all the snapshot writer can value; `invested_eur` on the same row
+    counts every transaction, cash deposits included. Comparing the two directly
+    puts the portfolio below its own cost basis by the cash balance, forever.
+
+    Cash needs no feed — a euro is worth a euro — so the missing side is derived
+    here at read time rather than stored. That also repairs the rows imported
+    from the desktop ledger, which no snapshot rewrite could reach.
+
+    One query for the whole series: a correlated lookup per point would be sixty
+    round trips to draw one chart.
+    """
+    if not dates:
+        return {}
+
+    rows = session.exec(
+        text(
+            """
+            SELECT d.date,
+                   COALESCE(SUM(
+                     CASE WHEN t.type = 'buy' THEN t.units ELSE -t.units END
+                   ), 0)
+            FROM unnest(CAST(:dates AS text[])) AS d(date)
+            LEFT JOIN "transaction" t
+              ON t.date <= d.date
+             AND t.deleted_at IS NULL
+             AND t.asset_id IN (SELECT id FROM asset WHERE type = 'cash')
+            GROUP BY d.date
+            """
+        ).bindparams(dates=dates)
+    ).all()
+    return {row[0]: float(row[1]) for row in rows}
+
+
 def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSnapshot]:
     """Last 60 points of net worth: daily, or the last snapshot in each week/month.
 

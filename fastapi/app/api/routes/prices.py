@@ -8,7 +8,11 @@ from app import crud
 from app.core.db import get_session
 from app.models import RefreshPricesResponse, RefreshResultItem
 from app.services.price_service_factory import get_price_service
-from app.services.snapshots import record_snapshot_for_date, run_snapshot_backfill
+from app.services.snapshots import (
+    record_snapshot_for_date,
+    run_daily_gap_fill,
+    run_snapshot_backfill,
+)
 
 router = APIRouter(prefix="/prices", tags=["prices"])
 
@@ -78,7 +82,11 @@ async def refresh_prices(
     # month-end backfill, which may reach upstream for prices it has no cache
     # entry for. Both are idempotent, and the cooldown above bounds how often
     # they run.
+    # Then the days nobody opened the app: a refresh is the only thing that
+    # records a day, so every stretch of not looking is a hole in the daily
+    # chart. One ranged request per asset closes them.
     record_snapshot_for_date(session, datetime.now(timezone.utc).date().isoformat())
+    await run_daily_gap_fill(session)
     await run_snapshot_backfill(session)
 
     # Only a refresh that actually got a quote starts the clock. Arming the
