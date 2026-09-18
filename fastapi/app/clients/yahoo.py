@@ -34,6 +34,45 @@ class YahooClient:
         except Exception:
             return None
 
+    async def get_historical_range(
+        self, ticker: str, start: str, end: str
+    ) -> dict[str, float]:
+        """Daily adjusted closes for `start`..`end`, as {'YYYY-MM-DD': price}.
+
+        `get_historical_price` already asks Yahoo for a range and then discards
+        all but one close; this keeps them. Prices are in the listing's
+        currency, which `get_live_quote` reports and the caller converts.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        period1 = int(datetime.fromisoformat(start).replace(tzinfo=UTC).timestamp())
+        period2 = int(
+            (datetime.fromisoformat(end) + timedelta(days=1))
+            .replace(tzinfo=UTC)
+            .timestamp()
+        )
+        url = f"{self.BASE_URL}/{ticker}?interval=1d&period1={period1}&period2={period2}"
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            if not r.is_success:
+                return {}
+            result = (r.json().get("chart", {}).get("result") or [None])[0]
+            if not result:
+                return {}
+            stamps = result.get("timestamp") or []
+            closes = result.get("indicators", {}).get("adjclose", [{}])[0].get("adjclose", [])
+        except Exception:
+            return {}
+
+        by_date: dict[str, float] = {}
+        for stamp, close in zip(stamps, closes, strict=False):
+            if close is None:
+                continue
+            day = datetime.fromtimestamp(stamp, tz=UTC).date().isoformat()
+            by_date[day] = float(close)
+        return by_date
+
     async def get_historical_price(self, ticker: str, date: str) -> float | None:
         from datetime import datetime, timedelta
 

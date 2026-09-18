@@ -7,6 +7,23 @@ class FrankfurterClient:
     # raised and silently fell back to a hardcoded 1.1.
     BASE_URL = "https://api.frankfurter.dev/v1"
 
+    async def get_rates_range(self, start: str, end: str) -> dict[str, float]:
+        """Every published EUR/USD rate in `start`..`end`, as {'YYYY-MM-DD': usd}.
+
+        One call instead of one per day. Weekends and TARGET holidays have no
+        ECB fixing and are simply absent from the response.
+        """
+        url = f"{self.BASE_URL}/{start}..{end}?base=EUR&symbols=USD"
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            r = await client.get(url)
+        r.raise_for_status()
+        rates = r.json().get("rates") or {}
+        return {
+            day: float(values["USD"])
+            for day, values in rates.items()
+            if isinstance(values, dict) and values.get("USD") is not None
+        }
+
     async def get_rate(self, date: str) -> float:
         url = f"{self.BASE_URL}/{date}?base=EUR&symbols=USD"
         async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:

@@ -7,6 +7,7 @@ that matters: one point per bucket, the latest in each, oldest first.
 """
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 from sqlmodel import Session
 
 from app.models import (
@@ -283,3 +284,239 @@ def test_cash_is_counted_as_of_each_date_not_today(
     }
     assert by_date["2026-01-31"] == 1000.0
     assert by_date["2026-02-28"] == 1400.0
+
+
+# ── Daily gap fill ────────────────────────────────────────────────────────────
+
+
+class _FakePriceService:
+    """Stands in for the upstream feeds.
+
+    `backfill_price_range` is the one method the gap fill calls; this records the
+    windows it was asked for and writes the prices the test wants cached.
+    """
+
+    def __init__(self, prices: dict[str, float] | None = None) -> None:
+        self.prices = prices or {}
+        self.calls: list[tuple[int, str, str]] = []
+
+    async def backfill_price_range(self, session: Session, asset, start: str, end: str) -> int:
+        self.calls.append((asset.id, start, end))
+        for date, price in self.prices.items():
+            if start <= date <= end:
+                session.add(
+                    PriceCache(asset_id=asset.id, date=date, price_eur=price, exchange_rate=1.1)
+                )
+        session.commit()
+        return len(self.prices)
+
+
+def _use_fake_prices(monkeypatch, service: _FakePriceService) -> None:
+    from app.services import snapshots as snapshots_module
+
+    monkeypatch.setattr(snapshots_module, "get_price_service", lambda: service)
+
+
+async def _gap_fill(session: Session, **kwargs) -> int:
+    from app.services.snapshots import run_daily_gap_fill
+
+    return await run_daily_gap_fill(session, **kwargs)
+
+
+def test_gap_fill_writes_a_row_for_every_missed_day(
+    session: Session, monkeypatch
+) -> None:
+    """The bug: a refresh records only the day it runs, so the days between two
+    visits have no snapshot and the daily chart jumps straight across them.
+    """
+    import asyncio
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    today = date_cls.today()
+    days = [(today - timedelta(days=offset)).isoformat() for offset in range(5)]
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date=days[-1], type="buy", units=2.0, eur_amount=100.0)
+    )
+    session.commit()
+    # Two visits, four days apart, and nothing in between.
+    session.add(NetWorthSnapshot(date=days[-1], total_eur=100.0, invested_eur=100.0))
+    session.commit()
+
+    service = _FakePriceService({day: 60.0 for day in days})
+    _use_fake_prices(monkeypatch, service)
+
+    written = asyncio.run(_gap_fill(session, window_days=10))
+
+    assert written == 4, "every day since the first visit, except the one already there"
+    stored = {
+        row.date for row in session.exec(text("SELECT date FROM net_worth_snapshot")).all()
+    }
+    assert stored == set(days)
+
+
+def test_gap_fill_asks_each_source_for_the_whole_window_once(
+    session: Session, monkeypatch
+) -> None:
+    """One ranged request per asset. Per-day fetching is what made filling a gap
+    unaffordable in the first place.
+    """
+    import asyncio
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    today = date_cls.today()
+    first = (today - timedelta(days=6)).isoformat()
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date=first, type="buy", units=1.0, eur_amount=50.0)
+    )
+    session.commit()
+
+    service = _FakePriceService(
+        {(today - timedelta(days=offset)).isoformat(): 50.0 for offset in range(7)}
+    )
+    _use_fake_prices(monkeypatch, service)
+
+    asyncio.run(_gap_fill(session, window_days=30))
+
+    assert len(service.calls) == 1
+    _, start, end = service.calls[0]
+    assert (start, end) == (first, today.isoformat())
+
+
+def test_gap_fill_skips_a_day_no_source_can_price(session: Session, monkeypatch) -> None:
+    """A snapshot missing one held position is not a smaller portfolio, it is a
+    wrong one — it would draw a cliff. Better no point than a false one.
+    """
+    import asyncio
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    today = date_cls.today()
+    first = (today - timedelta(days=3)).isoformat()
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date=first, type="buy", units=1.0, eur_amount=50.0)
+    )
+    session.commit()
+
+    # Nothing priced at all, and no earlier price to carry forward.
+    _use_fake_prices(monkeypatch, _FakePriceService({}))
+
+    assert asyncio.run(_gap_fill(session, window_days=30)) == 0
+    assert session.exec(text("SELECT COUNT(*) FROM net_worth_snapshot")).one()[0] == 0
+
+
+def test_gap_fill_does_not_reach_back_before_the_first_transaction(
+    session: Session, monkeypatch
+) -> None:
+    """An empty portfolio has no worth to record, and a row of zeroes would floor
+    the chart for every day before the first buy.
+    """
+    import asyncio
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    today = date_cls.today()
+    first = (today - timedelta(days=2)).isoformat()
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date=first, type="buy", units=1.0, eur_amount=50.0)
+    )
+    session.commit()
+
+    service = _FakePriceService(
+        {(today - timedelta(days=offset)).isoformat(): 50.0 for offset in range(90)}
+    )
+    _use_fake_prices(monkeypatch, service)
+
+    asyncio.run(_gap_fill(session, window_days=90))
+
+    dates = [row.date for row in session.exec(text("SELECT date FROM net_worth_snapshot")).all()]
+    assert min(dates) == first
+
+
+def test_gap_fill_leaves_days_it_already_has_alone(session: Session, monkeypatch) -> None:
+    """Idempotent: it runs on every refresh, and must not rewrite a day that was
+    recorded from live quotes with one rebuilt from historical closes.
+    """
+    import asyncio
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    today = date_cls.today()
+    first = (today - timedelta(days=2)).isoformat()
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date=first, type="buy", units=1.0, eur_amount=50.0)
+    )
+    session.commit()
+    session.add(NetWorthSnapshot(date=first, total_eur=999.0, invested_eur=50.0))
+    session.commit()
+
+    service = _FakePriceService(
+        {(today - timedelta(days=offset)).isoformat(): 50.0 for offset in range(3)}
+    )
+    _use_fake_prices(monkeypatch, service)
+    asyncio.run(_gap_fill(session, window_days=30))
+
+    kept = session.exec(
+        text("SELECT total_eur FROM net_worth_snapshot WHERE date = :d").bindparams(d=first)
+    ).one()
+    assert kept[0] == 999.0
+
+
+def test_gap_fill_carries_a_price_across_a_closed_market(
+    session: Session, monkeypatch
+) -> None:
+    """A weekend has no close because the exchange was shut, so Friday's price is
+    the honest value for Saturday — this is what the snapshot writer already does.
+    """
+    import asyncio
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    today = date_cls.today()
+    first = (today - timedelta(days=3)).isoformat()
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date=first, type="buy", units=1.0, eur_amount=50.0)
+    )
+    session.commit()
+
+    # Priced on the first day only; the three after it are within carry-forward.
+    _use_fake_prices(monkeypatch, _FakePriceService({first: 60.0}))
+
+    assert asyncio.run(_gap_fill(session, window_days=30)) == 4
+    totals = session.exec(text("SELECT DISTINCT total_eur FROM net_worth_snapshot")).all()
+    assert [row[0] for row in totals] == [60.0]
+
+
+def test_gap_fill_will_not_stretch_one_price_across_weeks(
+    session: Session, monkeypatch
+) -> None:
+    """Carrying a months-old price forward would draw a long flat line and call it
+    history. A gap the feeds could not fill stays visibly empty instead.
+    """
+    import asyncio
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    today = date_cls.today()
+    first = (today - timedelta(days=60)).isoformat()
+    asset = _asset(session)
+    session.add(
+        Transaction(asset_id=asset, date=first, type="buy", units=1.0, eur_amount=50.0)
+    )
+    session.commit()
+
+    # One price, sixty days back, and nothing since.
+    _use_fake_prices(monkeypatch, _FakePriceService({first: 60.0}))
+
+    written = asyncio.run(_gap_fill(session, window_days=90))
+
+    assert written == 6, "the day itself plus the five it may carry into"
+    dates = [row.date for row in session.exec(text("SELECT date FROM net_worth_snapshot")).all()]
+    assert max(dates) == (date_cls.fromisoformat(first) + timedelta(days=5)).isoformat()

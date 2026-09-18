@@ -1,5 +1,6 @@
 import calendar
 from datetime import date as date_cls
+from datetime import timedelta
 
 from sqlmodel import Session
 
@@ -62,6 +63,95 @@ def record_snapshot_for_date(session: Session, date_str: str) -> None:
     crud.upsert_snapshot(
         session, date_str, total_eur, crud.get_invested_eur_on_date(session, date_str)
     )
+
+
+# How far back the daily series is kept gap-free. The charts that ask for daily
+# points cover a week and a month, and `list_snapshots_aggregated` returns sixty
+# of them; ninety days covers both with room to spare, and bounds the backfill to
+# one bounded range request per asset.
+DAILY_WINDOW_DAYS = 90
+
+
+def _dates_between(start: date_cls, end: date_cls) -> list[str]:
+    span = (end - start).days
+    return [(start + timedelta(days=offset)).isoformat() for offset in range(span + 1)]
+
+
+# How far a price may be carried forward to value a day that has none of its own.
+# Long enough for a weekend plus a holiday on either side, which is a market that
+# was shut rather than a price nobody fetched; short enough that a gap the feeds
+# could not fill stays visibly empty instead of becoming a flat line.
+CARRY_FORWARD_DAYS = 5
+
+
+def _is_fully_priced(session: Session, assets: list, date_str: str) -> bool:
+    """Whether every asset held on `date_str` has a price close enough to value it.
+
+    A snapshot missing one position is not a smaller portfolio, it is a wrong
+    one, and it would draw a cliff on the chart. The month-end backfill already
+    refuses to write those; the daily fill holds the same line, and additionally
+    refuses to stretch one stale price across weeks of days it never covered.
+    """
+    target = date_cls.fromisoformat(date_str)
+    for asset in assets:
+        if crud.get_units_held_on_date(session, asset.id, date_str) <= 0:
+            continue
+        price_row = crud.get_price_on_or_before(session, asset.id, date_str)
+        if not price_row:
+            return False
+        if (target - date_cls.fromisoformat(price_row.date)).days > CARRY_FORWARD_DAYS:
+            return False
+    return True
+
+
+async def run_daily_gap_fill(session: Session, window_days: int = DAILY_WINDOW_DAYS) -> int:
+    """Writes a snapshot for every recent day that has none, and returns the count.
+
+    A snapshot is only recorded when a price refresh runs, and a refresh only
+    runs when the app is open — so a week nobody looked leaves a week-shaped hole
+    in the daily chart, and the line jumps straight from one visit to the next.
+
+    Filling those days needs a price per asset per day, which `fetch_historical_price`
+    would buy one request at a time. Each source here serves a date range in a
+    single call instead, so a ninety-day window costs one request per asset
+    rather than ninety.
+
+    Days the sources cannot cover are skipped, not guessed at: weekends and
+    holidays carry the last close forward, as the snapshot writer already does,
+    but a day where a held asset has no price at all gets no row.
+    """
+    earliest = crud.get_earliest_transaction_date(session)
+    if not earliest:
+        return 0
+
+    assets = _priced_assets(session)
+    if not assets:
+        return 0
+
+    today = date_cls.today()
+    start = max(today - timedelta(days=window_days), date_cls.fromisoformat(earliest))
+    if start > today:
+        return 0
+
+    missing = [
+        date_str
+        for date_str in _dates_between(start, today)
+        if crud.get_snapshot(session, date_str) is None
+    ]
+    if not missing:
+        return 0
+
+    price_service = get_price_service()
+    for asset in assets:
+        await price_service.backfill_price_range(session, asset, missing[0], missing[-1])
+
+    written = 0
+    for date_str in missing:
+        if not _is_fully_priced(session, assets, date_str):
+            continue
+        record_snapshot_for_date(session, date_str)
+        written += 1
+    return written
 
 
 async def run_snapshot_backfill(session: Session) -> None:

@@ -42,6 +42,24 @@ class CurrencyService:
         self._cache[date] = rate
         return rate
 
+    async def warm_range(self, start: str, end: str) -> None:
+        """Pre-load the cache for `start`..`end` in one call.
+
+        A daily backfill asks for a rate per day; without this that is one
+        Frankfurter request per day of the gap. Dates the ECB never published
+        (weekends, holidays) stay absent and fall through to `get_eur_usd_rate`,
+        which resolves them one at a time as before.
+        """
+        try:
+            rates = await self._client.get_rates_range(start, end)
+        except Exception:
+            logger.warning("frankfurter range %s..%s failed", start, end, exc_info=True)
+            return
+        # Existing entries win: they were fetched for a specific date and may
+        # have come from the fallback, which is no worse than this.
+        for day, rate in rates.items():
+            self._cache.setdefault(day, rate)
+
     async def _get_yahoo_rate(self, date: str) -> float:
         # Today has no settled close yet, so it needs the live quote rather than
         # the daily series.

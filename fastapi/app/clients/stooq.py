@@ -64,6 +64,42 @@ class StooqClient:
         except Exception:
             return None
 
+    async def get_historical_range(
+        self, yahoo_ticker: str, start: str, end: str
+    ) -> dict[str, float]:
+        """Daily closes for `start`..`end`, as {'YYYY-MM-DD': close}.
+
+        The same CSV `get_historical_price` already downloads, with every row
+        kept rather than just the last. Prices are in the listing's currency;
+        the caller converts.
+
+        Exchange holidays and weekends are simply absent — a market that did not
+        trade has no close, and inventing one is the caller's business.
+        """
+        ticker = to_stooq_ticker(yahoo_ticker).lower()
+        d_from = start.replace("-", "")
+        d_to = end.replace("-", "")
+        url = f"https://stooq.com/q/d/l/?s={ticker}&d1={d_from}&d2={d_to}&i=d"
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            if not r.is_success:
+                return {}
+            rows = _parse_csv(r.text)
+        except Exception:
+            return {}
+
+        closes: dict[str, float] = {}
+        for row in rows:
+            date, close = row.get("Date"), row.get("Close", "N/D")
+            if not date or close == "N/D":
+                continue
+            try:
+                closes[date] = float(close)
+            except ValueError:
+                continue
+        return closes
+
     async def get_historical_price(self, yahoo_ticker: str, date: str) -> float | None:
         from datetime import datetime, timedelta
 
