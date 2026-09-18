@@ -13,6 +13,16 @@ def get_net_worth(period: str = "1m", session: Session = Depends(get_session)) -
     if period not in ("1d", "1w", "1m"):
         period = "1m"
     snapshots = crud.list_snapshots_aggregated(session, period)
+    # `total_eur` holds only what the snapshot writer could price, so the cash
+    # side is added here; see `crud.get_cash_balance_by_date`.
+    cash = crud.get_cash_balance_by_date(session, [s.date for s in snapshots])
     return GetNetWorthResponse(
-        snapshots=[SnapshotRow(date=s.date, total_eur=s.total_eur, invested_eur=s.invested_eur) for s in snapshots]
+        snapshots=[
+            SnapshotRow(
+                date=s.date,
+                total_eur=s.total_eur + cash.get(s.date, 0.0),
+                invested_eur=s.invested_eur,
+            )
+            for s in snapshots
+        ]
     ).model_dump()
