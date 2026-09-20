@@ -1,6 +1,7 @@
 import { Outlet } from "@tanstack/react-router";
 import { SidebarBody } from "@/frontend/components/pebble/Sidebar";
 import { TransactionModalProvider } from "@/frontend/components/TransactionModalProvider";
+import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 
 /**
  * The persistent frame: a 244px position sidebar beside a fluid main column.
@@ -9,8 +10,13 @@ import { TransactionModalProvider } from "@/frontend/components/TransactionModal
  * screen — so it is never collapsed on desktop. Below `lg` it drops out of the
  * layout and the topbar's menu button opens the same body in a sheet; a 244px
  * rail on a phone leaves nothing for the tables.
+ *
+ * It also owns the quote pulling, because it is the one component that survives
+ * navigation — see `useAutoRefresh`.
  */
 export function RootLayout() {
+  useAutoRefresh();
+
   return (
     <TransactionModalProvider>
       <div className="flex min-h-screen">

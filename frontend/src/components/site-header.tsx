@@ -1,11 +1,14 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useIsMutating } from "@tanstack/react-query";
 import { ChevronLeft, Menu, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatSyncStamp } from "@/lib/format";
 import { usePortfolio } from "@/lib/portfolio";
-import { usePreferences } from "@/lib/preferences";
-import { useRefreshPrices } from "@/hooks/use-refresh-prices";
+import {
+  REFRESH_MUTATION_KEY,
+  useRefreshPrices,
+} from "@/hooks/use-refresh-prices";
 import { SidebarBody } from "@/frontend/components/pebble/Sidebar";
 import {
   PbDot,
@@ -39,22 +42,13 @@ export function SiteHeader({
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const { lastUpdated } = usePortfolio();
-  const prefs = usePreferences();
   const { openTransaction } = useTransactionModal();
-  const { refresh, refreshAuto, isPending, throttledUntil } = useRefreshPrices();
+  const { refresh, throttledUntil } = useRefreshPrices();
 
-  // Auto-refresh is a preference, so the interval lives here rather than in the
-  // query client: turning it off has to actually stop the polling.
-  React.useEffect(() => {
-    if (!prefs.autoRefresh) {
-      return undefined;
-    }
-    const id = window.setInterval(
-      () => refreshAuto(),
-      prefs.refreshIntervalMinutes * 60_000,
-    );
-    return () => window.clearInterval(id);
-  }, [prefs.autoRefresh, prefs.refreshIntervalMinutes, refreshAuto]);
+  // Any pull spins the button, not only this component's own. The automatic
+  // ones are started by the root layout, which outlives the routes that mount
+  // and unmount this header — see `useAutoRefresh`.
+  const isPending = useIsMutating({ mutationKey: REFRESH_MUTATION_KEY }) > 0;
 
   return (
     <header
