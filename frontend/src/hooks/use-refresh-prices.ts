@@ -16,11 +16,17 @@ import type { RefreshPricesResponse } from "@/types/api";
  * server's window and got it wrong, so the button would refuse to do anything
  * while the prices on screen were hours stale.
  */
+export const REFRESH_MUTATION_KEY = ["refresh-prices"] as const;
+
 export function useRefreshPrices() {
   const queryClient = useQueryClient();
   const [throttledUntil, setThrottledUntil] = useState<string | null>(null);
 
   const mutation = useMutation({
+    // Keyed so the topbar can spin its button for any pull, including the ones
+    // the root layout starts on its own — otherwise the app looks idle while it
+    // is in fact fetching.
+    mutationKey: REFRESH_MUTATION_KEY,
     mutationFn: (force: boolean) => api.refreshPrices(force),
     onSuccess: (response: RefreshPricesResponse) => {
       if (response.throttled) {
