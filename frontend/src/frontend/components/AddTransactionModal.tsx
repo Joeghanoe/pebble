@@ -15,6 +15,12 @@ type Side = "Buy" | "Sell";
 
 const PRESETS = [100, 250, 500, 1000];
 
+/** Reads a typed number, comma or point. `null` when the field is not a number. */
+function decimal(raw: string): number | null {
+  const value = Number.parseFloat(raw.replace(",", "."));
+  return Number.isFinite(value) ? value : null;
+}
+
 interface Props {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -25,11 +31,11 @@ interface Props {
 /**
  * The transaction dialog.
  *
- * It is spend-led rather than quantity-led: you remember paying €250, not
- * receiving 0,00218 BTC, so the amount drives and the quantity is derived from
- * the live unit price. The derived quantity stays editable, because a ledger has
- * to record the fill you actually got — deriving from the *current* quote and
- * saving it silently would book the wrong cost basis on any day the price moved.
+ * The two things a fill is: what left your account and what arrived. Both are
+ * typed, and the unit price is read off them — €500 for 0,006 BTC is €83.333,33
+ * a coin, whatever the feed says bitcoin costs today. The live quote only seeds
+ * the quantity for a same-day entry; it is a convenience, never the record,
+ * because saving a back-dated buy at today's price books the wrong cost basis.
  */
 export function AddTransactionModal({ open, onOpenChange, assetId }: Props) {
   return (
@@ -83,16 +89,22 @@ function TransactionForm({
   const position: HoldingRow | undefined =
     positions.find((p) => p.asset.id === selectedId) ?? positions[0];
 
-  const unitPrice = position?.unitPrice ?? null;
-  const spendValue = Number.parseFloat(spend.replace(",", "."));
-  const spendIsValid = Number.isFinite(spendValue) && spendValue > 0;
+  const livePrice = position?.unitPrice ?? null;
+  const spendValue = decimal(spend) ?? 0;
+  const spendIsValid = spendValue > 0;
 
-  const derivedUnits =
-    spendIsValid && unitPrice && unitPrice > 0 ? spendValue / unitPrice : 0;
+  // The two numbers on the receipt are what you paid and what you got, so those
+  // are the two that are typed. The quote only seeds the quantity for a
+  // same-day entry; once a quantity is entered it stands, including for a
+  // back-dated fill the quote knows nothing about.
+  const typedUnits = unitsOverride === null ? null : decimal(unitsOverride);
   const units =
-    unitsOverride === null
-      ? derivedUnits
-      : Number.parseFloat(unitsOverride.replace(",", ".")) || 0;
+    typedUnits ??
+    (spendIsValid && livePrice && livePrice > 0 ? spendValue / livePrice : 0);
+
+  // Always the price this transaction was actually filled at: €500 for 0,006
+  // BTC is €83.333,33 a coin, whatever the feed says bitcoin costs today.
+  const unitPrice = spendIsValid && units > 0 ? spendValue / units : livePrice;
 
   const newAverage =
     position && units > 0
@@ -134,9 +146,9 @@ function TransactionForm({
       return "Enter an amount greater than zero.";
     }
     if (units <= 0) {
-      return unitPrice
+      return livePrice
         ? "Enter a quantity greater than zero."
-        : `No live price for ${position.asset.symbol} — enter the quantity by hand.`;
+        : `No live price for ${position.asset.symbol} — enter the quantity yourself.`;
     }
     if (date > new Date().toISOString().slice(0, 10)) {
       return "That date is in the future.";
@@ -165,8 +177,15 @@ function TransactionForm({
 
   const label =
     "font-number text-[10px] tracking-[0.11em] text-pb-muted uppercase";
+  // 40px rather than 34: every control here has to clear 16px of text (see
+  // `input`), and 34 leaves a date field looking cramped around it.
   const field =
-    "flex h-[34px] items-center gap-2 rounded-[9px] border border-pb-input bg-pb-raised px-2.5";
+    "flex h-10 items-center gap-2 rounded-[9px] border border-pb-input bg-pb-raised px-2.5";
+  // Safari on iOS zooms the page when a control it focuses has text under 16px,
+  // and does not zoom back out. Every input in this dialog is at or above it —
+  // which is why the sizes here read large for the design.
+  const input =
+    "w-full rounded-[10px] border border-pb-strong bg-pb-raised px-3 font-number font-medium text-pb-text outline-none focus:border-[rgba(247,147,26,.55)]";
 
   return (
     <>
@@ -203,7 +222,7 @@ function TransactionForm({
             <span className={label}>Asset</span>
             <span className={cn(field, "relative")}>
               {position && <PbDot color={position.color} />}
-              <span className="min-w-0 flex-1 truncate font-number text-[12px]">
+              <span className="min-w-0 flex-1 truncate font-number text-[14px]">
                 {position?.asset.symbol ?? "No positions"}
               </span>
               <ChevronDown
@@ -217,8 +236,9 @@ function TransactionForm({
                 onChange={(event) => {
                   setSelectedId(Number(event.target.value));
                   setUnitsOverride(null);
+                  setPriceOverride(null);
                 }}
-                className="absolute inset-0 cursor-pointer opacity-0"
+                className="absolute inset-0 cursor-pointer text-[16px] opacity-0"
               >
                 {positions.map((option) => (
                   <option key={option.asset.id} value={option.asset.id}>
@@ -242,7 +262,7 @@ function TransactionForm({
               onChange={(event) => setDate(event.target.value)}
               className={cn(
                 field,
-                "w-full font-number text-[12px] outline-none",
+                "w-full font-number text-[16px] outline-none",
               )}
             />
           </label>
@@ -255,11 +275,8 @@ function TransactionForm({
           <input
             inputMode="decimal"
             value={spend}
-            onChange={(event) => {
-              setSpend(event.target.value);
-              setUnitsOverride(null);
-            }}
-            className="h-11 rounded-[10px] border border-pb-strong bg-pb-raised px-3 font-number text-[20px] font-medium text-pb-text outline-none focus:border-[rgba(247,147,26,.55)]"
+            onChange={(event) => setSpend(event.target.value)}
+            className={cn(input, "h-12 text-[20px]")}
           />
         </label>
 
@@ -268,16 +285,30 @@ function TransactionForm({
             <button
               key={preset}
               type="button"
-              onClick={() => {
-                setSpend(String(preset));
-                setUnitsOverride(null);
-              }}
+              onClick={() => setSpend(String(preset))}
               className="rounded-[7px] border border-pb-input bg-pb-raised px-2.5 py-1 font-number text-[11px] text-pb-text-3 transition-colors hover:border-[rgba(247,147,26,.4)] hover:text-pb-accent"
             >
               {formatEur(preset).replace(",00", "")}
             </button>
           ))}
         </div>
+
+        <label className="flex flex-col gap-1.5">
+          <span className={label}>
+            Quantity {position ? `(${position.asset.symbol})` : ""}
+          </span>
+          <input
+            aria-label="Quantity"
+            inputMode="decimal"
+            value={
+              unitsOverride ??
+              (units > 0 ? units.toFixed(units < 1 ? 8 : 4) : "")
+            }
+            onChange={(event) => setUnitsOverride(event.target.value)}
+            placeholder="0"
+            className={cn(input, "h-11 text-[17px] text-pb-accent")}
+          />
+        </label>
 
         {/* Live summary. Recomputes on every keystroke and preset click. */}
         <div
@@ -287,28 +318,8 @@ function TransactionForm({
               "linear-gradient(135deg,rgba(139,92,246,.1),rgba(247,147,26,.06))",
           }}
         >
-          <SummaryRow label="Unit price">
+          <SummaryRow label="Unit price" hint="amount ÷ quantity">
             {unitPrice === null ? "—" : formatEurPrice(unitPrice)}
-          </SummaryRow>
-          <SummaryRow label={side === "Sell" ? "You sell" : "You receive"}>
-            <span className="inline-flex items-baseline gap-1">
-              <input
-                aria-label="Quantity"
-                inputMode="decimal"
-                value={
-                  unitsOverride ??
-                  (derivedUnits > 0
-                    ? derivedUnits.toFixed(derivedUnits < 1 ? 8 : 4)
-                    : "")
-                }
-                onChange={(event) => setUnitsOverride(event.target.value)}
-                placeholder="0"
-                className="w-[11ch] bg-transparent text-right font-number text-[11.5px] text-pb-accent outline-none focus:underline"
-              />
-              <span className="text-pb-accent">
-                {position?.asset.symbol ?? ""}
-              </span>
-            </span>
           </SummaryRow>
           <div className="mt-1.5 border-t border-pb-line pt-[7px]">
             <SummaryRow label="New avg cost">
@@ -342,14 +353,24 @@ function TransactionForm({
 
 function SummaryRow({
   label,
+  hint,
   children,
 }: {
   readonly label: string;
+  /** Where the value came from, when that is not obvious — "live", say. */
+  readonly hint?: string;
   readonly children: React.ReactNode;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-0.5 text-[11.5px]">
-      <span className="text-pb-text-3">{label}</span>
+      <span className="text-pb-text-3">
+        {label}
+        {hint && (
+          <span className="ml-1.5 font-number text-[9.5px] text-pb-faintest">
+            {hint}
+          </span>
+        )}
+      </span>
       <span className="font-number whitespace-nowrap tabular-nums">
         {children}
       </span>
