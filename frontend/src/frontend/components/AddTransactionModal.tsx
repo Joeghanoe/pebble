@@ -15,6 +15,11 @@ type Side = "Buy" | "Sell";
 
 const PRESETS = [100, 250, 500, 1000];
 
+/** The quantity as the ledger holds it: eight decimals, no trailing padding. */
+function quantityText(units: number): string {
+  return units.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+}
+
 /** Reads a typed number, comma or point. `null` when the field is not a number. */
 function decimal(raw: string): number | null {
   const value = Number.parseFloat(raw.replace(",", "."));
@@ -89,6 +94,11 @@ function TransactionForm({
   const position: HoldingRow | undefined =
     positions.find((p) => p.asset.id === selectedId) ?? positions[0];
 
+  // A euro costs a euro: for cash the amount, the quantity and the price are
+  // one number, so the dialog asks for it once. "Amount received" for selling
+  // euros described nothing — you withdraw cash, you do not receive it.
+  const isCash = position?.asset.type === "cash";
+
   const livePrice = position?.unitPrice ?? null;
   const spendValue = decimal(spend) ?? 0;
   const spendIsValid = spendValue > 0;
@@ -105,6 +115,12 @@ function TransactionForm({
   // Always the price this transaction was actually filled at: €500 for 0,006
   // BTC is €83.333,33 a coin, whatever the feed says bitcoin costs today.
   const unitPrice = spendIsValid && units > 0 ? spendValue / units : livePrice;
+
+  const balanceAfter = position
+    ? side === "Buy"
+      ? position.units_held + units
+      : position.units_held - units
+    : 0;
 
   const newAverage =
     position && units > 0
@@ -236,7 +252,6 @@ function TransactionForm({
                 onChange={(event) => {
                   setSelectedId(Number(event.target.value));
                   setUnitsOverride(null);
-                  setPriceOverride(null);
                 }}
                 className="absolute inset-0 cursor-pointer text-[16px] opacity-0"
               >
@@ -270,7 +285,9 @@ function TransactionForm({
 
         <label className="flex flex-col gap-1.5">
           <span className={label}>
-            Amount {side === "Sell" ? "received" : "spent"} (€)
+            {isCash
+              ? `Amount ${side === "Sell" ? "withdrawn" : "deposited"} (€)`
+              : `Amount ${side === "Sell" ? "received" : "spent"} (€)`}
           </span>
           <input
             inputMode="decimal"
@@ -293,24 +310,25 @@ function TransactionForm({
           ))}
         </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className={label}>
-            Quantity {position ? `(${position.asset.symbol})` : ""}
-          </span>
-          <input
-            aria-label="Quantity"
-            inputMode="decimal"
-            value={
-              unitsOverride ??
-              (units > 0 ? units.toFixed(units < 1 ? 8 : 4) : "")
-            }
-            onChange={(event) => setUnitsOverride(event.target.value)}
-            placeholder="0"
-            className={cn(input, "h-11 text-[17px] text-pb-accent")}
-          />
-        </label>
+        {!isCash && (
+          <label className="flex flex-col gap-1.5">
+            <span className={label}>
+              Quantity {position ? `(${position.asset.symbol})` : ""}
+            </span>
+            <input
+              aria-label="Quantity"
+              inputMode="decimal"
+              value={unitsOverride ?? (units > 0 ? quantityText(units) : "")}
+              onChange={(event) => setUnitsOverride(event.target.value)}
+              placeholder="0"
+              className={cn(input, "h-11 text-[17px] text-pb-accent")}
+            />
+          </label>
+        )}
 
-        {/* Live summary. Recomputes on every keystroke and preset click. */}
+        {/* Live summary. Recomputes on every keystroke and preset click.
+            Cash has no price to report and no average to move, so it gets the
+            one figure that does change: what the balance becomes. */}
         <div
           className="rounded-[11px] border border-pb-strong px-3.5 py-3"
           style={{
@@ -318,14 +336,22 @@ function TransactionForm({
               "linear-gradient(135deg,rgba(139,92,246,.1),rgba(247,147,26,.06))",
           }}
         >
-          <SummaryRow label="Unit price" hint="amount ÷ quantity">
-            {unitPrice === null ? "—" : formatEurPrice(unitPrice)}
-          </SummaryRow>
-          <div className="mt-1.5 border-t border-pb-line pt-[7px]">
-            <SummaryRow label="New avg cost">
-              {newAverage === null ? "—" : formatEurPrice(newAverage)}
+          {isCash ? (
+            <SummaryRow label="Balance after">
+              {position ? formatEur(balanceAfter) : "—"}
             </SummaryRow>
-          </div>
+          ) : (
+            <>
+              <SummaryRow label="Unit price" hint="amount ÷ quantity">
+                {unitPrice === null ? "—" : formatEurPrice(unitPrice)}
+              </SummaryRow>
+              <div className="mt-1.5 border-t border-pb-line pt-[7px]">
+                <SummaryRow label="New avg cost">
+                  {newAverage === null ? "—" : formatEurPrice(newAverage)}
+                </SummaryRow>
+              </div>
+            </>
+          )}
         </div>
 
         {error && (

@@ -22,4 +22,10 @@ export type Transaction = {
   units: number;
   eur_amount: number;
   notes?: string | null;
+  /**
+   * What a sell actually made, FIFO against the buy lots — the API computes it
+   * per row in `list_transactions_by_asset`. Null on a buy, which has realised
+   * nothing yet.
+   */
+  realized_pnl?: number | null;
 };

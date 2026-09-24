@@ -49,6 +49,7 @@ web:
 
 test: test-api
 	cd frontend && bun run lint
+	cd frontend && bun run typecheck
 
 # The API tests run against a real Postgres, not SQLite: they exist to pin the raw SQL
 # and the identity middleware as they behave in the deployment.
