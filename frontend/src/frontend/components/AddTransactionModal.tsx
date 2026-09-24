@@ -15,6 +15,17 @@ type Side = "Buy" | "Sell";
 
 const PRESETS = [100, 250, 500, 1000];
 
+/** Reads a typed number, comma or point. `null` when the field is not a number. */
+function decimal(raw: string): number | null {
+  const value = Number.parseFloat(raw.replace(",", "."));
+  return Number.isFinite(value) ? value : null;
+}
+
+/** A price in an input, where a fixed format would fight the person typing. */
+function priceText(price: number): string {
+  return price < 0.01 ? price.toFixed(7) : price.toFixed(2);
+}
+
 interface Props {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -77,22 +88,36 @@ function TransactionForm({
     new Date().toISOString().slice(0, 10),
   );
   const [spend, setSpend] = React.useState("250");
+  // Price and quantity are one pair with one equation between them and the
+  // amount, so exactly one of the two is ever typed and the other follows.
+  // Typing into either clears the other's override rather than leaving two
+  // numbers on screen that do not multiply out.
+  const [priceOverride, setPriceOverride] = React.useState<string | null>(null);
   const [unitsOverride, setUnitsOverride] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   const position: HoldingRow | undefined =
     positions.find((p) => p.asset.id === selectedId) ?? positions[0];
 
-  const unitPrice = position?.unitPrice ?? null;
-  const spendValue = Number.parseFloat(spend.replace(",", "."));
-  const spendIsValid = Number.isFinite(spendValue) && spendValue > 0;
+  const livePrice = position?.unitPrice ?? null;
+  const spendValue = decimal(spend) ?? 0;
+  const spendIsValid = spendValue > 0;
 
-  const derivedUnits =
-    spendIsValid && unitPrice && unitPrice > 0 ? spendValue / unitPrice : 0;
+  // The quote is only a starting point. It is today's price, and a back-dated
+  // entry was filled at a different one — which is the whole reason this is
+  // typeable.
+  const typedPrice = priceOverride === null ? null : decimal(priceOverride);
+  const typedUnits = unitsOverride === null ? null : decimal(unitsOverride);
+
+  const unitPrice =
+    typedPrice ??
+    (typedUnits !== null && typedUnits > 0 && spendIsValid
+      ? spendValue / typedUnits
+      : livePrice);
+
   const units =
-    unitsOverride === null
-      ? derivedUnits
-      : Number.parseFloat(unitsOverride.replace(",", ".")) || 0;
+    typedUnits ??
+    (spendIsValid && unitPrice && unitPrice > 0 ? spendValue / unitPrice : 0);
 
   const newAverage =
     position && units > 0
@@ -133,10 +158,13 @@ function TransactionForm({
     if (!spendIsValid) {
       return "Enter an amount greater than zero.";
     }
+    if (unitPrice !== null && unitPrice <= 0) {
+      return "Enter a unit price greater than zero.";
+    }
     if (units <= 0) {
       return unitPrice
         ? "Enter a quantity greater than zero."
-        : `No live price for ${position.asset.symbol} — enter the quantity by hand.`;
+        : `No price for ${position.asset.symbol} — enter the unit price or the quantity.`;
     }
     if (date > new Date().toISOString().slice(0, 10)) {
       return "That date is in the future.";
@@ -217,6 +245,7 @@ function TransactionForm({
                 onChange={(event) => {
                   setSelectedId(Number(event.target.value));
                   setUnitsOverride(null);
+                  setPriceOverride(null);
                 }}
                 className="absolute inset-0 cursor-pointer opacity-0"
               >
@@ -255,10 +284,7 @@ function TransactionForm({
           <input
             inputMode="decimal"
             value={spend}
-            onChange={(event) => {
-              setSpend(event.target.value);
-              setUnitsOverride(null);
-            }}
+            onChange={(event) => setSpend(event.target.value)}
             className="h-11 rounded-[10px] border border-pb-strong bg-pb-raised px-3 font-number text-[20px] font-medium text-pb-text outline-none focus:border-[rgba(247,147,26,.55)]"
           />
         </label>
@@ -268,10 +294,7 @@ function TransactionForm({
             <button
               key={preset}
               type="button"
-              onClick={() => {
-                setSpend(String(preset));
-                setUnitsOverride(null);
-              }}
+              onClick={() => setSpend(String(preset))}
               className="rounded-[7px] border border-pb-input bg-pb-raised px-2.5 py-1 font-number text-[11px] text-pb-text-3 transition-colors hover:border-[rgba(247,147,26,.4)] hover:text-pb-accent"
             >
               {formatEur(preset).replace(",00", "")}
@@ -287,8 +310,35 @@ function TransactionForm({
               "linear-gradient(135deg,rgba(139,92,246,.1),rgba(247,147,26,.06))",
           }}
         >
-          <SummaryRow label="Unit price">
-            {unitPrice === null ? "—" : formatEurPrice(unitPrice)}
+          <SummaryRow
+            label="Unit price"
+            hint={
+              priceOverride === null &&
+              typedUnits === null &&
+              livePrice !== null
+                ? "live"
+                : undefined
+            }
+          >
+            <span className="inline-flex items-baseline gap-1">
+              <span className="text-pb-text-3">€</span>
+              <input
+                aria-label="Unit price"
+                inputMode="decimal"
+                value={
+                  priceOverride ??
+                  (unitPrice !== null && unitPrice > 0
+                    ? priceText(unitPrice)
+                    : "")
+                }
+                onChange={(event) => {
+                  setPriceOverride(event.target.value);
+                  setUnitsOverride(null);
+                }}
+                placeholder="0"
+                className="w-[12ch] border-b border-dashed border-pb-line bg-transparent text-right font-number text-[11.5px] outline-none focus:border-solid focus:border-pb-accent"
+              />
+            </span>
           </SummaryRow>
           <SummaryRow label={side === "Sell" ? "You sell" : "You receive"}>
             <span className="inline-flex items-baseline gap-1">
@@ -297,13 +347,14 @@ function TransactionForm({
                 inputMode="decimal"
                 value={
                   unitsOverride ??
-                  (derivedUnits > 0
-                    ? derivedUnits.toFixed(derivedUnits < 1 ? 8 : 4)
-                    : "")
+                  (units > 0 ? units.toFixed(units < 1 ? 8 : 4) : "")
                 }
-                onChange={(event) => setUnitsOverride(event.target.value)}
+                onChange={(event) => {
+                  setUnitsOverride(event.target.value);
+                  setPriceOverride(null);
+                }}
                 placeholder="0"
-                className="w-[11ch] bg-transparent text-right font-number text-[11.5px] text-pb-accent outline-none focus:underline"
+                className="w-[11ch] border-b border-dashed border-pb-line bg-transparent text-right font-number text-[11.5px] text-pb-accent outline-none focus:border-solid focus:border-pb-accent"
               />
               <span className="text-pb-accent">
                 {position?.asset.symbol ?? ""}
@@ -342,14 +393,24 @@ function TransactionForm({
 
 function SummaryRow({
   label,
+  hint,
   children,
 }: {
   readonly label: string;
+  /** Where the value came from, when that is not obvious — "live", say. */
+  readonly hint?: string;
   readonly children: React.ReactNode;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-0.5 text-[11.5px]">
-      <span className="text-pb-text-3">{label}</span>
+      <span className="text-pb-text-3">
+        {label}
+        {hint && (
+          <span className="ml-1.5 font-number text-[9.5px] text-pb-faintest">
+            {hint}
+          </span>
+        )}
+      </span>
       <span className="font-number whitespace-nowrap tabular-nums">
         {children}
       </span>
