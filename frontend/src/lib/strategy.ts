@@ -147,12 +147,64 @@ export function sma(
   return out;
 }
 
+/**
+ * The exponential moving average, seeded the conventional way: entry
+ * `window − 1` is the SMA of the first `window` values, and each entry after
+ * it moves toward the new value by α = 2 / (window + 1). Null before the seed,
+ * so an EMA needs exactly as much history as an SMA of the same length.
+ */
+export function ema(
+  values: readonly number[],
+  window: number,
+): (number | null)[] {
+  const seeded = sma(values, window);
+  const alpha = 2 / (window + 1);
+  const out: (number | null)[] = [];
+  let previous: number | null = null;
+  for (let i = 0; i < values.length; i++) {
+    if (i < window - 1) {
+      out.push(null);
+      continue;
+    }
+    previous =
+      previous === null
+        ? (seeded[i] as number)
+        : alpha * values[i] + (1 - alpha) * previous;
+    out.push(previous);
+  }
+  return out;
+}
+
 /* ── Regime ──────────────────────────────────────────────────────────────── */
 
 export const SMA_WINDOW = 200;
 export const CONFIRM_DAYS = 30;
 /** A full average, then a full confirmation streak on top of it. */
 export const MIN_HISTORY_DAYS = SMA_WINDOW + CONFIRM_DAYS;
+
+/**
+ * The rule's shape. `window + confirmDays` is the history it needs, and the
+ * server keeps one year of daily closes, so together they must fit in it.
+ */
+export type AverageKind = "ema" | "sma";
+
+export interface RegimeRule {
+  /** Which moving average BTC is measured against. */
+  readonly average: AverageKind;
+  /** Its length in days. */
+  readonly window: number;
+  readonly confirmDays: number;
+}
+
+/** 200-day EMA, 30 days to confirm: the rule as written on the spreadsheet. */
+export const DEFAULT_RULE: RegimeRule = {
+  average: "ema",
+  window: SMA_WINDOW,
+  confirmDays: CONFIRM_DAYS,
+};
+
+/** How many daily closes the server keeps; see `BTC_HISTORY_DAYS` in the API. */
+export const MAX_HISTORY_DAYS = 365;
 
 export type Regime = "defensive" | "risk-on";
 
@@ -161,9 +213,13 @@ export interface Split {
   readonly equity: number;
 }
 
+/**
+ * Share of the contribution going to BTC ("crypto") and to stocks ("equity").
+ * The defaults are the spreadsheet's €750/€750 and €500/€1,000 of €1,500.
+ */
 export const REGIME_SPLIT: Record<Regime, Split> = {
-  defensive: { crypto: 0.5, equity: 0.5 },
-  "risk-on": { crypto: 0.25, equity: 0.75 },
+  defensive: { crypto: 1 / 2, equity: 1 / 2 },
+  "risk-on": { crypto: 1 / 3, equity: 2 / 3 },
 };
 
 /** Which side of the average a close sits on. Exactly on it counts as neither. */
@@ -172,12 +228,18 @@ export type Side = "above" | "below" | "on";
 export interface RegimeReading {
   readonly date: string;
   readonly close: number;
-  readonly sma: number;
-  /** (close − sma) / sma, in percent. */
+  /** The moving average the rule measures against, EMA or SMA. */
+  readonly average: number;
+  /** (close − average) / average, in percent. */
   readonly distancePct: number;
   readonly side: Side;
   /** Consecutive closes on `side`, including this one. Zero when `side` is "on". */
   readonly streakDays: number;
+  /**
+   * The streak runs back to the first day with an average: it may be longer
+   * than the history can show, so `streakDays` is a lower bound.
+   */
+  readonly streakFromStart: boolean;
 }
 
 export type RegimeState =
@@ -197,15 +259,15 @@ export type RegimeState =
       /** The close that completed the 30-day streak and switched the rule over. */
       readonly since: string;
       readonly reading: RegimeReading;
-      /** Days of the current streak against the regime, 0..CONFIRM_DAYS−1. */
+      /** Days of the current streak against the regime, 0..confirmDays−1. */
       readonly daysTowardSwitch: number;
     };
 
 /**
  * The DCA rule, replayed over the whole series.
  *
- * Thirty consecutive closes below the 200-day average switch to Defensive,
- * thirty above switch to Risk-on, and anything short of that leaves the
+ * Thirty consecutive closes below the 200-day average (EMA or SMA, per the
+ * rule) switch to Defensive, thirty above switch to Risk-on, and anything short of that leaves the
  * previous regime standing — the hysteresis that keeps one wick across the
  * line from flipping the split. A close exactly on the average breaks both
  * streaks, since it is on neither side.
@@ -213,26 +275,35 @@ export type RegimeState =
  * Expects `closes` to be consecutive days (see `contiguousDailyCloses`); the
  * rule counts days, so a series with holes would count the wrong thing.
  */
-export function detectRegime(closes: readonly DailyClose[]): RegimeState {
-  if (closes.length < MIN_HISTORY_DAYS) {
+export function detectRegime(
+  closes: readonly DailyClose[],
+  rule: RegimeRule = DEFAULT_RULE,
+): RegimeState {
+  const { window: span, confirmDays } = rule;
+  if (!Number.isInteger(confirmDays) || confirmDays < 1) {
+    throw new RangeError(
+      `Confirmation must be a positive whole number of days, got ${confirmDays}`,
+    );
+  }
+  const requiredDays = span + confirmDays;
+  if (closes.length < requiredDays) {
     return {
       status: "insufficient",
       availableDays: closes.length,
-      requiredDays: MIN_HISTORY_DAYS,
+      requiredDays,
     };
   }
 
-  const averages = sma(
-    closes.map((c) => c.close),
-    SMA_WINDOW,
-  );
+  const values = closes.map((c) => c.close);
+  const averages =
+    rule.average === "ema" ? ema(values, span) : sma(values, span);
 
   let regime: Regime | null = null;
   let since = "";
   let above = 0;
   let below = 0;
 
-  for (let i = SMA_WINDOW - 1; i < closes.length; i++) {
+  for (let i = span - 1; i < closes.length; i++) {
     const close = closes[i].close;
     const average = averages[i] as number;
     if (close > average) {
@@ -246,10 +317,10 @@ export function detectRegime(closes: readonly DailyClose[]): RegimeState {
       below = 0;
     }
 
-    if (above >= CONFIRM_DAYS && regime !== "risk-on") {
+    if (above >= confirmDays && regime !== "risk-on") {
       regime = "risk-on";
       since = closes[i].date;
-    } else if (below >= CONFIRM_DAYS && regime !== "defensive") {
+    } else if (below >= confirmDays && regime !== "defensive") {
       regime = "defensive";
       since = closes[i].date;
     }
@@ -263,13 +334,16 @@ export function detectRegime(closes: readonly DailyClose[]): RegimeState {
       : last.close < lastAverage
         ? "below"
         : "on";
+  const streakDays = side === "above" ? above : side === "below" ? below : 0;
   const reading: RegimeReading = {
     date: last.date,
     close: last.close,
-    sma: lastAverage,
+    average: lastAverage,
     distancePct: ((last.close - lastAverage) / lastAverage) * 100,
     side,
-    streakDays: side === "above" ? above : side === "below" ? below : 0,
+    streakDays,
+    streakFromStart:
+      streakDays > 0 && streakDays === closes.length - (span - 1),
   };
 
   if (regime === null) {
@@ -284,6 +358,33 @@ export function detectRegime(closes: readonly DailyClose[]): RegimeState {
   };
 }
 
+/** Follow the rule, or hold a regime by hand regardless of what BTC does. */
+export type RegimeMode = "auto" | Regime;
+
+export interface ActiveRegime {
+  /** The regime the contribution follows, or null when there is none to follow. */
+  readonly regime: Regime | null;
+  readonly source: "rule" | "manual";
+  /** What the rule says, whatever the mode. Null when it cannot say. */
+  readonly ruleRegime: Regime | null;
+}
+
+/**
+ * The regime this month's money follows. A manual choice wins over the rule;
+ * the rule's own answer is kept alongside it, so an override never hides the
+ * signal it overrides.
+ */
+export function resolveRegime(
+  state: RegimeState | null,
+  mode: RegimeMode,
+): ActiveRegime {
+  const ruleRegime = state?.status === "established" ? state.regime : null;
+  if (mode !== "auto") {
+    return { regime: mode, source: "manual", ruleRegime };
+  }
+  return { regime: ruleRegime, source: "rule", ruleRegime };
+}
+
 /** This month's contribution, split by the regime. */
 export function splitContribution(
   contribution: number,
@@ -292,6 +393,98 @@ export function splitContribution(
   return {
     crypto: contribution * split.crypto,
     equity: contribution * split.equity,
+  };
+}
+
+/* ── Profit taking ───────────────────────────────────────────────────────── */
+
+/**
+ * Trim BTC once a long run above the average has made it too large a slice:
+ * after `minDaysAbove` consecutive closes above, with BTC over `maxBtcShare` of
+ * the whole portfolio, sell `sellFraction` of the BTC held and put the proceeds
+ * into stocks, `sp500Share` of it to the S&P 500 and the rest to ex-US.
+ */
+export interface ProfitRule {
+  readonly minDaysAbove: number;
+  readonly maxBtcShare: number;
+  readonly sellFraction: number;
+  readonly sp500Share: number;
+}
+
+export const DEFAULT_PROFIT_RULE: ProfitRule = {
+  minDaysAbove: 150,
+  maxBtcShare: 0.35,
+  sellFraction: 0.05,
+  sp500Share: 0.6,
+};
+
+export type ProfitSignal =
+  | { readonly status: "unavailable" }
+  | {
+      readonly status: "waiting";
+      readonly daysAbove: number;
+      readonly btcShare: number;
+    }
+  | { readonly status: "done"; readonly takenOn: string }
+  | {
+      readonly status: "due";
+      readonly daysAbove: number;
+      readonly btcShare: number;
+      readonly sellEur: number;
+      readonly sp500Eur: number;
+      readonly exUsEur: number;
+    };
+
+/**
+ * Whether the profit-taking rule fires today.
+ *
+ * "Once" is once per run above the average: a sale marked on `takenOn` counts
+ * for as long as the run it was made in lasts — that is, while BTC has closed
+ * above the average every day since — and the rule re-arms after the first
+ * close below. Pebble places no orders; this only says what the rule asks for.
+ *
+ * `totalValue` is the whole portfolio, cash included.
+ */
+export function profitTakingSignal({
+  state,
+  btcValue,
+  totalValue,
+  rule,
+  takenOn,
+}: {
+  readonly state: RegimeState | null;
+  readonly btcValue: number;
+  readonly totalValue: number;
+  readonly rule: ProfitRule;
+  readonly takenOn: string | null;
+}): ProfitSignal {
+  if (state === null || state.status === "insufficient") {
+    return { status: "unavailable" };
+  }
+  const { reading } = state;
+  const daysAbove = reading.side === "above" ? reading.streakDays : 0;
+
+  if (takenOn !== null && daysAbove > 0) {
+    const sameRun =
+      reading.streakFromStart ||
+      daysAbove >= daysBetween(takenOn, reading.date) + 1;
+    if (sameRun) {
+      return { status: "done", takenOn };
+    }
+  }
+
+  const btcShare = totalValue > 0 ? btcValue / totalValue : 0;
+  if (daysAbove < rule.minDaysAbove || btcShare <= rule.maxBtcShare) {
+    return { status: "waiting", daysAbove, btcShare };
+  }
+  const sellEur = btcValue * rule.sellFraction;
+  return {
+    status: "due",
+    daysAbove,
+    btcShare,
+    sellEur,
+    sp500Eur: sellEur * rule.sp500Share,
+    exUsEur: sellEur * (1 - rule.sp500Share),
   };
 }
 
