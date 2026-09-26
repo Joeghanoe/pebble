@@ -4,11 +4,13 @@ import { getStartedRoute } from "./routes/get-started";
 import { indexRoute } from "./routes/index";
 import { positionRoute } from "./routes/position.$assetId";
 import { settingsRoute } from "./routes/settings";
+import { strategyRoute } from "./routes/strategy";
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
   getStartedRoute,
   positionRoute,
+  strategyRoute,
   settingsRoute,
 ]);
 

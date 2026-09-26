@@ -54,7 +54,7 @@ make web           # web  → http://localhost:1420  (vite proxies /api to the a
 Tests:
 
 ```bash
-make test          # pytest against a real Postgres, then eslint
+make test          # pytest against a real Postgres, bun test, then eslint
 ```
 
 The API tests deliberately run against Postgres rather than SQLite. Several queries are

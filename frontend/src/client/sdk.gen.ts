@@ -29,6 +29,7 @@ import type {
   GetPositionHistoryApiPositionsAssetIdHistoryGetResponse,
   RefreshPricesApiPricesRefreshPostData,
   RefreshPricesApiPricesRefreshPostResponse,
+  GetBtcDailyApiPricesBtcDailyGetResponse,
   CreateTransactionApiTransactionsPostData,
   CreateTransactionApiTransactionsPostResponse,
   ListTransactionsApiTransactionsAssetIdGetData,
@@ -352,6 +353,23 @@ export class PricesService {
       errors: {
         422: "Validation Error",
       },
+    });
+  }
+
+  /**
+   * Get Btc Daily
+   * The last year of daily BTC closes in EUR, oldest first, as cached.
+   *
+   * Returned as stored, gaps and all: the strategy view decides how far a close
+   * may be carried forward, and refuses to compute a regime over a real hole.
+   * Empty when the portfolio holds no BTC.
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static getBtcDailyApiPricesBtcDailyGet(): CancelablePromise<GetBtcDailyApiPricesBtcDailyGetResponse> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/prices/btc/daily",
     });
   }
 }

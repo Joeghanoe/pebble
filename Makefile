@@ -2,7 +2,7 @@
 # Pebble
 # =============================================================================
 
-.PHONY: help setup up down db api web test test-api lint migrate revision generate-client desktop desktop-build clean
+.PHONY: help setup up down db api web test test-api test-web lint migrate revision generate-client desktop desktop-build clean
 
 PROJECT_ROOT := $(shell pwd)
 
@@ -47,8 +47,13 @@ web:
 
 ##@ Test
 
-test: test-api
+test: test-api test-web
 	cd frontend && bun run lint
+
+# The frontend's pure logic (the Strategy view's regime rule and projection), on
+# bun's built-in runner: no browser, no extra dependency.
+test-web:
+	cd frontend && bun run test
 
 # The API tests run against a real Postgres, not SQLite: they exist to pin the raw SQL
 # and the identity middleware as they behave in the deployment.

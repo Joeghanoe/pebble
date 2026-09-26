@@ -37,6 +37,7 @@ export function useRefreshPrices() {
       void queryClient.invalidateQueries({ queryKey: ["positions"] });
       void queryClient.invalidateQueries({ queryKey: ["net-worth"] });
       void queryClient.invalidateQueries({ queryKey: ["position-history"] });
+      void queryClient.invalidateQueries({ queryKey: ["btc-daily"] });
     },
   });
 

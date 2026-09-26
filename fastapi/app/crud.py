@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, text
+from sqlalchemy import delete, func, text
 from sqlmodel import Session, select
 
 from app.models import (
@@ -345,6 +345,29 @@ def get_cash_balance_by_date(session: Session, dates: list[str]) -> dict[str, fl
     return {row[0]: float(row[1]) for row in rows}
 
 
+def get_btc_asset(session: Session) -> Asset | None:
+    """The one asset that is Bitcoin, by the same rule every BTC feature uses."""
+    return session.exec(
+        select(Asset)
+        .where(func.upper(Asset.symbol) == "BTC")
+        .where(Asset.type == "crypto")
+        .order_by(Asset.id)  # type: ignore[arg-type]
+        .limit(1)
+    ).first()
+
+
+def list_prices_since(session: Session, asset_id: int, since: str) -> list[PriceCache]:
+    """Every cached price for an asset on or after `since`, oldest first."""
+    return list(
+        session.exec(
+            select(PriceCache)
+            .where(PriceCache.asset_id == asset_id)
+            .where(PriceCache.date >= since)
+            .order_by(PriceCache.date)  # type: ignore[arg-type]
+        ).all()
+    )
+
+
 def get_btc_eur_by_date(session: Session, dates: list[str]) -> dict[str, float]:
     """The BTC price on each of `dates`, for denominating a series in BTC.
 
@@ -358,13 +381,8 @@ def get_btc_eur_by_date(session: Session, dates: list[str]) -> dict[str, float]:
     if not dates:
         return {}
 
-    asset_id = session.exec(
-        text(
-            "SELECT id FROM asset WHERE UPPER(symbol) = 'BTC' AND type = 'crypto' "
-            "ORDER BY id LIMIT 1"
-        )
-    ).first()
-    if not asset_id:
+    btc = get_btc_asset(session)
+    if not btc:
         return {}
 
     rows = session.exec(
@@ -378,7 +396,7 @@ def get_btc_eur_by_date(session: Session, dates: list[str]) -> dict[str, float]:
               ORDER BY date DESC LIMIT 1
             ) p ON TRUE
             """
-        ).bindparams(dates=dates, asset_id=asset_id[0])
+        ).bindparams(dates=dates, asset_id=btc.id)
     ).all()
     return {row[0]: float(row[1]) for row in rows if row[1] is not None}
 

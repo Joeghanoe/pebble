@@ -57,3 +57,13 @@ export type GetExchangesResponse = {
 export type RefreshPricesResponse = {
   throttled: boolean;
 };
+
+export type BtcDailyClose = {
+  date: string;
+  price_eur: number;
+};
+
+/** A year of daily BTC closes as cached, oldest first. Gaps are not filled. */
+export type GetBtcDailyResponse = {
+  closes: BtcDailyClose[];
+};

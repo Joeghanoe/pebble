@@ -125,3 +125,14 @@ export function formatSyncStamp(iso: string): string {
   }
   return `${day} · ${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
 }
+
+/** `€100.000`. Whole euros, for targets and projections where cents are noise. */
+export function formatEurWhole(amount: number): string {
+  return signed(amount, "€" + grouped(Math.round(amount), 0, 0));
+}
+
+/** `+€120` / `−€45`: a whole-euro difference that always states its direction. */
+export function formatEurDelta(amount: number): string {
+  const rounded = Math.round(amount);
+  return (rounded > 0 ? "+" : "") + formatEurWhole(rounded);
+}

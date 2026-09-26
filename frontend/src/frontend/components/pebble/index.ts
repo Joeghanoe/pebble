@@ -6,3 +6,4 @@ export * from "./LineChart";
 export * from "./Sidebar";
 export * from "./CadenceChart";
 export * from "./PnlByBuyChart";
+export * from "./ProjectionChart";

@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutGrid, Plus, SlidersHorizontal } from "lucide-react";
+import { Compass, LayoutGrid, Plus, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/lib/portfolio";
 import { usePreferences } from "@/lib/preferences";
@@ -51,6 +51,14 @@ export function SidebarBody({
           icon={<LayoutGrid size={15} strokeWidth={1.8} />}
         >
           Dashboard
+        </NavItem>
+        <NavItem
+          onNavigate={onNavigate}
+          to="/strategy"
+          active={pathname === "/strategy"}
+          icon={<Compass size={15} strokeWidth={1.8} />}
+        >
+          Strategy
         </NavItem>
         {/* <NavItem
           to="/get-started"
