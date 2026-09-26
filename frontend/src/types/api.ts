@@ -56,4 +56,8 @@ export type GetExchangesResponse = {
 
 export type RefreshPricesResponse = {
   throttled: boolean;
+  /** `cooldown` or `in_progress`, when the server declined to pull. */
+  reason?: string | null;
+  /** When the next pull is allowed, ISO 8601. Null when nothing is holding. */
+  next_allowed_at?: string | null;
 };
