@@ -14,12 +14,21 @@ import {
 } from "@/lib/preferences";
 import {
   resetStrategySettings,
+  setProfitRule,
+  setRegimeCryptoShare,
+  setRule,
   setScenarioRate,
   setStrategySetting,
   TARGET_AGE,
   useStrategySettings,
 } from "@/lib/strategy-settings";
-import { SCENARIO_NAMES } from "@/lib/strategy";
+import {
+  MAX_HISTORY_DAYS,
+  SCENARIO_NAMES,
+  type Regime,
+  type RegimeMode,
+} from "@/lib/strategy";
+import { formatEurWhole } from "@/lib/format";
 import { SiteHeader } from "@/components/site-header";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import {
@@ -208,7 +217,7 @@ export function Settings() {
             </Row>
             <Row
               label="Monthly contribution"
-              description="Split between crypto and equity by the regime"
+              description="Split between BTC and stocks by the regime"
             >
               <NumberField
                 label="Monthly contribution"
@@ -257,6 +266,167 @@ export function Settings() {
                 </div>
               </Row>
             ))}
+          </Group>
+
+          <Group title="DCA rule" note="BTC vs its moving average">
+            <Row
+              label="Regime"
+              description="Follow the rule, or hold a regime by hand"
+            >
+              <PbSegmented
+                mono={false}
+                options={["Auto", "Defensive", "Risk-on"] as const}
+                value={
+                  strategy.regimeMode === "auto"
+                    ? "Auto"
+                    : strategy.regimeMode === "defensive"
+                      ? "Defensive"
+                      : "Risk-on"
+                }
+                onChange={(next) =>
+                  setStrategySetting(
+                    "regimeMode",
+                    (next === "Auto"
+                      ? "auto"
+                      : next === "Defensive"
+                        ? "defensive"
+                        : "risk-on") as RegimeMode,
+                  )
+                }
+              />
+            </Row>
+            <Row
+              label="Average"
+              description="Which moving average BTC is measured against"
+            >
+              <PbSegmented
+                options={["EMA", "SMA"] as const}
+                value={strategy.rule.average === "ema" ? "EMA" : "SMA"}
+                onChange={(next) =>
+                  setRule("average", next === "EMA" ? "ema" : "sma")
+                }
+              />
+            </Row>
+            <Row
+              label="Average length"
+              description={`Days. With the confirmation, fits in the ${MAX_HISTORY_DAYS} days of BTC history kept`}
+            >
+              <NumberField
+                label="Average length in days"
+                suffix="d"
+                width="w-[92px]"
+                integer
+                value={strategy.rule.window}
+                min={2}
+                max={MAX_HISTORY_DAYS - strategy.rule.confirmDays}
+                onCommit={(next) => setRule("window", next)}
+              />
+            </Row>
+            <Row
+              label="Confirmation"
+              description="Consecutive closes on one side before the regime switches"
+            >
+              <NumberField
+                label="Confirmation in days"
+                suffix="d"
+                width="w-[92px]"
+                integer
+                value={strategy.rule.confirmDays}
+                min={1}
+                max={MAX_HISTORY_DAYS - strategy.rule.window}
+                onCommit={(next) => setRule("confirmDays", next)}
+              />
+            </Row>
+            {(["risk-on", "defensive"] as const).map((regime: Regime) => {
+              const contribution = strategy.monthlyContribution;
+              const btc = strategy.splits[regime].crypto * contribution;
+              return (
+                <Row
+                  key={regime}
+                  label={
+                    regime === "risk-on"
+                      ? "Risk-on: to BTC"
+                      : "Defensive: to BTC"
+                  }
+                  description={`${formatEurWhole(btc)} BTC / ${formatEurWhole(contribution - btc)} stocks of ${formatEurWhole(contribution)}`}
+                >
+                  <NumberField
+                    label={`${regime} amount to BTC`}
+                    prefix="€"
+                    value={Math.round(btc * 100) / 100}
+                    min={0}
+                    max={contribution}
+                    onCommit={(next) =>
+                      contribution > 0 &&
+                      setRegimeCryptoShare(regime, next / contribution)
+                    }
+                  />
+                </Row>
+              );
+            })}
+          </Group>
+
+          <Group
+            title="Profit taking"
+            note="a signal on the Strategy page, never an order"
+          >
+            <Row
+              label="Days above the average"
+              description="Consecutive closes above before trimming BTC"
+            >
+              <NumberField
+                label="Days above the average"
+                suffix="d"
+                width="w-[92px]"
+                integer
+                value={strategy.profitRule.minDaysAbove}
+                min={1}
+                max={MAX_HISTORY_DAYS}
+                onCommit={(next) => setProfitRule("minDaysAbove", next)}
+              />
+            </Row>
+            <Row
+              label="BTC share over"
+              description="Of the whole portfolio, cash included"
+            >
+              <NumberField
+                label="BTC share threshold"
+                suffix="%"
+                width="w-[92px]"
+                value={Math.round(strategy.profitRule.maxBtcShare * 1e6) / 1e4}
+                min={0}
+                max={100}
+                onCommit={(next) => setProfitRule("maxBtcShare", next / 100)}
+              />
+            </Row>
+            <Row
+              label="Sell"
+              description="Share of the BTC held, once per run above"
+            >
+              <NumberField
+                label="Share of BTC to sell"
+                suffix="%"
+                width="w-[92px]"
+                value={Math.round(strategy.profitRule.sellFraction * 1e6) / 1e4}
+                min={0}
+                max={100}
+                onCommit={(next) => setProfitRule("sellFraction", next / 100)}
+              />
+            </Row>
+            <Row
+              label="Proceeds to S&P 500"
+              description={`The rest, ${Math.round((1 - strategy.profitRule.sp500Share) * 100)}%, to ex-US`}
+            >
+              <NumberField
+                label="Share of proceeds to the S&P 500"
+                suffix="%"
+                width="w-[92px]"
+                value={Math.round(strategy.profitRule.sp500Share * 1e6) / 1e4}
+                min={0}
+                max={100}
+                onCommit={(next) => setProfitRule("sp500Share", next / 100)}
+              />
+            </Row>
           </Group>
 
           <Group title="Account" note="Google, through the auth proxy">
@@ -427,6 +597,8 @@ function NumberField({
   value,
   onCommit,
   min,
+  max = Number.POSITIVE_INFINITY,
+  integer = false,
   prefix,
   suffix,
   width = "w-[120px]",
@@ -435,6 +607,9 @@ function NumberField({
   readonly value: number;
   readonly onCommit: (next: number) => void;
   readonly min: number;
+  readonly max?: number;
+  /** Whole numbers only, for day counts. */
+  readonly integer?: boolean;
   readonly prefix?: string;
   readonly suffix?: string;
   readonly width?: string;
@@ -447,7 +622,13 @@ function NumberField({
       return;
     }
     const parsed = Number(draft.replace(/\s/g, "").replace(",", "."));
-    if (draft.trim() !== "" && Number.isFinite(parsed) && parsed >= min) {
+    if (
+      draft.trim() !== "" &&
+      Number.isFinite(parsed) &&
+      parsed >= min &&
+      parsed <= max &&
+      (!integer || Number.isInteger(parsed))
+    ) {
       onCommit(parsed);
     }
     setDraft(null);

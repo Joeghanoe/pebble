@@ -6,21 +6,30 @@ import type { GetBtcDailyResponse } from "@/types/api";
 import { SiteHeader } from "@/components/site-header";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/lib/portfolio";
-import { TARGET_AGE, useStrategySettings } from "@/lib/strategy-settings";
+import {
+  setStrategySetting,
+  TARGET_AGE,
+  useStrategySettings,
+} from "@/lib/strategy-settings";
 import {
   addMonths,
   birthdayAt,
   bucketHoldings,
-  CONFIRM_DAYS,
   contiguousDailyCloses,
   detectRegime,
   evaluateScenarios,
   monthsBetween,
   progressTowardTarget,
-  REGIME_SPLIT,
-  SMA_WINDOW,
+  profitTakingSignal,
+  resolveRegime,
   splitContribution,
+  type AverageKind,
+  type ProfitRule,
+  type ProfitSignal,
+  type ActiveRegime,
   type Regime,
+  type RegimeMode,
+  type RegimeRule,
   type RegimeState,
   type ScenarioName,
   type ScenarioOutcome,
@@ -37,7 +46,9 @@ import {
   PbCard,
   PbCardHeader,
   PbEyebrow,
+  PbGhostButton,
   PbProjectionChart,
+  PbSegmented,
 } from "@/frontend/components/pebble";
 
 const REGIME_LABEL: Record<Regime, string> = {
@@ -76,6 +87,7 @@ function localToday(): string {
 export function Strategy() {
   const portfolio = usePortfolio();
   const settings = useStrategySettings();
+  const { average, window: span, confirmDays } = settings.rule;
   const { data: btc, isLoading: btcLoading } = useQuery({
     queryKey: ["btc-daily"],
     queryFn: () =>
@@ -90,10 +102,15 @@ export function Strategy() {
       contiguousDailyCloses(
         btc.closes.map((c) => ({ date: c.date, price: c.price_eur })),
       ),
+      { average, window: span, confirmDays },
     );
-  }, [btc]);
+  }, [btc, average, span, confirmDays]);
 
   const today = localToday();
+  // The profit rule is about Bitcoin itself, not every coin in the crypto bucket.
+  const btcValue = portfolio.positions
+    .filter((p) => p.asset.symbol.toUpperCase() === "BTC")
+    .reduce((sum, p) => sum + p.current_value_eur, 0);
   const holdings = bucketHoldings(portfolio.positions);
   const progress = progressTowardTarget(
     holdings,
@@ -105,11 +122,10 @@ export function Strategy() {
     : null;
   const months = targetDate ? monthsBetween(today, targetDate) : null;
 
-  // The projection needs a split even when the rule cannot name a regime yet.
-  // Defensive is the even split, so it is the one that favours neither side.
-  const activeRegime: Regime | null =
-    regime?.status === "established" ? regime.regime : null;
-  const split: Split = REGIME_SPLIT[activeRegime ?? "defensive"];
+  const active = resolveRegime(regime, settings.regimeMode);
+  // The projection needs a split even when there is no regime to follow yet.
+  // Defensive is the cautious one, so it is the one assumed.
+  const split: Split = settings.splits[active.regime ?? "defensive"];
 
   const loading = portfolio.isLoading || btcLoading;
 
@@ -125,6 +141,10 @@ export function Strategy() {
         <div className="grid grid-cols-1 gap-3.5 min-[980px]:grid-cols-2">
           <RegimeCard
             state={regime}
+            active={active}
+            mode={settings.regimeMode}
+            rule={settings.rule}
+            splits={settings.splits}
             hasCloses={(btc?.closes.length ?? 0) > 0}
             contribution={settings.monthlyContribution}
           />
@@ -136,6 +156,19 @@ export function Strategy() {
             includeCash={settings.includeCash}
           />
         </div>
+
+        <ProfitCard
+          signal={profitTakingSignal({
+            state: regime,
+            btcValue,
+            totalValue: portfolio.totalValue,
+            rule: settings.profitRule,
+            takenOn: settings.profitTakenOn,
+          })}
+          rule={settings.profitRule}
+          average={settings.rule.average}
+          today={today}
+        />
 
         {targetDate !== null && months !== null ? (
           <ScenariosCard
@@ -153,7 +186,7 @@ export function Strategy() {
             target={settings.targetAmount}
             contribution={settings.monthlyContribution}
             split={split}
-            splitFrom={activeRegime}
+            splitFrom={active}
           />
         ) : (
           <PbCard className="p-[18px]">
@@ -168,12 +201,35 @@ export function Strategy() {
 
 /* ── Regime ──────────────────────────────────────────────────────────────── */
 
+const MODE_OPTIONS = ["Auto", "Defensive", "Risk-on"] as const;
+type ModeOption = (typeof MODE_OPTIONS)[number];
+
+function modeOption(mode: RegimeMode): ModeOption {
+  return mode === "auto" ? "Auto" : (REGIME_LABEL[mode] as ModeOption);
+}
+
+function modeFromOption(option: ModeOption): RegimeMode {
+  return option === "Auto"
+    ? "auto"
+    : option === "Defensive"
+      ? "defensive"
+      : "risk-on";
+}
+
 function RegimeCard({
   state,
+  active,
+  mode,
+  rule,
+  splits,
   hasCloses,
   contribution,
 }: {
   readonly state: RegimeState | null;
+  readonly active: ActiveRegime;
+  readonly mode: RegimeMode;
+  readonly rule: RegimeRule;
+  readonly splits: Record<Regime, Split>;
   readonly hasCloses: boolean;
   readonly contribution: number;
 }) {
@@ -182,25 +238,55 @@ function RegimeCard({
       <PbCardHeader
         className="mb-3 p-0"
         title="Regime"
-        note={`BTC vs ${SMA_WINDOW}-day average · ${CONFIRM_DAYS}-day confirmation`}
-      />
-      <RegimeBody
-        state={state}
-        hasCloses={hasCloses}
-        contribution={contribution}
-      />
+        note={`BTC vs ${rule.window}-day ${rule.average.toUpperCase()} · ${rule.confirmDays}-day confirmation`}
+      >
+        <PbSegmented
+          mono={false}
+          options={MODE_OPTIONS}
+          value={modeOption(mode)}
+          onChange={(next) =>
+            setStrategySetting("regimeMode", modeFromOption(next))
+          }
+        />
+      </PbCardHeader>
+
+      {active.regime !== null && (
+        <div className="mb-3.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="text-[26px] font-semibold tracking-[-0.02em]">
+            {REGIME_LABEL[active.regime]}
+          </span>
+          <span className="font-number text-[11px] text-pb-muted">
+            {active.source === "manual"
+              ? `set by hand · rule says ${
+                  active.ruleRegime
+                    ? REGIME_LABEL[active.ruleRegime]
+                    : "nothing yet"
+                }`
+              : state?.status === "established"
+                ? `since ${state.since}`
+                : ""}
+          </span>
+        </div>
+      )}
+
+      <RuleReading state={state} rule={rule} hasCloses={hasCloses} />
+
+      {active.regime !== null && (
+        <MonthSplit split={splits[active.regime]} contribution={contribution} />
+      )}
     </PbCard>
   );
 }
 
-function RegimeBody({
+/** What the rule sees: the close against its average, and how close a switch is. */
+function RuleReading({
   state,
+  rule,
   hasCloses,
-  contribution,
 }: {
   readonly state: RegimeState | null;
+  readonly rule: RegimeRule;
   readonly hasCloses: boolean;
-  readonly contribution: number;
 }) {
   if (state === null) {
     return null;
@@ -212,9 +298,10 @@ function RegimeBody({
         {hasCloses
           ? `${state.availableDays} of ${state.requiredDays} consecutive daily BTC closes. `
           : "No BTC price history yet. "}
-        The rule needs a {SMA_WINDOW}-day average plus {CONFIRM_DAYS} days on
-        one side of it before it can name a regime. A price refresh backfills
-        the last year of BTC closes when the portfolio holds BTC.
+        The rule needs a {rule.window}-day {rule.average.toUpperCase()} plus{" "}
+        {rule.confirmDays} days on one side of it before it can name a regime. A
+        price refresh backfills the last year of BTC closes when the portfolio
+        holds BTC.
       </Notice>
     );
   }
@@ -233,43 +320,36 @@ function RegimeBody({
     const opposite = state.regime === "risk-on" ? "below" : "above";
     const next = state.regime === "risk-on" ? "Defensive" : "Risk-on";
     counterDays = state.daysTowardSwitch;
-    counterLabel = `${counterDays} / ${CONFIRM_DAYS} days ${opposite} · switches to ${next} at ${CONFIRM_DAYS}`;
+    counterLabel = `${counterDays} / ${rule.confirmDays} days ${opposite} · the rule switches to ${next} at ${rule.confirmDays}`;
   } else {
     counterDays = reading.streakDays;
     counterLabel =
       reading.side === "on"
         ? "On the average · no streak"
-        : `${counterDays} / ${CONFIRM_DAYS} days ${sideLabel} · sets the first regime at ${CONFIRM_DAYS}`;
+        : `${counterDays} / ${rule.confirmDays} days ${sideLabel} · sets the first regime at ${rule.confirmDays}`;
   }
 
   return (
     <>
-      {state.status === "established" ? (
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-[26px] font-semibold tracking-[-0.02em]">
-            {REGIME_LABEL[state.regime]}
-          </span>
-          <span className="font-number text-[11px] text-pb-muted">
-            since {state.since}
-          </span>
+      {state.status === "unestablished" && (
+        <div className="mb-3.5">
+          <Notice title="No regime from the rule yet">
+            There has been no run of {rule.confirmDays} consecutive closes on
+            one side of the average in the history available. Pick a regime by
+            hand above, or the projection assumes the Defensive split.
+          </Notice>
         </div>
-      ) : (
-        <Notice title="No regime yet">
-          There has been no run of {CONFIRM_DAYS} consecutive closes on one side
-          of the average in the history available, so the rule has nothing to
-          hold. The projection below assumes the even split until it does.
-        </Notice>
       )}
 
-      <div className="mt-3.5 grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <Stat
           eyebrow="BTC close"
           value={formatEurPrice(reading.close)}
           caption={reading.date}
         />
         <Stat
-          eyebrow={`${SMA_WINDOW}d SMA`}
-          value={formatEurPrice(reading.sma)}
+          eyebrow={`${rule.window}d ${rule.average.toUpperCase()}`}
+          value={formatEurPrice(reading.average)}
           caption={`BTC ${sideLabel} it`}
         />
         <Stat
@@ -281,40 +361,161 @@ function RegimeBody({
 
       <div className="mt-3.5">
         <PbEyebrow>Toward a switch</PbEyebrow>
-        <PbBar percent={(counterDays / CONFIRM_DAYS) * 100} color="#F7931A" />
+        <PbBar
+          percent={(counterDays / rule.confirmDays) * 100}
+          color="#F7931A"
+        />
         <span className="mt-1 block font-number text-[10.5px] text-pb-faint">
           {counterLabel}
         </span>
       </div>
-
-      {state.status === "established" && (
-        <MonthSplit regime={state.regime} contribution={contribution} />
-      )}
     </>
   );
 }
 
 function MonthSplit({
-  regime,
+  split,
   contribution,
 }: {
-  readonly regime: Regime;
+  readonly split: Split;
   readonly contribution: number;
 }) {
-  const split = REGIME_SPLIT[regime];
   const amounts = splitContribution(contribution, split);
   return (
     <div className="mt-3.5 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-pb-hairline pt-3">
       <PbEyebrow>This month</PbEyebrow>
       <span className="font-number text-[15px] font-medium tabular-nums">
-        {formatEurWhole(amounts.crypto)} crypto
+        {formatEurWhole(amounts.crypto)} BTC
         <span className="px-1.5 text-pb-faint">/</span>
-        {formatEurWhole(amounts.equity)} equity
+        {formatEurWhole(amounts.equity)} stocks
       </span>
       <span className="font-number text-[10.5px] text-pb-faint">
         {Math.round(split.crypto * 100)}/{Math.round(split.equity * 100)} of{" "}
         {formatEurWhole(contribution)}
       </span>
+    </div>
+  );
+}
+
+/* ── Profit taking ───────────────────────────────────────────────────────── */
+
+function ProfitCard({
+  signal,
+  rule,
+  average,
+  today,
+}: {
+  readonly signal: ProfitSignal;
+  readonly rule: ProfitRule;
+  readonly average: AverageKind;
+  readonly today: string;
+}) {
+  const pct = (fraction: number) => `${Math.round(fraction * 1000) / 10}%`;
+  const condition = `${rule.minDaysAbove} days above the ${average.toUpperCase()} and BTC over ${pct(rule.maxBtcShare)} of the portfolio`;
+
+  return (
+    <PbCard className="p-[18px]">
+      <PbCardHeader
+        className="mb-3 p-0"
+        title="Profit taking"
+        note={`sell ${pct(rule.sellFraction)} of BTC once per run · ${pct(rule.sp500Share)} S&P 500 / ${pct(1 - rule.sp500Share)} ex-US`}
+      >
+        {signal.status === "due" && (
+          <PbGhostButton
+            onClick={() => setStrategySetting("profitTakenOn", today)}
+          >
+            Mark as done
+          </PbGhostButton>
+        )}
+        {signal.status === "done" && (
+          <PbGhostButton
+            onClick={() => setStrategySetting("profitTakenOn", null)}
+          >
+            Undo
+          </PbGhostButton>
+        )}
+      </PbCardHeader>
+
+      {signal.status === "unavailable" && (
+        <p className="text-[11.5px] text-pb-muted">
+          Needs the same BTC history as the regime rule.
+        </p>
+      )}
+
+      {signal.status === "waiting" && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Condition
+            label="Days above"
+            value={`${signal.daysAbove} / ${rule.minDaysAbove}`}
+            percent={(signal.daysAbove / rule.minDaysAbove) * 100}
+            met={signal.daysAbove >= rule.minDaysAbove}
+          />
+          <Condition
+            label="BTC share of portfolio"
+            value={`${pct(signal.btcShare)} / over ${pct(rule.maxBtcShare)}`}
+            percent={(signal.btcShare / rule.maxBtcShare) * 100}
+            met={signal.btcShare > rule.maxBtcShare}
+          />
+        </div>
+      )}
+
+      {signal.status === "due" && (
+        <div className="rounded-[11px] border border-[rgba(247,147,26,.35)] bg-[rgba(247,147,26,.06)] px-3.5 py-3">
+          <span className="block text-[12.5px] font-semibold">
+            Take profit: sell {formatEurWhole(signal.sellEur)} of BTC
+          </span>
+          <span className="mt-1 block font-number text-[11.5px] text-pb-text-3">
+            then buy {formatEurWhole(signal.sp500Eur)} S&amp;P 500 ·{" "}
+            {formatEurWhole(signal.exUsEur)} ex-US
+          </span>
+          <span className="mt-1 block text-[10.5px] text-pb-faint">
+            {signal.daysAbove} days above · BTC is {pct(signal.btcShare)} of the
+            portfolio. Pebble places no orders; mark it done once you have.
+          </span>
+        </div>
+      )}
+
+      {signal.status === "done" && (
+        <p className="text-[11.5px] text-pb-muted">
+          Taken on {signal.takenOn} for this run. The rule re-arms after BTC
+          closes below the {average.toUpperCase()}.
+        </p>
+      )}
+
+      {signal.status === "waiting" && (
+        <p className="mt-2.5 text-[10.5px] text-pb-faint">
+          Fires when both hold: {condition}.
+        </p>
+      )}
+    </PbCard>
+  );
+}
+
+function Condition({
+  label,
+  value,
+  percent,
+  met,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly percent: number;
+  readonly met: boolean;
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <PbEyebrow>{label}</PbEyebrow>
+        <span
+          className={cn(
+            "font-number text-[11.5px] tabular-nums",
+            met ? "text-pb-up" : "text-pb-text-2",
+          )}
+        >
+          {value}
+        </span>
+      </div>
+      <PbBar percent={percent} color={met ? "#34D399" : "#8B5CF6"} />
     </div>
   );
 }
@@ -430,7 +631,7 @@ function ScenariosCard({
   readonly target: number;
   readonly contribution: number;
   readonly split: Split;
-  readonly splitFrom: Regime | null;
+  readonly splitFrom: ActiveRegime;
 }) {
   const length = outcomes[0]?.path.length ?? 0;
   const dates = Array.from({ length }, (_, i) => addMonths(today, i));
@@ -441,9 +642,11 @@ function ScenariosCard({
         className="mb-1 p-0"
         title="Projection"
         note={`${formatEurWhole(contribution)}/mo at ${Math.round(split.crypto * 100)}/${Math.round(split.equity * 100)} · ${
-          splitFrom
-            ? `${REGIME_LABEL[splitFrom]} split`
-            : "no regime, even split"
+          splitFrom.regime === null
+            ? "no regime yet, Defensive split assumed"
+            : `${REGIME_LABEL[splitFrom.regime]} split${
+                splitFrom.source === "manual" ? " (set by hand)" : ""
+              }`
         }`}
       />
 

@@ -6,21 +6,27 @@ import {
   bucketHoldings,
   CONFIRM_DAYS,
   contiguousDailyCloses,
+  DEFAULT_PROFIT_RULE,
+  ema,
   detectRegime,
   evaluateScenarios,
   MIN_HISTORY_DAYS,
   monthlyRate,
   monthsBetween,
+  profitTakingSignal,
   progressTowardTarget,
   projectPath,
   projectValue,
   REGIME_SPLIT,
   requiredContribution,
+  resolveRegime,
   sma,
   SMA_WINDOW,
   splitContribution,
   type DailyClose,
   type ProjectionInput,
+  type RegimeRule,
+  type RegimeState,
   type ScenarioRates,
 } from "../src/lib/strategy";
 
@@ -47,6 +53,12 @@ function regimeSeries(pattern: string): DailyClose[] {
 function letterDate(n: number): string {
   return addDays(START, SMA_WINDOW - 1 + n - 1);
 }
+
+const SMA_RULE: RegimeRule = {
+  average: "sma",
+  window: SMA_WINDOW,
+  confirmDays: CONFIRM_DAYS,
+};
 
 const A = (n: number) => "A".repeat(n);
 const B = (n: number) => "B".repeat(n);
@@ -223,7 +235,7 @@ describe("detectRegime", () => {
   });
 
   test("a close exactly on the average is on neither side", () => {
-    const state = detectRegime(closesFrom(Array(260).fill(100)));
+    const state = detectRegime(closesFrom(Array(260).fill(100)), SMA_RULE);
     expect(state.status).toBe("unestablished");
     if (state.status !== "unestablished") throw new Error("unreachable");
     expect(state.reading).toMatchObject({
@@ -234,26 +246,25 @@ describe("detectRegime", () => {
   });
 
   test("reports the latest close against its average", () => {
-    const state = detectRegime(regimeSeries(A(CONFIRM_DAYS + 1)));
+    const state = detectRegime(regimeSeries(A(CONFIRM_DAYS + 1)), SMA_RULE);
     if (state.status !== "established") throw new Error("unreachable");
     const { reading } = state;
     // 169 flat days at 100 and 31 at 1000 in the window.
     const expected = (169 * 100 + 31 * 1000) / 200;
     expect(reading.close).toBe(1000);
-    expect(reading.sma).toBeCloseTo(expected, 9);
+    expect(reading.average).toBeCloseTo(expected, 9);
     expect(reading.distancePct).toBeCloseTo(
       ((1000 - expected) / expected) * 100,
       9,
     );
   });
 
-  test("splits this month's contribution by the regime", () => {
-    expect(splitContribution(1000, REGIME_SPLIT.defensive)).toEqual({
-      crypto: 500,
-      equity: 500,
-    });
-    expect(splitContribution(1000, REGIME_SPLIT["risk-on"])).toEqual({
-      crypto: 250,
+  test("splits this month's contribution the spreadsheet's way", () => {
+    const riskOn = splitContribution(1500, REGIME_SPLIT["risk-on"]);
+    expect(riskOn.crypto).toBeCloseTo(500, 9);
+    expect(riskOn.equity).toBeCloseTo(1000, 9);
+    expect(splitContribution(1500, REGIME_SPLIT.defensive)).toEqual({
+      crypto: 750,
       equity: 750,
     });
   });
@@ -321,7 +332,9 @@ describe("projectPath", () => {
     // Two months: the first payment grows one month, per bucket.
     const two = projectValue({ ...input, months: 2 });
     expect(two).toBeCloseTo(
-      250 * (1 + monthlyRate(0.5)) + 750 * (1 + monthlyRate(0.1)) + 1000,
+      (1000 / 3) * (1 + monthlyRate(0.5)) +
+        (2000 / 3) * (1 + monthlyRate(0.1)) +
+        1000,
       9,
     );
   });
@@ -518,5 +531,181 @@ describe("progressTowardTarget", () => {
       pctOfTarget: 40,
       start: { cash: 5_000 },
     });
+  });
+});
+
+/* ── EMA ─────────────────────────────────────────────────────────────────── */
+
+describe("ema", () => {
+  test("seeds with the SMA of the first window, then moves by 2 / (n + 1)", () => {
+    // Window 3: α = 0.5. Seed = mean(1, 2, 3) = 2; then 2 + 0.5·(4 − 2) = 3;
+    // then 3 + 0.5·(8 − 3) = 5.5.
+    expect(ema([1, 2, 3, 4, 8], 3)).toEqual([null, null, 2, 3, 5.5]);
+  });
+
+  test("reacts faster than the SMA to a jump", () => {
+    const values = [...Array(200).fill(100), ...Array(20).fill(200)];
+    const e = ema(values, 200)[219] as number;
+    const s = sma(values, 200)[219] as number;
+    expect(e).toBeGreaterThan(s);
+    expect(s).toBeCloseTo(110, 9);
+  });
+
+  test("needs the same history as an SMA of the same length", () => {
+    const out = ema(Array(199).fill(1), 200);
+    expect(out.every((v) => v === null)).toBe(true);
+  });
+});
+
+/* ── Configurable rule ───────────────────────────────────────────────────── */
+
+describe("detectRegime with a configured rule", () => {
+  test("the default rule is the spreadsheet's: 200-day EMA, 30 days", () => {
+    const state = detectRegime(regimeSeries(A(30) + B(1)));
+    expect(state).toMatchObject({
+      status: "established",
+      regime: "risk-on",
+      since: letterDate(30),
+    });
+  });
+
+  test("the EMA and the SMA can disagree about the latest side", () => {
+    // A long flat base, a 40-day spike to 300, then a dip to 150. The SMA
+    // (~141) still sits under the dip; the EMA (~165) has risen past it.
+    const closes = closesFrom([
+      ...Array(260).fill(100),
+      ...Array(40).fill(300),
+      ...Array(5).fill(150),
+    ]);
+    const bySma = detectRegime(closes, SMA_RULE);
+    const byEma = detectRegime(closes);
+    if (bySma.status !== "established" || byEma.status !== "established") {
+      throw new Error("unreachable");
+    }
+    expect(bySma.reading.side).toBe("above");
+    expect(byEma.reading.side).toBe("below");
+  });
+
+  test("a shorter confirmation switches sooner", () => {
+    const rule: RegimeRule = { average: "sma", window: 200, confirmDays: 10 };
+    const state = detectRegime(regimeSeries(A(10) + B(1)), rule);
+    expect(state).toMatchObject({ regime: "risk-on", since: letterDate(10) });
+  });
+
+  test("the history needed follows the rule's lengths", () => {
+    const rule: RegimeRule = { average: "ema", window: 50, confirmDays: 5 };
+    expect(detectRegime(closesFrom(Array(54).fill(1)), rule)).toMatchObject({
+      status: "insufficient",
+      requiredDays: 55,
+    });
+  });
+
+  test("rejects a confirmation that is not a positive whole number", () => {
+    expect(() =>
+      detectRegime(regimeSeries(A(31)), { ...SMA_RULE, confirmDays: 0 }),
+    ).toThrow(RangeError);
+  });
+});
+
+describe("resolveRegime", () => {
+  const riskOn = detectRegime(regimeSeries(A(31)));
+
+  test("auto follows the rule", () => {
+    expect(resolveRegime(riskOn, "auto")).toEqual({
+      regime: "risk-on",
+      source: "rule",
+      ruleRegime: "risk-on",
+    });
+  });
+
+  test("a manual regime wins, and the rule's answer is kept beside it", () => {
+    expect(resolveRegime(riskOn, "defensive")).toEqual({
+      regime: "defensive",
+      source: "manual",
+      ruleRegime: "risk-on",
+    });
+  });
+
+  test("auto without an established regime has nothing to follow", () => {
+    expect(resolveRegime(null, "auto").regime).toBeNull();
+  });
+});
+
+/* ── Profit taking ───────────────────────────────────────────────────────── */
+
+describe("profitTakingSignal", () => {
+  // 199 flat days then n days far above: the streak is n days long.
+  const aboveFor = (n: number, rule?: RegimeRule): RegimeState =>
+    detectRegime(regimeSeries(A(n)), rule);
+  const today = (state: RegimeState) =>
+    state.status === "insufficient" ? "" : state.reading.date;
+
+  const base = {
+    btcValue: 10_000,
+    totalValue: 25_000, // 40% BTC
+    rule: DEFAULT_PROFIT_RULE,
+    takenOn: null,
+  };
+
+  test("waits for 150 days above", () => {
+    const signal = profitTakingSignal({ ...base, state: aboveFor(149) });
+    expect(signal).toMatchObject({ status: "waiting", daysAbove: 149 });
+  });
+
+  test("waits while BTC is 35% of the portfolio or less", () => {
+    const signal = profitTakingSignal({
+      ...base,
+      state: aboveFor(150),
+      totalValue: 10_000 / 0.35,
+    });
+    expect(signal.status).toBe("waiting");
+  });
+
+  test("fires with both: sell 5% of BTC, 60/40 into S&P 500 and ex-US", () => {
+    const signal = profitTakingSignal({ ...base, state: aboveFor(150) });
+    expect(signal).toMatchObject({ status: "due", daysAbove: 150 });
+    if (signal.status !== "due") throw new Error("unreachable");
+    expect(signal.btcShare).toBeCloseTo(0.4, 9);
+    expect(signal.sellEur).toBeCloseTo(500, 9);
+    expect(signal.sp500Eur).toBeCloseTo(300, 9);
+    expect(signal.exUsEur).toBeCloseTo(200, 9);
+  });
+
+  test("once done, stays done for the rest of the same run", () => {
+    const state = aboveFor(160);
+    const takenOn = addDays(today(state), -5);
+    expect(profitTakingSignal({ ...base, state, takenOn })).toEqual({
+      status: "done",
+      takenOn,
+    });
+  });
+
+  test("re-arms for a new run after a close below", () => {
+    // Taken during an earlier run; since then a close below broke it and a new
+    // 150-day run has formed.
+    const pattern = A(30) + B(1) + A(150);
+    const state = detectRegime(regimeSeries(pattern));
+    const takenOn = letterDate(20); // inside the first run
+    const signal = profitTakingSignal({ ...base, state, takenOn });
+    expect(signal.status).toBe("due");
+  });
+
+  test("a streak older than the history still counts as the same run", () => {
+    // The streak starts on the first averaged day, so the sale may predate
+    // what the series can show.
+    const state = aboveFor(160);
+    if (state.status === "insufficient") throw new Error("unreachable");
+    expect(state.reading.streakFromStart).toBe(true);
+    const signal = profitTakingSignal({
+      ...base,
+      state,
+      takenOn: "2020-01-01",
+    });
+    expect(signal.status).toBe("done");
+  });
+
+  test("says nothing without enough history", () => {
+    const state = detectRegime(closesFrom([1, 2, 3]));
+    expect(profitTakingSignal({ ...base, state }).status).toBe("unavailable");
   });
 });
