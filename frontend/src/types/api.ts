@@ -61,3 +61,13 @@ export type RefreshPricesResponse = {
   /** When the next pull is allowed, ISO 8601. Null when nothing is holding. */
   next_allowed_at?: string | null;
 };
+
+export type BtcDailyClose = {
+  date: string;
+  price_eur: number;
+};
+
+/** A year of daily BTC closes as cached, oldest first. Gaps are not filled. */
+export type GetBtcDailyResponse = {
+  closes: BtcDailyClose[];
+};

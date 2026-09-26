@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint .",
+    "test": "bun test tests",
     "format": "prettier --write .",
     "preview": "vite preview",
     "generate-client": "openapi-ts"

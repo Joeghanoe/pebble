@@ -211,5 +211,14 @@ class GetPositionHistoryResponse(SQLModel):
     points: list[PositionHistoryPoint]
 
 
+class BtcDailyClose(SQLModel):
+    date: str
+    price_eur: float
+
+
+class GetBtcDailyResponse(SQLModel):
+    closes: list[BtcDailyClose]
+
+
 class Message(SQLModel):
     message: str

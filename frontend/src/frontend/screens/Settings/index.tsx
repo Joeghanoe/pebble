@@ -12,6 +12,14 @@ import {
   usePreferences,
   type Preferences,
 } from "@/lib/preferences";
+import {
+  resetStrategySettings,
+  setScenarioRate,
+  setStrategySetting,
+  TARGET_AGE,
+  useStrategySettings,
+} from "@/lib/strategy-settings";
+import { SCENARIO_NAMES } from "@/lib/strategy";
 import { SiteHeader } from "@/components/site-header";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import {
@@ -30,6 +38,7 @@ import {
  */
 export function Settings() {
   const prefs = usePreferences();
+  const strategy = useStrategySettings();
   const queryClient = useQueryClient();
 
   const { data: exchangesData } = useQuery({
@@ -165,6 +174,91 @@ export function Settings() {
             </Row>
           </Group>
 
+          <Group title="Strategy" note="target, contribution, scenarios">
+            <Row
+              label="Target"
+              description="What the portfolio should be worth"
+            >
+              <NumberField
+                label="Target amount"
+                prefix="€"
+                value={strategy.targetAmount}
+                min={1}
+                onCommit={(next) => setStrategySetting("targetAmount", next)}
+              />
+            </Row>
+            <Row
+              label="Birthdate"
+              description={`The target is due on your ${TARGET_AGE}th birthday`}
+            >
+              <input
+                type="date"
+                aria-label="Birthdate"
+                value={strategy.birthdate ?? ""}
+                onChange={(event) =>
+                  setStrategySetting(
+                    "birthdate",
+                    /^\d{4}-\d{2}-\d{2}$/.test(event.target.value)
+                      ? event.target.value
+                      : null,
+                  )
+                }
+                className={FIELD_CLASS}
+              />
+            </Row>
+            <Row
+              label="Monthly contribution"
+              description="Split between crypto and equity by the regime"
+            >
+              <NumberField
+                label="Monthly contribution"
+                prefix="€"
+                value={strategy.monthlyContribution}
+                min={0}
+                onCommit={(next) =>
+                  setStrategySetting("monthlyContribution", next)
+                }
+              />
+            </Row>
+            <Row
+              label="Count sideline cash"
+              description="Include the cash buffer in progress toward the target"
+            >
+              <PbToggle
+                label="Count sideline cash"
+                checked={strategy.includeCash}
+                onChange={(next) => setStrategySetting("includeCash", next)}
+              />
+            </Row>
+            {SCENARIO_NAMES.map((name) => (
+              <Row
+                key={name}
+                label={`${name[0].toUpperCase()}${name.slice(1)} scenario`}
+                description="Annual return · crypto / equity"
+              >
+                <div className="flex items-center gap-1.5">
+                  {(["crypto", "equity"] as const).map((bucket) => (
+                    <NumberField
+                      key={bucket}
+                      label={`${name} ${bucket} annual return`}
+                      suffix="%"
+                      width="w-[76px]"
+                      // Percent on screen, a fraction in storage. Rounded so
+                      // 0.15 × 100 does not print as 15.000000000000002.
+                      value={
+                        Math.round(strategy.scenarios[name][bucket] * 1e6) / 1e4
+                      }
+                      min={-99.99}
+                      onCommit={(next) =>
+                        setScenarioRate(name, bucket, next / 100)
+                      }
+                    />
+                  ))}
+                </div>
+              </Row>
+            ))}
+          </Group>
+
           <Group title="Account" note="Google, through the auth proxy">
             <Row
               label={me?.email || "Signed in"}
@@ -243,6 +337,7 @@ export function Settings() {
                   ) as (keyof Preferences)[]) {
                     setPreference(key, DEFAULT_PREFERENCES[key]);
                   }
+                  resetStrategySettings();
                   toast.success("Preferences reset.");
                 }}
               >
@@ -313,5 +408,71 @@ function DangerButton({ className, ...props }: React.ComponentProps<"button">) {
       style={{ borderColor: "rgba(248,113,113,.3)" }}
       {...props}
     />
+  );
+}
+
+const FIELD_CLASS =
+  "h-[30px] rounded-[9px] border border-pb-input bg-pb-raised px-2.5 font-number text-[12px] tabular-nums outline-none focus:border-[rgba(247,147,26,.55)]";
+
+/**
+ * A number typed as text and committed on blur or Enter.
+ *
+ * Writing on every keystroke would store the half-typed `1` of `1000` and redraw
+ * the Strategy view around it, so this field holds a draft and only writes a
+ * value that parses and clears `min`. Anything else snaps back to the stored
+ * value. Accepts a decimal comma, since that is how every figure here is printed.
+ */
+function NumberField({
+  label,
+  value,
+  onCommit,
+  min,
+  prefix,
+  suffix,
+  width = "w-[120px]",
+}: {
+  readonly label: string;
+  readonly value: number;
+  readonly onCommit: (next: number) => void;
+  readonly min: number;
+  readonly prefix?: string;
+  readonly suffix?: string;
+  readonly width?: string;
+}) {
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const shown = draft ?? String(value).replace(".", ",");
+
+  function commit() {
+    if (draft === null) {
+      return;
+    }
+    const parsed = Number(draft.replace(/\s/g, "").replace(",", "."));
+    if (draft.trim() !== "" && Number.isFinite(parsed) && parsed >= min) {
+      onCommit(parsed);
+    }
+    setDraft(null);
+  }
+
+  return (
+    <label className={cn(FIELD_CLASS, "flex items-center gap-1", width)}>
+      {prefix && <span className="text-pb-faint">{prefix}</span>}
+      <input
+        aria-label={label}
+        inputMode="decimal"
+        value={shown}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            commit();
+          }
+          if (event.key === "Escape") {
+            setDraft(null);
+          }
+        }}
+        className="w-full min-w-0 bg-transparent text-right outline-none"
+      />
+      {suffix && <span className="text-pb-faint">{suffix}</span>}
+    </label>
   );
 }

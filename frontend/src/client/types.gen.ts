@@ -155,6 +155,10 @@ export type RefreshPricesApiPricesRefreshPostResponse = {
   [key: string]: unknown;
 };
 
+export type GetBtcDailyApiPricesBtcDailyGetResponse = {
+  [key: string]: unknown;
+};
+
 export type CreateTransactionApiTransactionsPostData = {
   requestBody: TransactionCreate;
 };
