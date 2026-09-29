@@ -1,8 +1,10 @@
 import * as React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronDown, X } from "lucide-react";
 import { toast } from "sonner";
+import { VenuesService } from "@/client";
+import type { GetVenuesResponse } from "@/types/api";
 import { api } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -11,7 +13,24 @@ import { usePreferences } from "@/lib/preferences";
 import { formatEur, formatEurPrice, formatUnits } from "@/lib/format";
 import { PbDot, PbGhostButton, PbSegmented } from "./pebble/primitives";
 
-type Side = "Buy" | "Sell";
+type Side = "Buy" | "Sell" | "Move";
+
+/** Cash is deposited and withdrawn, not bought and sold; the ledger types are the same. */
+const SIDE_LABEL: Record<"asset" | "cash", Record<Side, string>> = {
+  asset: { Buy: "Buy", Sell: "Sell", Move: "Move" },
+  cash: { Buy: "Deposit", Sell: "Withdraw", Move: "Move" },
+};
+
+const SIDES: readonly Side[] = ["Buy", "Sell", "Move"];
+
+/** Units held at a venue; an empty name is the unassigned history. */
+function heldAt(
+  venues: readonly { venue: string | null; units: number }[],
+  venue: string,
+): number {
+  const name = venue.trim() || null;
+  return venues.find((v) => v.venue === name)?.units ?? 0;
+}
 
 const PRESETS = [100, 250, 500, 1000];
 
@@ -37,7 +56,7 @@ interface Props {
  * The transaction dialog.
  *
  * The two things a fill is: what left your account and what arrived. Both are
- * typed, and the unit price is read off them — €500 for 0,006 BTC is €83.333,33
+ * typed, along with where it happened, and the unit price is read off them — €500 for 0,006 BTC is €83.333,33
  * a coin, whatever the feed says bitcoin costs today. The live quote only seeds
  * the quantity for a same-day entry; it is a convenience, never the record,
  * because saving a back-dated buy at today's price books the wrong cost basis.
@@ -94,11 +113,27 @@ function TransactionForm({
   const position: HoldingRow | undefined =
     positions.find((p) => p.asset.id === selectedId) ?? positions[0];
 
+  const { data: venuesData } = useQuery({
+    queryKey: ["venues"],
+    queryFn: () =>
+      VenuesService.listVenuesApiVenuesGet() as unknown as Promise<GetVenuesResponse>,
+  });
+  const knownVenues = (venuesData?.venues ?? []).map((v) => v.name);
+  const holdings = position?.venues ?? [];
+
+  // Where this position mostly sits is the likeliest place for the next entry,
+  // and the place a move most likely leaves from.
+  const defaultVenue = holdings.find((h) => h.venue !== null)?.venue ?? "";
+  const [venueOverride, setVenueOverride] = React.useState<string | null>(null);
+  const venue = venueOverride ?? defaultVenue;
+  const [toVenue, setToVenue] = React.useState("");
+
   // A euro costs a euro: for cash the amount, the quantity and the price are
   // one number, so the dialog asks for it once. "Amount received" for selling
   // euros described nothing — you withdraw cash, you do not receive it.
   const isCash = position?.asset.type === "cash";
 
+  const isMove = side === "Move";
   const livePrice = position?.unitPrice ?? null;
   const spendValue = decimal(spend) ?? 0;
   const spendIsValid = spendValue > 0;
@@ -108,9 +143,14 @@ function TransactionForm({
   // same-day entry; once a quantity is entered it stands, including for a
   // back-dated fill the quote knows nothing about.
   const typedUnits = unitsOverride === null ? null : decimal(unitsOverride);
-  const units =
-    typedUnits ??
-    (spendIsValid && livePrice && livePrice > 0 ? spendValue / livePrice : 0);
+  const units = isMove
+    ? isCash
+      ? spendValue
+      : (typedUnits ?? 0)
+    : (typedUnits ??
+      (spendIsValid && livePrice && livePrice > 0
+        ? spendValue / livePrice
+        : 0));
 
   // Always the price this transaction was actually filled at: €500 for 0,006
   // BTC is €83.333,33 a coin, whatever the feed says bitcoin costs today.
@@ -119,7 +159,9 @@ function TransactionForm({
   const balanceAfter = position
     ? side === "Buy"
       ? position.units_held + units
-      : position.units_held - units
+      : side === "Sell"
+        ? position.units_held - units
+        : position.units_held
     : 0;
 
   const newAverage =
@@ -146,6 +188,7 @@ function TransactionForm({
       }
       void queryClient.invalidateQueries({ queryKey: ["positions"] });
       void queryClient.invalidateQueries({ queryKey: ["net-worth"] });
+      void queryClient.invalidateQueries({ queryKey: ["venues"] });
       toast.success("Transaction saved.");
       onClose();
     },
@@ -158,6 +201,25 @@ function TransactionForm({
     if (!position) {
       return "Add a position before logging a transaction.";
     }
+    if (date > new Date().toISOString().slice(0, 10)) {
+      return "That date is in the future.";
+    }
+    if (isMove) {
+      if (units <= 0) {
+        return `Enter ${isCash ? "an amount" : "a quantity"} greater than zero.`;
+      }
+      if (!toVenue.trim()) {
+        return "Say where it moved to.";
+      }
+      if (toVenue.trim() === venue.trim()) {
+        return "Pick two different venues.";
+      }
+      const available = heldAt(holdings, venue);
+      if (units > available + 1e-9) {
+        return `${venue.trim() || "Unassigned"} holds ${formatUnits(available, prefs.fullPrecision)} ${position.asset.symbol}.`;
+      }
+      return null;
+    }
     if (!spendIsValid) {
       return "Enter an amount greater than zero.";
     }
@@ -166,11 +228,11 @@ function TransactionForm({
         ? "Enter a quantity greater than zero."
         : `No live price for ${position.asset.symbol} — enter the quantity yourself.`;
     }
-    if (date > new Date().toISOString().slice(0, 10)) {
-      return "That date is in the future.";
-    }
     if (side === "Sell" && units > position.units_held) {
       return `You hold ${formatUnits(position.units_held, prefs.fullPrecision)} ${position.asset.symbol}.`;
+    }
+    if (side === "Sell" && units > heldAt(holdings, venue) + 1e-9) {
+      return `${venue.trim() || "Unassigned"} holds ${formatUnits(heldAt(holdings, venue), prefs.fullPrecision)} ${position.asset.symbol}. Move it there first, or pick the venue it is at.`;
     }
     return null;
   }
@@ -185,12 +247,16 @@ function TransactionForm({
     createTx.mutate({
       assetId: position.asset.id,
       date,
-      type: side === "Buy" ? "buy" : "sell",
+      type: side === "Buy" ? "buy" : side === "Sell" ? "sell" : "move",
       units,
-      eurAmount: spendValue,
+      // A move carries no money; the API zeroes it either way.
+      eurAmount: isMove ? 0 : spendValue,
+      venue: venue.trim() || null,
+      toVenue: isMove ? toVenue.trim() : null,
     });
   }
 
+  const labels = SIDE_LABEL[isCash ? "cash" : "asset"];
   const label =
     "font-number text-[10px] tracking-[0.11em] text-pb-muted uppercase";
   // 40px rather than 34: every control here has to clear 16px of text (see
@@ -207,7 +273,11 @@ function TransactionForm({
     <>
       <div className="flex items-center gap-2 border-b border-pb-subtle px-[18px] py-[15px]">
         <Dialog.Title className="text-[13.5px] font-semibold">
-          {side === "Sell" ? "Sell" : "Add"} transaction
+          {isMove
+            ? "Move between venues"
+            : side === "Sell"
+              ? "Sell transaction"
+              : "Add transaction"}
         </Dialog.Title>
         <span className="font-number text-[10.5px] text-pb-faint">
           {position?.asset.symbol ?? "—"}
@@ -222,14 +292,18 @@ function TransactionForm({
         <PbSegmented
           grow
           mono={false}
-          options={["Buy", "Sell"] as const}
-          value={side}
-          onChange={setSide}
+          options={SIDES.map((option) => labels[option])}
+          value={labels[side]}
+          onChange={(next) =>
+            setSide(SIDES.find((option) => labels[option] === next) ?? "Buy")
+          }
           itemClassName="py-1.5 text-[12px] font-semibold"
           activeStyle={(option) =>
-            option === "Buy"
+            option === labels.Buy
               ? { background: "rgba(52,211,153,.14)", color: "#34D399" }
-              : { background: "rgba(248,113,113,.14)", color: "#F87171" }
+              : option === labels.Sell
+                ? { background: "rgba(248,113,113,.14)", color: "#F87171" }
+                : { background: "rgba(139,92,246,.18)", color: "#C084FC" }
           }
         />
 
@@ -252,6 +326,7 @@ function TransactionForm({
                 onChange={(event) => {
                   setSelectedId(Number(event.target.value));
                   setUnitsOverride(null);
+                  setVenueOverride(null);
                 }}
                 className="absolute inset-0 cursor-pointer text-[16px] opacity-0"
               >
@@ -283,32 +358,96 @@ function TransactionForm({
           </label>
         </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className={label}>
-            {isCash
-              ? `Amount ${side === "Sell" ? "withdrawn" : "deposited"} (€)`
-              : `Amount ${side === "Sell" ? "received" : "spent"} (€)`}
-          </span>
-          <input
-            inputMode="decimal"
-            value={spend}
-            onChange={(event) => setSpend(event.target.value)}
-            className={cn(input, "h-12 text-[20px]")}
-          />
-        </label>
-
-        <div className="flex flex-wrap gap-2">
-          {PRESETS.map((preset) => (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => setSpend(String(preset))}
-              className="rounded-[7px] border border-pb-input bg-pb-raised px-2.5 py-1 font-number text-[11px] text-pb-text-3 transition-colors hover:border-[rgba(247,147,26,.4)] hover:text-pb-accent"
-            >
-              {formatEur(preset).replace(",00", "")}
-            </button>
+        <datalist id="pb-venues">
+          {knownVenues.map((name) => (
+            <option key={name} value={name} />
           ))}
-        </div>
+        </datalist>
+
+        {isMove ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className="flex flex-col gap-1.5">
+              <span className={label}>From</span>
+              <span className={cn(field, "relative")}>
+                <span className="min-w-0 flex-1 truncate text-[14px]">
+                  {venue.trim() || "Unassigned"}
+                </span>
+                <ChevronDown
+                  size={12}
+                  strokeWidth={2.2}
+                  className="text-pb-faintest"
+                />
+                <select
+                  aria-label="From venue"
+                  value={venue.trim()}
+                  onChange={(event) => setVenueOverride(event.target.value)}
+                  className="absolute inset-0 cursor-pointer text-[16px] opacity-0"
+                >
+                  {holdings.map((h) => (
+                    <option key={h.venue ?? ""} value={h.venue ?? ""}>
+                      {h.venue ?? "Unassigned"} ·{" "}
+                      {formatUnits(h.units, prefs.fullPrecision)}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className={label}>To</span>
+              <input
+                list="pb-venues"
+                value={toVenue}
+                onChange={(event) => setToVenue(event.target.value)}
+                placeholder="e.g. MetaMask"
+                className={cn(field, "w-full text-[16px] outline-none")}
+              />
+            </label>
+          </div>
+        ) : (
+          <label className="flex flex-col gap-1.5">
+            <span className={label}>Where</span>
+            <input
+              list="pb-venues"
+              value={venue}
+              onChange={(event) => setVenueOverride(event.target.value)}
+              placeholder={isCash ? "e.g. Revolut" : "e.g. Bitvavo"}
+              className={cn(field, "w-full text-[16px] outline-none")}
+            />
+          </label>
+        )}
+
+        {(!isMove || isCash) && (
+          <label className="flex flex-col gap-1.5">
+            <span className={label}>
+              {isMove
+                ? "Amount moved (€)"
+                : isCash
+                  ? `Amount ${side === "Sell" ? "withdrawn" : "deposited"} (€)`
+                  : `Amount ${side === "Sell" ? "received" : "spent"} (€)`}
+            </span>
+            <input
+              inputMode="decimal"
+              value={spend}
+              onChange={(event) => setSpend(event.target.value)}
+              className={cn(input, "h-12 text-[20px]")}
+            />
+          </label>
+        )}
+
+        {!isMove && (
+          <div className="flex flex-wrap gap-2">
+            {PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setSpend(String(preset))}
+                className="rounded-[7px] border border-pb-input bg-pb-raised px-2.5 py-1 font-number text-[11px] text-pb-text-3 transition-colors hover:border-[rgba(247,147,26,.4)] hover:text-pb-accent"
+              >
+                {formatEur(preset).replace(",00", "")}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!isCash && (
           <label className="flex flex-col gap-1.5">
@@ -336,7 +475,18 @@ function TransactionForm({
               "linear-gradient(135deg,rgba(139,92,246,.1),rgba(247,147,26,.06))",
           }}
         >
-          {isCash ? (
+          {isMove ? (
+            <>
+              <SummaryRow label={`Left at ${venue.trim() || "Unassigned"}`}>
+                {position
+                  ? `${formatUnits(heldAt(holdings, venue) - units, prefs.fullPrecision)} ${position.asset.symbol}`
+                  : "—"}
+              </SummaryRow>
+              <SummaryRow label="Cost basis and P&L" hint="unchanged">
+                —
+              </SummaryRow>
+            </>
+          ) : isCash ? (
             <SummaryRow label="Balance after">
               {position ? formatEur(balanceAfter) : "—"}
             </SummaryRow>

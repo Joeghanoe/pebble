@@ -1,8 +1,7 @@
 from typing import Annotated, Any, Literal, Optional, Union
 
-from pydantic import StringConstraints
+from pydantic import StringConstraints, model_validator
 from sqlmodel import Field, SQLModel
-
 
 # ============================================================================
 # Database Table Models
@@ -24,7 +23,9 @@ class Asset(SQLModel, table=True):
     symbol: str = Field(max_length=50)
     name: str = Field(max_length=255)
     type: str = Field(max_length=20)  # crypto | etf | cash | stock
-    exchange_id: int = Field(foreign_key="exchange.id")
+    # Legacy: where a position lived before venues moved to the transaction
+    # (migration 004). Optional now, and nothing new sets it.
+    exchange_id: Optional[int] = Field(default=None, foreign_key="exchange.id")
     yahoo_ticker: Optional[str] = Field(default=None, max_length=50)
     coingecko_id: Optional[str] = Field(default=None, max_length=100)
 
@@ -35,10 +36,14 @@ class Transaction(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     asset_id: int = Field(foreign_key="asset.id")
     date: str = Field(max_length=10)  # YYYY-MM-DD
-    type: str = Field(max_length=10)  # buy | sell
+    type: str = Field(max_length=10)  # buy | sell | move
     units: float
     eur_amount: float
     notes: Optional[str] = Field(default=None)
+    # Where it happened: a broker, exchange, wallet or bank. For a move, where
+    # the units left from; `to_venue` is where they arrived.
+    venue: Optional[str] = Field(default=None, max_length=100)
+    to_venue: Optional[str] = Field(default=None, max_length=100)
     source: str = Field(default="manual", max_length=20)  # manual | imported
     external_id: Optional[str] = Field(default=None)
     # ISO 8601 UTC, whole seconds. 40 rather than 30: see migration 003.
@@ -83,18 +88,22 @@ class PositionSnapshot(SQLModel, table=True):
 # the generated TypeScript client a union instead of `string`.
 AssetType = Literal["crypto", "etf", "cash", "stock"]
 ExchangeType = Literal["crypto", "broker", "manual"]
-TransactionType = Literal["buy", "sell"]
+TransactionType = Literal["buy", "sell", "move"]
 
 # 'YYYY-MM-DD'. The column is 10 characters wide and every comparison in the raw SQL
 # relies on ISO dates sorting lexicographically, so a free-form string is not safe here.
 IsoDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+
+# A venue is a name typed by hand; surrounding whitespace would make "Revolut"
+# and "Revolut " two places.
+VenueName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
 
 class AssetCreate(SQLModel):
     symbol: str = Field(min_length=1, max_length=50)
     name: str = Field(min_length=1, max_length=255)
     type: AssetType
-    exchange_id: int
+    exchange_id: Optional[int] = None
     yahoo_ticker: Optional[str] = Field(default=None, max_length=50)
     coingecko_id: Optional[str] = Field(default=None, max_length=100)
 
@@ -120,6 +129,22 @@ class TransactionCreate(SQLModel):
     units: float
     eur_amount: float
     notes: Optional[str] = None
+    venue: Optional[VenueName] = None
+    to_venue: Optional[VenueName] = None
+
+    @model_validator(mode="after")
+    def _move_has_both_ends(self) -> "TransactionCreate":
+        # A move relocates units and changes nothing else, so it needs a
+        # distinct origin and destination and carries no money.
+        if self.type == "move":
+            if not self.venue or not self.to_venue:
+                raise ValueError("A move needs both a venue and a to_venue.")
+            if self.venue == self.to_venue:
+                raise ValueError("A move needs two different venues.")
+            self.eur_amount = 0.0
+        elif self.to_venue is not None:
+            raise ValueError("Only a move has a to_venue.")
+        return self
 
 
 class TransactionUpdate(SQLModel):
@@ -128,6 +153,8 @@ class TransactionUpdate(SQLModel):
     units: Optional[float] = None
     eur_amount: Optional[float] = None
     notes: Optional[str] = None
+    venue: Optional[VenueName] = None
+    to_venue: Optional[VenueName] = None
 
 
 # ============================================================================
@@ -156,9 +183,17 @@ class PriceResultUnavailable(SQLModel):
 PriceResult = Union[PriceResultOk, PriceResultStale, PriceResultUnavailable]
 
 
+class VenueHolding(SQLModel):
+    # None for transactions recorded before venues existed and never assigned.
+    venue: Optional[str] = None
+    units: float
+
+
 class PositionRow(SQLModel):
     asset: Asset
-    exchange: Exchange
+    exchange: Optional[Exchange] = None
+    # Units held per venue, largest first. Sums to `units_held`.
+    venues: list[VenueHolding] = []
     units_held: float
     total_invested_eur: float
     current_value_eur: float
@@ -218,6 +253,20 @@ class BtcDailyClose(SQLModel):
 
 class GetBtcDailyResponse(SQLModel):
     closes: list[BtcDailyClose]
+
+
+class VenueSummary(SQLModel):
+    name: str
+    transactions: int
+
+
+class GetVenuesResponse(SQLModel):
+    venues: list[VenueSummary]
+
+
+class VenueRename(SQLModel):
+    from_name: VenueName
+    to_name: VenueName
 
 
 class Message(SQLModel):

@@ -4,7 +4,7 @@ export type AssetCreate = {
   symbol: string;
   name: string;
   type: "crypto" | "etf" | "cash" | "stock";
-  exchange_id: number;
+  exchange_id?: number | null;
   yahoo_ticker?: string | null;
   coingecko_id?: string | null;
 };
@@ -34,26 +34,35 @@ export type HTTPValidationError = {
 export type TransactionCreate = {
   asset_id: number;
   date: string;
-  type: "buy" | "sell";
+  type: "buy" | "sell" | "move";
   units: number;
   eur_amount: number;
   notes?: string | null;
+  venue?: string | null;
+  to_venue?: string | null;
 };
 
-export type type3 = "buy" | "sell";
+export type type3 = "buy" | "sell" | "move";
 
 export type TransactionUpdate = {
   date?: string | null;
-  type?: "buy" | "sell" | null;
+  type?: "buy" | "sell" | "move" | null;
   units?: number | null;
   eur_amount?: number | null;
   notes?: string | null;
+  venue?: string | null;
+  to_venue?: string | null;
 };
 
 export type ValidationError = {
   loc: Array<string | number>;
   msg: string;
   type: string;
+};
+
+export type VenueRename = {
+  from_name: string;
+  to_name: string;
 };
 
 export type ListAssetsApiAssetsGetResponse = {
@@ -189,5 +198,17 @@ export type DeleteTransactionApiTransactionsTxIdDeleteDeleteData = {
 };
 
 export type DeleteTransactionApiTransactionsTxIdDeleteDeleteResponse = {
+  [key: string]: unknown;
+};
+
+export type ListVenuesApiVenuesGetResponse = {
+  [key: string]: unknown;
+};
+
+export type RenameVenueApiVenuesRenamePostData = {
+  requestBody: VenueRename;
+};
+
+export type RenameVenueApiVenuesRenamePostResponse = {
   [key: string]: unknown;
 };
