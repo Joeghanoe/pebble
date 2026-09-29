@@ -5,6 +5,7 @@ import "./index.css";
 import { RouterProvider } from "@tanstack/react-router";
 import { PreferencesEffects } from "@/lib/preferences";
 import { AccessGate } from "@/components/AccessGate";
+import { SettingsSync } from "@/lib/settings-sync";
 import { Toaster } from "@/components/ui/sonner";
 import { router } from "./router";
 import { queryClient } from "@/lib/queryClient";
@@ -24,6 +25,7 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <PreferencesEffects />
       <AccessGate>
+        <SettingsSync />
         <RouterProvider router={router} context={{ queryClient }} />
       </AccessGate>
       <Toaster position="top-right" />

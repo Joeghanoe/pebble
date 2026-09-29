@@ -1,12 +1,18 @@
 // src/lib/preferences.ts
 import * as React from "react";
+import {
+  browserStorage,
+  createSyncedDocument,
+  useSyncedDocument,
+} from "@/lib/synced-document";
+import { pushSetting, reportSyncError } from "@/lib/settings-api";
 
 /**
- * The settings screen's state.
+ * The settings screen's display preferences.
  *
- * These are presentation preferences — how a number is spelled, how often quotes
- * are pulled — not portfolio data, so they belong to the machine rather than to
- * the ledger and live in localStorage. Nothing here changes what the API stores.
+ * Stored in the API so every device the owner signs in on looks the same, and
+ * cached in localStorage so the theme is right on first paint — see
+ * `synced-document`. Nothing server-side reads them.
  *
  * There is no base-currency preference: Pebble prices in EUR end to end, from the
  * feed through the snapshots to every figure on screen. A currency selector here
@@ -37,49 +43,36 @@ export const DEFAULT_PREFERENCES: Preferences = {
   density: "dense",
 };
 
-const STORAGE_KEY = "pebble.preferences";
-
-function read(): Preferences {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return DEFAULT_PREFERENCES;
-    }
-    // Spread over the defaults rather than trusting the stored shape: a
-    // preference added in a later version has to arrive with a value.
-    return {
-      ...DEFAULT_PREFERENCES,
-      ...(JSON.parse(raw) as Partial<Preferences>),
-    };
-  } catch {
+/**
+ * Spread over the defaults rather than trusting the stored shape: a preference
+ * added in a later version has to arrive with a value.
+ */
+export function normalizePreferences(raw: unknown): Preferences {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return DEFAULT_PREFERENCES;
   }
+  return { ...DEFAULT_PREFERENCES, ...(raw as Partial<Preferences>) };
 }
 
-type Listener = (prefs: Preferences) => void;
-
-let current =
-  typeof localStorage === "undefined" ? DEFAULT_PREFERENCES : read();
-const listeners = new Set<Listener>();
-
-function emit() {
-  for (const listener of listeners) {
-    listener(current);
-  }
-}
+export const preferencesDocument = createSyncedDocument<Preferences>({
+  name: "preferences",
+  storageKey: "pebble.preferences",
+  defaults: DEFAULT_PREFERENCES,
+  normalize: normalizePreferences,
+  storage: browserStorage(),
+  push: (value) => pushSetting("preferences", value),
+  onError: reportSyncError,
+});
 
 export function setPreference<K extends keyof Preferences>(
   key: K,
   value: Preferences[K],
 ): void {
-  current = { ...current, [key]: value };
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
-  } catch {
-    // A private window with storage blocked still gets a working session; the
-    // choice just does not survive a reload.
-  }
-  emit();
+  preferencesDocument.set({ ...preferencesDocument.get(), [key]: value });
+}
+
+export function resetPreferences(): void {
+  preferencesDocument.set(DEFAULT_PREFERENCES);
 }
 
 /** Applies the theme choice to <html>, which is where the CSS variants hang. */
@@ -88,34 +81,16 @@ export function applyTheme(theme: Preferences["theme"]): void {
 }
 
 export function usePreferences(): Preferences {
-  return React.useSyncExternalStore(
-    (onChange) => {
-      listeners.add(onChange);
-      return () => listeners.delete(onChange);
-    },
-    () => current,
-    () => DEFAULT_PREFERENCES,
-  );
+  return useSyncedDocument(preferencesDocument, DEFAULT_PREFERENCES);
 }
 
-/** Keeps a second tab in step, and stamps the theme on first paint. */
+/** Stamps the theme on first paint, and again whenever it changes. */
 export function PreferencesEffects() {
   const prefs = usePreferences();
 
   React.useEffect(() => {
     applyTheme(prefs.theme);
   }, [prefs.theme]);
-
-  React.useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.storageArea === localStorage && event.key === STORAGE_KEY) {
-        current = read();
-        emit();
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
 
   return null;
 }

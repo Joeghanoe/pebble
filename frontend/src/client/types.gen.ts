@@ -31,6 +31,15 @@ export type HTTPValidationError = {
   detail?: Array<ValidationError>;
 };
 
+export type SettingsResponse = {
+  preferences?: {
+    [key: string]: unknown;
+  } | null;
+  strategy?: {
+    [key: string]: unknown;
+  } | null;
+};
+
 export type TransactionCreate = {
   asset_id: number;
   date: string;
@@ -156,6 +165,19 @@ export type RefreshPricesApiPricesRefreshPostResponse = {
 };
 
 export type GetBtcDailyApiPricesBtcDailyGetResponse = {
+  [key: string]: unknown;
+};
+
+export type GetSettingsApiSettingsGetResponse = SettingsResponse;
+
+export type PutSettingApiSettingsNamePutData = {
+  name: "preferences" | "strategy";
+  requestBody: {
+    [key: string]: unknown;
+  };
+};
+
+export type PutSettingApiSettingsNamePutResponse = {
   [key: string]: unknown;
 };
 

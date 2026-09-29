@@ -65,7 +65,7 @@ def _clean_tables() -> None:
         conn.execute(
             text(
                 'TRUNCATE "transaction", price_cache, position_snapshot, '
-                "net_worth_snapshot, asset, exchange RESTART IDENTITY CASCADE"
+                "net_worth_snapshot, asset, exchange, setting RESTART IDENTITY CASCADE"
             )
         )
         conn.execute(
