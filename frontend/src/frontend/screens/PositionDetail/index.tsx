@@ -7,7 +7,6 @@ import { PositionsService, TransactionsService } from "@/client";
 import type {
   GetPositionHistoryResponse,
   GetTransactionsResponse,
-  VenueHolding,
 } from "@/types/api";
 import { api } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
@@ -41,7 +40,6 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { EditPositionModal } from "@/frontend/components/EditPositionModal";
 import { useTransactionModal } from "@/frontend/components/TransactionModalProvider";
 import {
-  PbBar,
   PbCadenceChart,
   PbCard,
   PbCardHeader,
@@ -308,16 +306,6 @@ export function PositionDetail() {
           </div>
         </div>
 
-        {position && position.venues.length > 0 && (
-          <HeldAtCard
-            venues={position.venues}
-            unitPrice={unitPrice}
-            symbol={symbol}
-            isCash={position.asset.type === "cash"}
-            fullPrecision={prefs.fullPrecision}
-          />
-        )}
-
         {/* The pair the release build had below the hero: which buys are in
             profit, and how steadily they were made. */}
         <div className="grid grid-cols-1 gap-3.5 min-[980px]:grid-cols-2">
@@ -485,70 +473,5 @@ function LedgerPnl({
     >
       {children}
     </span>
-  );
-}
-
-/**
- * Where the position sits: units per venue, and what each slice is worth. For
- * cash this is the balance at each bank and exchange.
- */
-function HeldAtCard({
-  venues,
-  unitPrice,
-  symbol,
-  isCash,
-  fullPrecision,
-}: {
-  readonly venues: readonly VenueHolding[];
-  readonly unitPrice: number | null;
-  readonly symbol: string;
-  readonly isCash: boolean;
-  readonly fullPrecision: boolean;
-}) {
-  const total = venues.reduce((sum, v) => sum + v.units, 0);
-  return (
-    <PbCard>
-      <PbCardHeader
-        title="Held at"
-        note={`${venues.length} venue${venues.length === 1 ? "" : "s"}`}
-        className="border-b border-pb-subtle"
-      />
-      {venues.map((v) => {
-        const value = isCash
-          ? v.units
-          : unitPrice === null
-            ? null
-            : v.units * unitPrice;
-        return (
-          <div
-            key={v.venue ?? ""}
-            className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 border-b border-pb-hairline px-[18px] py-2.5 last:border-b-0"
-          >
-            <div className="min-w-0">
-              <span
-                className={cn(
-                  "block truncate text-[12.5px] font-medium",
-                  v.venue === null && "text-pb-muted italic",
-                )}
-              >
-                {v.venue ?? "Unassigned"}
-              </span>
-              <PbBar
-                percent={total > 0 ? (v.units / total) * 100 : 0}
-                color="#8B5CF6"
-              />
-            </div>
-            {!isCash && (
-              <span className="text-right font-number text-[11.5px] text-pb-text-3 tabular-nums">
-                {formatUnits(v.units, fullPrecision)} {symbol}
-              </span>
-            )}
-            <span className="min-w-[96px] text-right font-number text-[12px] tabular-nums">
-              {value === null ? "—" : formatEur(value)}
-            </span>
-          </div>
-        );
-      })}
-    </PbCard>
   );
 }
