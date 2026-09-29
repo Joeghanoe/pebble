@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PositionsService } from "@/client";
 import type { GetPositionsResponse, Position } from "@/types/api";
 import { assetClass, assetColor, type AssetClass } from "@/lib/asset-identity";
+import { venueBreakdown, type VenueSlice } from "@/lib/venues";
 
 export interface HoldingRow extends Position {
   color: string;
@@ -26,6 +27,8 @@ export interface Portfolio {
   totalBtc: number | null;
   btcEurPrice: number | null;
   allocation: { klass: AssetClass; value: number; fraction: number }[];
+  /** The same total split by where it is held, largest first. */
+  venues: VenueSlice[];
   best: HoldingRow | null;
   worst: HoldingRow | null;
   lastUpdated: string | null;
@@ -103,6 +106,7 @@ export function usePortfolio(): Portfolio {
     totalBtc: btcEurPrice && btcEurPrice > 0 ? totalValue / btcEurPrice : null,
     btcEurPrice,
     allocation,
+    venues: venueBreakdown(raw),
     best: ranked[0] ?? null,
     worst: ranked.length > 1 ? ranked[ranked.length - 1] : null,
     lastUpdated: data?.last_updated ?? null,

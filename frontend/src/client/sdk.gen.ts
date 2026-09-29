@@ -38,6 +38,9 @@ import type {
   UpdateTransactionApiTransactionsTxIdUpdatePutResponse,
   DeleteTransactionApiTransactionsTxIdDeleteDeleteData,
   DeleteTransactionApiTransactionsTxIdDeleteDeleteResponse,
+  ListVenuesApiVenuesGetResponse,
+  RenameVenueApiVenuesRenamePostData,
+  RenameVenueApiVenuesRenamePostResponse,
 } from "./types.gen";
 
 export class AssetsService {
@@ -459,6 +462,44 @@ export class TransactionsService {
       path: {
         tx_id: data.txId,
       },
+      errors: {
+        422: "Validation Error",
+      },
+    });
+  }
+}
+
+export class VenuesService {
+  /**
+   * List Venues
+   * Every venue a transaction names. There is no venue table: a venue exists
+   * for as long as something happened there, and is created by typing its name.
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static listVenuesApiVenuesGet(): CancelablePromise<ListVenuesApiVenuesGetResponse> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/venues/",
+    });
+  }
+
+  /**
+   * Rename Venue
+   * Rename a venue everywhere it is used; onto an existing name, the two merge.
+   * @param data The data for the request.
+   * @param data.requestBody
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static renameVenueApiVenuesRenamePost(
+    data: RenameVenueApiVenuesRenamePostData,
+  ): CancelablePromise<RenameVenueApiVenuesRenamePostResponse> {
+    return __request(OpenAPI, {
+      method: "POST",
+      url: "/api/venues/rename",
+      body: data.requestBody,
+      mediaType: "application/json",
       errors: {
         422: "Validation Error",
       },

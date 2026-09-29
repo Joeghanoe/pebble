@@ -1,8 +1,8 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ExchangesService } from "@/client";
-import type { GetExchangesResponse } from "@/types/api";
+import { VenuesService } from "@/client";
+import type { GetVenuesResponse } from "@/types/api";
 import { api, apiUrl, SIGN_OUT_URL } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,6 @@ import {
 } from "@/lib/strategy";
 import { formatEurWhole } from "@/lib/format";
 import { SiteHeader } from "@/components/site-header";
-import { ConfirmButton } from "@/components/ConfirmButton";
 import {
   PbCard,
   PbGhostButton,
@@ -50,45 +49,30 @@ export function Settings() {
   const strategy = useStrategySettings();
   const queryClient = useQueryClient();
 
-  const { data: exchangesData } = useQuery({
-    queryKey: ["exchanges"],
+  const { data: venuesData } = useQuery({
+    queryKey: ["venues"],
     queryFn: () =>
-      ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+      VenuesService.listVenuesApiVenuesGet() as unknown as Promise<GetVenuesResponse>,
   });
   const { data: me } = useQuery({
     queryKey: ["me"],
     queryFn: () => api.getMe(),
   });
 
-  const [exchangeName, setExchangeName] = React.useState("");
-  const [exchangeType, setExchangeType] = React.useState<
-    "crypto" | "broker" | "manual"
-  >("crypto");
-
-  const addExchange = useMutation({
-    mutationFn: (body: { name: string; type: string }) =>
-      api.createExchange(body),
+  const renameVenue = useMutation({
+    mutationFn: ({ from, to }: { from: string; to: string }) =>
+      api.renameVenue(from, to),
     onSuccess: () => {
-      setExchangeName("");
-      void queryClient.invalidateQueries({ queryKey: ["exchanges"] });
+      toast.success("Venue renamed.");
+      void queryClient.invalidateQueries({ queryKey: ["venues"] });
+      void queryClient.invalidateQueries({ queryKey: ["positions"] });
+      void queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
     onError: (error) =>
-      toast.error(apiErrorMessage(error, "Could not add that exchange.")),
+      toast.error(apiErrorMessage(error, "Could not rename that venue.")),
   });
 
-  const deleteExchange = useMutation({
-    mutationFn: (id: number) => api.deleteExchange(id),
-    onSuccess: () => {
-      toast.success("Exchange deleted.");
-      void queryClient.invalidateQueries({ queryKey: ["exchanges"] });
-    },
-    // A 409 names the positions still pointing at this exchange, which is the
-    // whole reason the endpoint returns one instead of a bare 500.
-    onError: (error) =>
-      toast.error(apiErrorMessage(error, "Could not delete that exchange.")),
-  });
-
-  const exchanges = exchangesData?.exchanges ?? [];
+  const venues = venuesData?.venues ?? [];
 
   return (
     <>
@@ -440,55 +424,33 @@ export function Settings() {
             </Row>
           </Group>
 
-          <Group title="Exchanges" note="where each position is held">
-            {exchanges.map((exchange) => (
+          <Group title="Venues" note="where your money sits">
+            {venues.length === 0 && (
+              <p className="px-[18px] py-[13px] text-[11.5px] text-pb-muted">
+                A venue appears here once a transaction names it — type one in
+                the Where field when you log a buy, sell or move.
+              </p>
+            )}
+            {venues.map((venue) => (
               <Row
-                key={exchange.id}
-                label={exchange.name}
-                description={exchange.type}
+                key={venue.name}
+                label={venue.name}
+                description={`${venue.transactions} transaction${venue.transactions === 1 ? "" : "s"}`}
               >
-                <ConfirmButton
-                  title={`Delete ${exchange.name}?`}
-                  description="The exchange is removed. Positions held on it have to be deleted or moved first."
-                  onConfirm={() => deleteExchange.mutateAsync(exchange.id)}
-                >
-                  <DangerButton>Delete</DangerButton>
-                </ConfirmButton>
+                <VenueRename
+                  name={venue.name}
+                  onRename={(to) =>
+                    renameVenue.mutate({ from: venue.name, to })
+                  }
+                />
               </Row>
             ))}
-            <form
-              className="flex flex-wrap items-center gap-2 px-[18px] py-[13px]"
-              onSubmit={(event) => {
-                event.preventDefault();
-                addExchange.mutate({ name: exchangeName, type: exchangeType });
-              }}
-            >
-              <input
-                value={exchangeName}
-                onChange={(event) => setExchangeName(event.target.value)}
-                placeholder="e.g. Kraken"
-                required
-                className="h-[30px] min-w-0 flex-1 rounded-[9px] border border-pb-input bg-pb-raised px-2.5 text-[12px] outline-none focus:border-[rgba(247,147,26,.55)]"
-              />
-              <PbSegmented
-                mono={false}
-                options={["crypto", "broker", "manual"] as const}
-                value={exchangeType}
-                onChange={setExchangeType}
-              />
-              <PbGhostButton
-                type="submit"
-                disabled={addExchange.isPending || !exchangeName.trim()}
-              >
-                Add
-              </PbGhostButton>
-            </form>
           </Group>
 
           <Group title="Danger zone" note="cannot be undone">
             <Row
               label="Export portfolio"
-              description="Download every exchange, position, transaction and snapshot as JSON"
+              description="Download every position, transaction and snapshot as JSON"
             >
               {/* A plain link: the response carries its own Content-Disposition,
                   and the browser handles the save without any script. */}
@@ -655,5 +617,51 @@ function NumberField({
       />
       {suffix && <span className="text-pb-faint">{suffix}</span>}
     </label>
+  );
+}
+
+/**
+ * Rename in place: the name becomes an input, Enter or blur saves. Renaming onto
+ * a venue that already exists merges the two, which is how a typo is folded
+ * into the venue it meant.
+ */
+function VenueRename({
+  name,
+  onRename,
+}: {
+  readonly name: string;
+  readonly onRename: (to: string) => void;
+}) {
+  const [draft, setDraft] = React.useState<string | null>(null);
+
+  if (draft === null) {
+    return <PbGhostButton onClick={() => setDraft(name)}>Rename</PbGhostButton>;
+  }
+
+  function commit() {
+    const next = draft?.trim() ?? "";
+    setDraft(null);
+    if (next && next !== name) {
+      onRename(next);
+    }
+  }
+
+  return (
+    <input
+      autoFocus
+      aria-label={`Rename ${name}`}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          commit();
+        }
+        if (event.key === "Escape") {
+          setDraft(null);
+        }
+      }}
+      className={cn(FIELD_CLASS, "w-[160px] text-[12px]")}
+    />
   );
 }
