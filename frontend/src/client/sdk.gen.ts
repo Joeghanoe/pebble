@@ -30,6 +30,9 @@ import type {
   RefreshPricesApiPricesRefreshPostData,
   RefreshPricesApiPricesRefreshPostResponse,
   GetBtcDailyApiPricesBtcDailyGetResponse,
+  GetSettingsApiSettingsGetResponse,
+  PutSettingApiSettingsNamePutData,
+  PutSettingApiSettingsNamePutResponse,
   CreateTransactionApiTransactionsPostData,
   CreateTransactionApiTransactionsPostResponse,
   ListTransactionsApiTransactionsAssetIdGetData,
@@ -373,6 +376,46 @@ export class PricesService {
     return __request(OpenAPI, {
       method: "GET",
       url: "/api/prices/btc/daily",
+    });
+  }
+}
+
+export class SettingsService {
+  /**
+   * Get Settings
+   * @returns SettingsResponse Successful Response
+   * @throws ApiError
+   */
+  public static getSettingsApiSettingsGet(): CancelablePromise<GetSettingsApiSettingsGetResponse> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/settings/",
+    });
+  }
+
+  /**
+   * Put Setting
+   * Replace one settings document whole. Last write wins: there is one owner.
+   * @param data The data for the request.
+   * @param data.name
+   * @param data.requestBody
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static putSettingApiSettingsNamePut(
+    data: PutSettingApiSettingsNamePutData,
+  ): CancelablePromise<PutSettingApiSettingsNamePutResponse> {
+    return __request(OpenAPI, {
+      method: "PUT",
+      url: "/api/settings/{name}",
+      path: {
+        name: data.name,
+      },
+      body: data.requestBody,
+      mediaType: "application/json",
+      errors: {
+        422: "Validation Error",
+      },
     });
   }
 }

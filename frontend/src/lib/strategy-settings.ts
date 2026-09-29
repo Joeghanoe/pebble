@@ -1,5 +1,10 @@
 // src/lib/strategy-settings.ts
-import * as React from "react";
+import {
+  browserStorage,
+  createSyncedDocument,
+  useSyncedDocument,
+} from "@/lib/synced-document";
+import { pushSetting, reportSyncError } from "@/lib/settings-api";
 import {
   DEFAULT_PROFIT_RULE,
   DEFAULT_RULE,
@@ -18,9 +23,10 @@ import {
  * whether to follow it at all), the target, the contribution, and what each
  * scenario assumes the market does.
  *
- * Kept on this machine, like `preferences`, rather than in the ledger: these
- * are plans about the portfolio, not facts in it, and nothing the API computes
- * depends on them. The cost is that a second device starts from the defaults.
+ * Stored in the API as one opaque document, like `preferences`, so every
+ * device plans against the same target and rule. The API never reads it: these
+ * are plans about the portfolio, not facts in it, and nothing it computes
+ * depends on them.
  *
  * Rates are stored as fractions (0.15 is 15%/yr); the settings screen shows
  * and edits them as percentages.
@@ -64,65 +70,61 @@ export const DEFAULT_STRATEGY: StrategySettings = {
   profitTakenOn: null,
 };
 
-const STORAGE_KEY = "pebble.strategy";
-
-function read(): StrategySettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return DEFAULT_STRATEGY;
-    }
-    const stored = JSON.parse(raw) as Partial<StrategySettings>;
-    // Spread per scenario as well as at the top: a scenario stored before a
-    // field existed still has to arrive with every rate.
-    return {
-      ...DEFAULT_STRATEGY,
-      ...stored,
-      scenarios: {
-        bear: { ...DEFAULT_STRATEGY.scenarios.bear, ...stored.scenarios?.bear },
-        base: { ...DEFAULT_STRATEGY.scenarios.base, ...stored.scenarios?.base },
-        bull: { ...DEFAULT_STRATEGY.scenarios.bull, ...stored.scenarios?.bull },
-      },
-      rule: { ...DEFAULT_STRATEGY.rule, ...stored.rule },
-      profitRule: { ...DEFAULT_STRATEGY.profitRule, ...stored.profitRule },
-      splits: {
-        defensive: {
-          ...DEFAULT_STRATEGY.splits.defensive,
-          ...stored.splits?.defensive,
-        },
-        "risk-on": {
-          ...DEFAULT_STRATEGY.splits["risk-on"],
-          ...stored.splits?.["risk-on"],
-        },
-      },
-    };
-  } catch {
+/**
+ * Spread per scenario, rule and split as well as at the top: a document stored
+ * before a field existed still has to arrive with every value.
+ */
+export function normalizeStrategy(raw: unknown): StrategySettings {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return DEFAULT_STRATEGY;
   }
+  const stored = raw as Partial<StrategySettings>;
+  return {
+    ...DEFAULT_STRATEGY,
+    ...stored,
+    scenarios: {
+      bear: { ...DEFAULT_STRATEGY.scenarios.bear, ...stored.scenarios?.bear },
+      base: { ...DEFAULT_STRATEGY.scenarios.base, ...stored.scenarios?.base },
+      bull: { ...DEFAULT_STRATEGY.scenarios.bull, ...stored.scenarios?.bull },
+    },
+    rule: { ...DEFAULT_STRATEGY.rule, ...stored.rule },
+    profitRule: { ...DEFAULT_STRATEGY.profitRule, ...stored.profitRule },
+    splits: {
+      defensive: {
+        ...DEFAULT_STRATEGY.splits.defensive,
+        ...stored.splits?.defensive,
+      },
+      "risk-on": {
+        ...DEFAULT_STRATEGY.splits["risk-on"],
+        ...stored.splits?.["risk-on"],
+      },
+    },
+  };
 }
 
-type Listener = (settings: StrategySettings) => void;
-
-let current = typeof localStorage === "undefined" ? DEFAULT_STRATEGY : read();
-const listeners = new Set<Listener>();
+export const strategyDocument = createSyncedDocument<StrategySettings>({
+  name: "strategy",
+  storageKey: "pebble.strategy",
+  defaults: DEFAULT_STRATEGY,
+  normalize: normalizeStrategy,
+  storage: browserStorage(),
+  push: (value) => pushSetting("strategy", value),
+  onError: reportSyncError,
+});
 
 function write(next: StrategySettings): void {
-  current = next;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
-  } catch {
-    // Storage blocked: the change holds for this session and no longer.
-  }
-  for (const listener of listeners) {
-    listener(current);
-  }
+  strategyDocument.set(next);
+}
+
+function current(): StrategySettings {
+  return strategyDocument.get();
 }
 
 export function setStrategySetting<K extends keyof StrategySettings>(
   key: K,
   value: StrategySettings[K],
 ): void {
-  write({ ...current, [key]: value });
+  write({ ...current(), [key]: value });
 }
 
 export function setScenarioRate(
@@ -130,11 +132,12 @@ export function setScenarioRate(
   bucket: keyof ScenarioRates,
   value: number,
 ): void {
+  const settings = current();
   write({
-    ...current,
+    ...settings,
     scenarios: {
-      ...current.scenarios,
-      [scenario]: { ...current.scenarios[scenario], [bucket]: value },
+      ...settings.scenarios,
+      [scenario]: { ...settings.scenarios[scenario], [bucket]: value },
     },
   });
 }
@@ -143,18 +146,21 @@ export function setRule<K extends keyof RegimeRule>(
   key: K,
   value: RegimeRule[K],
 ): void {
-  write({ ...current, rule: { ...current.rule, [key]: value } });
+  const settings = current();
+  write({ ...settings, rule: { ...settings.rule, [key]: value } });
 }
 
 export function setProfitRule(key: keyof ProfitRule, value: number): void {
-  write({ ...current, profitRule: { ...current.profitRule, [key]: value } });
+  const settings = current();
+  write({ ...settings, profitRule: { ...settings.profitRule, [key]: value } });
 }
 
 /** Sets a regime's crypto share; equity takes the rest, so the two always sum to one. */
 export function setRegimeCryptoShare(regime: Regime, crypto: number): void {
+  const settings = current();
   write({
-    ...current,
-    splits: { ...current.splits, [regime]: { crypto, equity: 1 - crypto } },
+    ...settings,
+    splits: { ...settings.splits, [regime]: { crypto, equity: 1 - crypto } },
   });
 }
 
@@ -163,26 +169,5 @@ export function resetStrategySettings(): void {
 }
 
 export function useStrategySettings(): StrategySettings {
-  React.useEffect(() => {
-    // Another tab edited the settings: pick them up here too.
-    const onStorage = (event: StorageEvent) => {
-      if (event.storageArea === localStorage && event.key === STORAGE_KEY) {
-        current = read();
-        for (const listener of listeners) {
-          listener(current);
-        }
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  return React.useSyncExternalStore(
-    (onChange) => {
-      listeners.add(onChange);
-      return () => listeners.delete(onChange);
-    },
-    () => current,
-    () => DEFAULT_STRATEGY,
-  );
+  return useSyncedDocument(strategyDocument, DEFAULT_STRATEGY);
 }

@@ -1,5 +1,16 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useSearch } from "@tanstack/react-router";
+import {
+  ArrowLeftRight,
+  HandCoins,
+  MapPin,
+  Palette,
+  SlidersHorizontal,
+  Target,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { VenuesService } from "@/client";
 import type { GetVenuesResponse } from "@/types/api";
@@ -7,11 +18,12 @@ import { api, apiUrl, SIGN_OUT_URL } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import {
-  DEFAULT_PREFERENCES,
+  resetPreferences,
   setPreference,
   usePreferences,
   type Preferences,
 } from "@/lib/preferences";
+import { useSettingsSyncStatus } from "@/lib/settings-sync";
 import {
   resetStrategySettings,
   setProfitRule,
@@ -30,33 +42,495 @@ import {
 } from "@/lib/strategy";
 import { formatEurWhole } from "@/lib/format";
 import { SiteHeader } from "@/components/site-header";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import {
   PbCard,
   PbGhostButton,
   PbSegmented,
   PbToggle,
 } from "@/frontend/components/pebble";
+import { PbDot } from "@/frontend/components/pebble/primitives";
+import { SETTINGS_SECTIONS, type SettingsSection } from "./sections";
+
+const SECTION_ICONS: Record<SettingsSection, LucideIcon> = {
+  general: SlidersHorizontal,
+  appearance: Palette,
+  strategy: Target,
+  dca: ArrowLeftRight,
+  profit: HandCoins,
+  venues: MapPin,
+  account: UserRound,
+};
 
 /**
  * Settings.
  *
- * Nothing here has a save button: every control writes on change. The groups run
- * from the harmless to the irreversible, and the danger zone is last for that
- * reason.
+ * A section nav beside one section at a time, rather than every control on one
+ * long page: the strategy inputs alone outgrew a single scroll. The open section
+ * lives in the URL (`?section=`), so it bookmarks and survives Back.
+ *
+ * Nothing here has a save button: every control writes on change, to this
+ * device at once and to the API right after, so every device the owner signs
+ * in on shows the same settings. See `synced-document`.
  */
 export function Settings() {
-  const prefs = usePreferences();
-  const strategy = useStrategySettings();
-  const queryClient = useQueryClient();
+  const { section = "general" } = useSearch({ from: "/settings" });
+  const active =
+    SETTINGS_SECTIONS.find((s) => s.id === section) ?? SETTINGS_SECTIONS[0];
 
+  return (
+    <>
+      <SiteHeader name="Settings" />
+      <div className="pb-fade mx-auto flex w-full max-w-[1040px] flex-col gap-5 px-4 py-5 sm:px-6 md:flex-row md:gap-8 md:py-7">
+        <SectionNav active={active.id} />
+
+        <div className="flex min-w-0 max-w-[680px] flex-1 flex-col gap-3.5">
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-1 border-b border-pb-subtle pb-4">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[16px] font-semibold">{active.label}</h2>
+              <p className="mt-0.5 text-[12px] text-pb-muted">
+                {active.description}
+              </p>
+            </div>
+            <SyncBadge />
+          </div>
+
+          {active.id === "general" && <GeneralSection />}
+          {active.id === "appearance" && <AppearanceSection />}
+          {active.id === "strategy" && <StrategySection />}
+          {active.id === "dca" && <DcaSection />}
+          {active.id === "profit" && <ProfitSection />}
+          {active.id === "venues" && <VenuesSection />}
+          {active.id === "account" && <AccountSection />}
+
+          <p className="pt-2 text-center font-number text-[10.5px] text-pb-faintest">
+            Pebble 2.0.0 · single-tenant — one portfolio, one owner
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * A vertical list beside the content on desktop; a row of pills that scrolls
+ * sideways on a phone, where a 196px column would leave nothing for the rows.
+ */
+function SectionNav({ active }: { readonly active: SettingsSection }) {
+  return (
+    <nav
+      aria-label="Settings sections"
+      className="-mx-4 shrink-0 overflow-x-auto px-4 sm:-mx-6 sm:px-6 md:sticky md:top-[82px] md:mx-0 md:w-[196px] md:self-start md:overflow-visible md:px-0"
+    >
+      <ul className="flex gap-1 md:flex-col">
+        {SETTINGS_SECTIONS.map(({ id, label }) => {
+          const Icon = SECTION_ICONS[id];
+          const isActive = id === active;
+          return (
+            <li key={id} className="shrink-0">
+              <Link
+                to="/settings"
+                search={{ section: id }}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-[9px] px-2.5 py-[7px] text-[12.5px] font-medium whitespace-nowrap transition-colors",
+                  isActive
+                    ? "bg-pb-nav-active text-pb-text"
+                    : "text-[#9E97B4] hover:bg-pb-nav-hover hover:text-pb-text",
+                )}
+              >
+                <Icon size={14} strokeWidth={1.8} className="shrink-0" />
+                {label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+function SyncBadge() {
+  const status = useSettingsSyncStatus();
+  const { color, text } =
+    status === "error"
+      ? { color: "#F87171", text: "Not saved to server · retrying" }
+      : status === "saving"
+        ? { color: "#F7931A", text: "Saving…" }
+        : { color: "#34D399", text: "Synced across devices" };
+  return (
+    <span
+      role="status"
+      className="flex items-center gap-1.5 font-number text-[10.5px] text-pb-faint"
+    >
+      <PbDot color={color} size={5} />
+      {text}
+    </span>
+  );
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+
+function GeneralSection() {
+  const prefs = usePreferences();
+  return (
+    <>
+      <Group title="Numbers" note="euro, and how they are shown">
+        <Row
+          label="Denominate in BTC"
+          description="Show a sats value alongside every position"
+        >
+          <PbToggle
+            label="Denominate in BTC"
+            checked={prefs.denominateInBtc}
+            onChange={(next) => setPreference("denominateInBtc", next)}
+          />
+        </Row>
+        <Row
+          label="Full precision"
+          description="Eight decimals on crypto quantities"
+        >
+          <PbToggle
+            label="Full precision"
+            checked={prefs.fullPrecision}
+            onChange={(next) => setPreference("fullPrecision", next)}
+          />
+        </Row>
+        <Row label="Table density" description="Row height in both tables">
+          <PbSegmented
+            mono={false}
+            options={["Dense", "Comfortable"] as const}
+            value={prefs.density === "dense" ? "Dense" : "Comfortable"}
+            onChange={(next) =>
+              setPreference(
+                "density",
+                next === "Dense" ? "dense" : "comfortable",
+              )
+            }
+          />
+        </Row>
+      </Group>
+
+      <Group title="Quotes" note="pulled while the app is open">
+        <Row
+          label="Auto-refresh prices"
+          description="Pull quotes while the app is open"
+        >
+          <PbToggle
+            label="Auto-refresh prices"
+            checked={prefs.autoRefresh}
+            onChange={(next) => setPreference("autoRefresh", next)}
+          />
+        </Row>
+        <Row label="Interval" description="How often quotes are pulled">
+          <PbSegmented
+            options={["1m", "5m", "15m"] as const}
+            value={`${prefs.refreshIntervalMinutes}m` as "1m" | "5m" | "15m"}
+            onChange={(next) =>
+              setPreference(
+                "refreshIntervalMinutes",
+                Number.parseInt(
+                  next,
+                  10,
+                ) as Preferences["refreshIntervalMinutes"],
+              )
+            }
+          />
+        </Row>
+      </Group>
+    </>
+  );
+}
+
+function AppearanceSection() {
+  const prefs = usePreferences();
+  return (
+    <Group>
+      <Row label="Theme" description="Pebble is built dark-first">
+        <PbSegmented
+          mono={false}
+          options={["Dark", "Midnight", "System"] as const}
+          value={
+            prefs.theme === "dark"
+              ? "Dark"
+              : prefs.theme === "midnight"
+                ? "Midnight"
+                : "System"
+          }
+          onChange={(next) =>
+            setPreference("theme", next.toLowerCase() as Preferences["theme"])
+          }
+        />
+      </Row>
+    </Group>
+  );
+}
+
+function StrategySection() {
+  const strategy = useStrategySettings();
+  return (
+    <>
+      <Group title="Target" note="what the plan works toward">
+        <Row label="Target" description="What the portfolio should be worth">
+          <NumberField
+            label="Target amount"
+            prefix="€"
+            value={strategy.targetAmount}
+            min={1}
+            onCommit={(next) => setStrategySetting("targetAmount", next)}
+          />
+        </Row>
+        <Row
+          label="Birthdate"
+          description={`The target is due on your ${TARGET_AGE}th birthday`}
+        >
+          <input
+            type="date"
+            aria-label="Birthdate"
+            value={strategy.birthdate ?? ""}
+            onChange={(event) =>
+              setStrategySetting(
+                "birthdate",
+                /^\d{4}-\d{2}-\d{2}$/.test(event.target.value)
+                  ? event.target.value
+                  : null,
+              )
+            }
+            className={FIELD_CLASS}
+          />
+        </Row>
+        <Row
+          label="Monthly contribution"
+          description="Split between BTC and stocks by the regime"
+        >
+          <NumberField
+            label="Monthly contribution"
+            prefix="€"
+            value={strategy.monthlyContribution}
+            min={0}
+            onCommit={(next) => setStrategySetting("monthlyContribution", next)}
+          />
+        </Row>
+        <Row
+          label="Count sideline cash"
+          description="Include the cash buffer in progress toward the target"
+        >
+          <PbToggle
+            label="Count sideline cash"
+            checked={strategy.includeCash}
+            onChange={(next) => setStrategySetting("includeCash", next)}
+          />
+        </Row>
+      </Group>
+
+      <Group title="Scenarios" note="annual return, per scenario">
+        {SCENARIO_NAMES.map((name) => (
+          <Row
+            key={name}
+            label={`${name[0].toUpperCase()}${name.slice(1)}`}
+            description="Crypto / equity"
+          >
+            <div className="flex items-center gap-1.5">
+              {(["crypto", "equity"] as const).map((bucket) => (
+                <NumberField
+                  key={bucket}
+                  label={`${name} ${bucket} annual return`}
+                  suffix="%"
+                  width="w-[76px]"
+                  // Percent on screen, a fraction in storage. Rounded so
+                  // 0.15 × 100 does not print as 15.000000000000002.
+                  value={
+                    Math.round(strategy.scenarios[name][bucket] * 1e6) / 1e4
+                  }
+                  min={-99.99}
+                  onCommit={(next) => setScenarioRate(name, bucket, next / 100)}
+                />
+              ))}
+            </div>
+          </Row>
+        ))}
+      </Group>
+    </>
+  );
+}
+
+function DcaSection() {
+  const strategy = useStrategySettings();
+  const contribution = strategy.monthlyContribution;
+  return (
+    <>
+      <Group title="Regime" note="BTC vs its moving average">
+        <Row
+          label="Regime"
+          description="Follow the rule, or hold a regime by hand"
+        >
+          <PbSegmented
+            mono={false}
+            options={["Auto", "Defensive", "Risk-on"] as const}
+            value={
+              strategy.regimeMode === "auto"
+                ? "Auto"
+                : strategy.regimeMode === "defensive"
+                  ? "Defensive"
+                  : "Risk-on"
+            }
+            onChange={(next) =>
+              setStrategySetting(
+                "regimeMode",
+                (next === "Auto"
+                  ? "auto"
+                  : next === "Defensive"
+                    ? "defensive"
+                    : "risk-on") as RegimeMode,
+              )
+            }
+          />
+        </Row>
+        <Row
+          label="Average"
+          description="Which moving average BTC is measured against"
+        >
+          <PbSegmented
+            options={["EMA", "SMA"] as const}
+            value={strategy.rule.average === "ema" ? "EMA" : "SMA"}
+            onChange={(next) =>
+              setRule("average", next === "EMA" ? "ema" : "sma")
+            }
+          />
+        </Row>
+        <Row
+          label="Average length"
+          description={`Days. With the confirmation, fits in the ${MAX_HISTORY_DAYS} days of BTC history kept`}
+        >
+          <NumberField
+            label="Average length in days"
+            suffix="d"
+            width="w-[92px]"
+            integer
+            value={strategy.rule.window}
+            min={2}
+            max={MAX_HISTORY_DAYS - strategy.rule.confirmDays}
+            onCommit={(next) => setRule("window", next)}
+          />
+        </Row>
+        <Row
+          label="Confirmation"
+          description="Consecutive closes on one side before the regime switches"
+        >
+          <NumberField
+            label="Confirmation in days"
+            suffix="d"
+            width="w-[92px]"
+            integer
+            value={strategy.rule.confirmDays}
+            min={1}
+            max={MAX_HISTORY_DAYS - strategy.rule.window}
+            onCommit={(next) => setRule("confirmDays", next)}
+          />
+        </Row>
+      </Group>
+
+      <Group
+        title="Split"
+        note={`of the ${formatEurWhole(contribution)} monthly contribution`}
+      >
+        {(["risk-on", "defensive"] as const).map((regime: Regime) => {
+          const btc = strategy.splits[regime].crypto * contribution;
+          return (
+            <Row
+              key={regime}
+              label={
+                regime === "risk-on" ? "Risk-on: to BTC" : "Defensive: to BTC"
+              }
+              description={`${formatEurWhole(btc)} BTC / ${formatEurWhole(contribution - btc)} stocks of ${formatEurWhole(contribution)}`}
+            >
+              <NumberField
+                label={`${regime} amount to BTC`}
+                prefix="€"
+                value={Math.round(btc * 100) / 100}
+                min={0}
+                max={contribution}
+                onCommit={(next) =>
+                  contribution > 0 &&
+                  setRegimeCryptoShare(regime, next / contribution)
+                }
+              />
+            </Row>
+          );
+        })}
+      </Group>
+    </>
+  );
+}
+
+function ProfitSection() {
+  const strategy = useStrategySettings();
+  return (
+    <Group>
+      <Row
+        label="Days above the average"
+        description="Consecutive closes above before trimming BTC"
+      >
+        <NumberField
+          label="Days above the average"
+          suffix="d"
+          width="w-[92px]"
+          integer
+          value={strategy.profitRule.minDaysAbove}
+          min={1}
+          max={MAX_HISTORY_DAYS}
+          onCommit={(next) => setProfitRule("minDaysAbove", next)}
+        />
+      </Row>
+      <Row
+        label="BTC share over"
+        description="Of the whole portfolio, cash included"
+      >
+        <NumberField
+          label="BTC share threshold"
+          suffix="%"
+          width="w-[92px]"
+          value={Math.round(strategy.profitRule.maxBtcShare * 1e6) / 1e4}
+          min={0}
+          max={100}
+          onCommit={(next) => setProfitRule("maxBtcShare", next / 100)}
+        />
+      </Row>
+      <Row label="Sell" description="Share of the BTC held, once per run above">
+        <NumberField
+          label="Share of BTC to sell"
+          suffix="%"
+          width="w-[92px]"
+          value={Math.round(strategy.profitRule.sellFraction * 1e6) / 1e4}
+          min={0}
+          max={100}
+          onCommit={(next) => setProfitRule("sellFraction", next / 100)}
+        />
+      </Row>
+      <Row
+        label="Proceeds to S&P 500"
+        description={`The rest, ${Math.round((1 - strategy.profitRule.sp500Share) * 100)}%, to ex-US`}
+      >
+        <NumberField
+          label="Share of proceeds to the S&P 500"
+          suffix="%"
+          width="w-[92px]"
+          value={Math.round(strategy.profitRule.sp500Share * 1e6) / 1e4}
+          min={0}
+          max={100}
+          onCommit={(next) => setProfitRule("sp500Share", next / 100)}
+        />
+      </Row>
+    </Group>
+  );
+}
+
+function VenuesSection() {
+  const queryClient = useQueryClient();
   const { data: venuesData } = useQuery({
     queryKey: ["venues"],
     queryFn: () =>
       VenuesService.listVenuesApiVenuesGet() as unknown as Promise<GetVenuesResponse>,
-  });
-  const { data: me } = useQuery({
-    queryKey: ["me"],
-    queryFn: () => api.getMe(),
   });
 
   const renameVenue = useMutation({
@@ -75,433 +549,106 @@ export function Settings() {
   const venues = venuesData?.venues ?? [];
 
   return (
+    <Group>
+      {venues.length === 0 && (
+        <p className="px-[18px] py-[13px] text-[11.5px] text-pb-muted">
+          A venue appears here once a transaction names it — type one in the
+          Where field when you log a buy, sell or move.
+        </p>
+      )}
+      {venues.map((venue) => (
+        <Row
+          key={venue.name}
+          label={venue.name}
+          description={`${venue.transactions} transaction${venue.transactions === 1 ? "" : "s"}`}
+        >
+          <VenueRename
+            name={venue.name}
+            onRename={(to) => renameVenue.mutate({ from: venue.name, to })}
+          />
+        </Row>
+      ))}
+    </Group>
+  );
+}
+
+function AccountSection() {
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => api.getMe(),
+  });
+  return (
     <>
-      <SiteHeader name="Settings" />
-      <div className="pb-fade flex justify-center p-5">
-        <div className="flex w-full max-w-[720px] flex-col gap-3.5">
-          <Group title="Portfolio" note="euro, and how numbers are shown">
-            <Row
-              label="Denominate in BTC"
-              description="Show a sats value alongside every position"
-            >
-              <PbToggle
-                label="Denominate in BTC"
-                checked={prefs.denominateInBtc}
-                onChange={(next) => setPreference("denominateInBtc", next)}
-              />
-            </Row>
-            <Row
-              label="Full precision"
-              description="Eight decimals on crypto quantities"
-            >
-              <PbToggle
-                label="Full precision"
-                checked={prefs.fullPrecision}
-                onChange={(next) => setPreference("fullPrecision", next)}
-              />
-            </Row>
-            <Row label="Table density" description="Row height in both tables">
-              <PbSegmented
-                mono={false}
-                options={["Dense", "Comfortable"] as const}
-                value={prefs.density === "dense" ? "Dense" : "Comfortable"}
-                onChange={(next) =>
-                  setPreference(
-                    "density",
-                    next === "Dense" ? "dense" : "comfortable",
-                  )
-                }
-              />
-            </Row>
-          </Group>
+      <Group title="Account" note="Google, through the auth proxy">
+        <Row
+          label={me?.email || "Signed in"}
+          description="Only this address reaches the API"
+        >
+          <a href={SIGN_OUT_URL}>
+            <PbGhostButton>Sign out</PbGhostButton>
+          </a>
+        </Row>
+      </Group>
 
-          <Group title="Data" note="single-tenant, one portfolio">
-            <Row
-              label="Auto-refresh prices"
-              description="Pull quotes while the app is open"
-            >
-              <PbToggle
-                label="Auto-refresh prices"
-                checked={prefs.autoRefresh}
-                onChange={(next) => setPreference("autoRefresh", next)}
-              />
-            </Row>
-            <Row label="Interval" description="How often quotes are pulled">
-              <PbSegmented
-                options={["1m", "5m", "15m"] as const}
-                value={
-                  `${prefs.refreshIntervalMinutes}m` as "1m" | "5m" | "15m"
-                }
-                onChange={(next) =>
-                  setPreference(
-                    "refreshIntervalMinutes",
-                    Number.parseInt(
-                      next,
-                      10,
-                    ) as Preferences["refreshIntervalMinutes"],
-                  )
-                }
-              />
-            </Row>
-          </Group>
+      <Group title="Data" note="a backup, not a sync">
+        <Row
+          label="Export portfolio"
+          description="Every position, transaction, snapshot and setting as JSON"
+        >
+          {/* A plain link: the response carries its own Content-Disposition,
+              and the browser handles the save without any script. */}
+          <a href={apiUrl("/api/export/")}>
+            <PbGhostButton>Export</PbGhostButton>
+          </a>
+        </Row>
+      </Group>
 
-          <Group title="Appearance" note="purple chrome · orange actions">
-            <Row label="Theme" description="Pebble is built dark-first">
-              <PbSegmented
-                mono={false}
-                options={["Dark", "Midnight", "System"] as const}
-                value={
-                  prefs.theme === "dark"
-                    ? "Dark"
-                    : prefs.theme === "midnight"
-                      ? "Midnight"
-                      : "System"
-                }
-                onChange={(next) =>
-                  setPreference(
-                    "theme",
-                    next.toLowerCase() as Preferences["theme"],
-                  )
-                }
-              />
-            </Row>
-          </Group>
-
-          <Group title="Strategy" note="target, contribution, scenarios">
-            <Row
-              label="Target"
-              description="What the portfolio should be worth"
-            >
-              <NumberField
-                label="Target amount"
-                prefix="€"
-                value={strategy.targetAmount}
-                min={1}
-                onCommit={(next) => setStrategySetting("targetAmount", next)}
-              />
-            </Row>
-            <Row
-              label="Birthdate"
-              description={`The target is due on your ${TARGET_AGE}th birthday`}
-            >
-              <input
-                type="date"
-                aria-label="Birthdate"
-                value={strategy.birthdate ?? ""}
-                onChange={(event) =>
-                  setStrategySetting(
-                    "birthdate",
-                    /^\d{4}-\d{2}-\d{2}$/.test(event.target.value)
-                      ? event.target.value
-                      : null,
-                  )
-                }
-                className={FIELD_CLASS}
-              />
-            </Row>
-            <Row
-              label="Monthly contribution"
-              description="Split between BTC and stocks by the regime"
-            >
-              <NumberField
-                label="Monthly contribution"
-                prefix="€"
-                value={strategy.monthlyContribution}
-                min={0}
-                onCommit={(next) =>
-                  setStrategySetting("monthlyContribution", next)
-                }
-              />
-            </Row>
-            <Row
-              label="Count sideline cash"
-              description="Include the cash buffer in progress toward the target"
-            >
-              <PbToggle
-                label="Count sideline cash"
-                checked={strategy.includeCash}
-                onChange={(next) => setStrategySetting("includeCash", next)}
-              />
-            </Row>
-            {SCENARIO_NAMES.map((name) => (
-              <Row
-                key={name}
-                label={`${name[0].toUpperCase()}${name.slice(1)} scenario`}
-                description="Annual return · crypto / equity"
-              >
-                <div className="flex items-center gap-1.5">
-                  {(["crypto", "equity"] as const).map((bucket) => (
-                    <NumberField
-                      key={bucket}
-                      label={`${name} ${bucket} annual return`}
-                      suffix="%"
-                      width="w-[76px]"
-                      // Percent on screen, a fraction in storage. Rounded so
-                      // 0.15 × 100 does not print as 15.000000000000002.
-                      value={
-                        Math.round(strategy.scenarios[name][bucket] * 1e6) / 1e4
-                      }
-                      min={-99.99}
-                      onCommit={(next) =>
-                        setScenarioRate(name, bucket, next / 100)
-                      }
-                    />
-                  ))}
-                </div>
-              </Row>
-            ))}
-          </Group>
-
-          <Group title="DCA rule" note="BTC vs its moving average">
-            <Row
-              label="Regime"
-              description="Follow the rule, or hold a regime by hand"
-            >
-              <PbSegmented
-                mono={false}
-                options={["Auto", "Defensive", "Risk-on"] as const}
-                value={
-                  strategy.regimeMode === "auto"
-                    ? "Auto"
-                    : strategy.regimeMode === "defensive"
-                      ? "Defensive"
-                      : "Risk-on"
-                }
-                onChange={(next) =>
-                  setStrategySetting(
-                    "regimeMode",
-                    (next === "Auto"
-                      ? "auto"
-                      : next === "Defensive"
-                        ? "defensive"
-                        : "risk-on") as RegimeMode,
-                  )
-                }
-              />
-            </Row>
-            <Row
-              label="Average"
-              description="Which moving average BTC is measured against"
-            >
-              <PbSegmented
-                options={["EMA", "SMA"] as const}
-                value={strategy.rule.average === "ema" ? "EMA" : "SMA"}
-                onChange={(next) =>
-                  setRule("average", next === "EMA" ? "ema" : "sma")
-                }
-              />
-            </Row>
-            <Row
-              label="Average length"
-              description={`Days. With the confirmation, fits in the ${MAX_HISTORY_DAYS} days of BTC history kept`}
-            >
-              <NumberField
-                label="Average length in days"
-                suffix="d"
-                width="w-[92px]"
-                integer
-                value={strategy.rule.window}
-                min={2}
-                max={MAX_HISTORY_DAYS - strategy.rule.confirmDays}
-                onCommit={(next) => setRule("window", next)}
-              />
-            </Row>
-            <Row
-              label="Confirmation"
-              description="Consecutive closes on one side before the regime switches"
-            >
-              <NumberField
-                label="Confirmation in days"
-                suffix="d"
-                width="w-[92px]"
-                integer
-                value={strategy.rule.confirmDays}
-                min={1}
-                max={MAX_HISTORY_DAYS - strategy.rule.window}
-                onCommit={(next) => setRule("confirmDays", next)}
-              />
-            </Row>
-            {(["risk-on", "defensive"] as const).map((regime: Regime) => {
-              const contribution = strategy.monthlyContribution;
-              const btc = strategy.splits[regime].crypto * contribution;
-              return (
-                <Row
-                  key={regime}
-                  label={
-                    regime === "risk-on"
-                      ? "Risk-on: to BTC"
-                      : "Defensive: to BTC"
-                  }
-                  description={`${formatEurWhole(btc)} BTC / ${formatEurWhole(contribution - btc)} stocks of ${formatEurWhole(contribution)}`}
-                >
-                  <NumberField
-                    label={`${regime} amount to BTC`}
-                    prefix="€"
-                    value={Math.round(btc * 100) / 100}
-                    min={0}
-                    max={contribution}
-                    onCommit={(next) =>
-                      contribution > 0 &&
-                      setRegimeCryptoShare(regime, next / contribution)
-                    }
-                  />
-                </Row>
-              );
-            })}
-          </Group>
-
-          <Group
-            title="Profit taking"
-            note="a signal on the Strategy page, never an order"
+      <Group title="Danger zone" note="cannot be undone">
+        <Row
+          label="Reset settings"
+          description="Puts every setting back to its default, on every device"
+        >
+          <ConfirmButton
+            title="Reset every setting?"
+            description="Display preferences, the strategy target, scenarios and rules all go back to their defaults, on every device. The portfolio itself is untouched."
+            onConfirm={() => {
+              resetPreferences();
+              resetStrategySettings();
+              toast.success("Settings reset.");
+            }}
           >
-            <Row
-              label="Days above the average"
-              description="Consecutive closes above before trimming BTC"
-            >
-              <NumberField
-                label="Days above the average"
-                suffix="d"
-                width="w-[92px]"
-                integer
-                value={strategy.profitRule.minDaysAbove}
-                min={1}
-                max={MAX_HISTORY_DAYS}
-                onCommit={(next) => setProfitRule("minDaysAbove", next)}
-              />
-            </Row>
-            <Row
-              label="BTC share over"
-              description="Of the whole portfolio, cash included"
-            >
-              <NumberField
-                label="BTC share threshold"
-                suffix="%"
-                width="w-[92px]"
-                value={Math.round(strategy.profitRule.maxBtcShare * 1e6) / 1e4}
-                min={0}
-                max={100}
-                onCommit={(next) => setProfitRule("maxBtcShare", next / 100)}
-              />
-            </Row>
-            <Row
-              label="Sell"
-              description="Share of the BTC held, once per run above"
-            >
-              <NumberField
-                label="Share of BTC to sell"
-                suffix="%"
-                width="w-[92px]"
-                value={Math.round(strategy.profitRule.sellFraction * 1e6) / 1e4}
-                min={0}
-                max={100}
-                onCommit={(next) => setProfitRule("sellFraction", next / 100)}
-              />
-            </Row>
-            <Row
-              label="Proceeds to S&P 500"
-              description={`The rest, ${Math.round((1 - strategy.profitRule.sp500Share) * 100)}%, to ex-US`}
-            >
-              <NumberField
-                label="Share of proceeds to the S&P 500"
-                suffix="%"
-                width="w-[92px]"
-                value={Math.round(strategy.profitRule.sp500Share * 1e6) / 1e4}
-                min={0}
-                max={100}
-                onCommit={(next) => setProfitRule("sp500Share", next / 100)}
-              />
-            </Row>
-          </Group>
-
-          <Group title="Account" note="Google, through the auth proxy">
-            <Row
-              label={me?.email || "Signed in"}
-              description="Only this address reaches the API"
-            >
-              <a href={SIGN_OUT_URL}>
-                <PbGhostButton>Sign out</PbGhostButton>
-              </a>
-            </Row>
-          </Group>
-
-          <Group title="Venues" note="where your money sits">
-            {venues.length === 0 && (
-              <p className="px-[18px] py-[13px] text-[11.5px] text-pb-muted">
-                A venue appears here once a transaction names it — type one in
-                the Where field when you log a buy, sell or move.
-              </p>
-            )}
-            {venues.map((venue) => (
-              <Row
-                key={venue.name}
-                label={venue.name}
-                description={`${venue.transactions} transaction${venue.transactions === 1 ? "" : "s"}`}
-              >
-                <VenueRename
-                  name={venue.name}
-                  onRename={(to) =>
-                    renameVenue.mutate({ from: venue.name, to })
-                  }
-                />
-              </Row>
-            ))}
-          </Group>
-
-          <Group title="Danger zone" note="cannot be undone">
-            <Row
-              label="Export portfolio"
-              description="Download every position, transaction and snapshot as JSON"
-            >
-              {/* A plain link: the response carries its own Content-Disposition,
-                  and the browser handles the save without any script. */}
-              <a href={apiUrl("/api/export/")}>
-                <PbGhostButton>Export</PbGhostButton>
-              </a>
-            </Row>
-            <Row
-              label="Reset preferences"
-              description="Puts every setting on this page back to its default"
-            >
-              <DangerButton
-                onClick={() => {
-                  for (const key of Object.keys(
-                    DEFAULT_PREFERENCES,
-                  ) as (keyof Preferences)[]) {
-                    setPreference(key, DEFAULT_PREFERENCES[key]);
-                  }
-                  resetStrategySettings();
-                  toast.success("Preferences reset.");
-                }}
-              >
-                Reset
-              </DangerButton>
-            </Row>
-          </Group>
-
-          <p className="text-center font-number text-[10.5px] text-pb-faintest">
-            Pebble 2.0.0 · single-tenant — one portfolio, one owner
-          </p>
-        </div>
-      </div>
+            <DangerButton>Reset</DangerButton>
+          </ConfirmButton>
+        </Row>
+      </Group>
     </>
   );
 }
 
+/* ── Building blocks ─────────────────────────────────────────────────────── */
+
+/** A card of rows. The title is optional: a one-card section's heading already names it. */
 function Group({
   title,
   note,
   children,
 }: {
-  readonly title: string;
-  readonly note: string;
+  readonly title?: string;
+  readonly note?: string;
   readonly children: React.ReactNode;
 }) {
   return (
     <PbCard>
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-pb-subtle px-[18px] py-[13px]">
-        <h2 className="text-[12.5px] font-semibold">{title}</h2>
-        <span className="font-number text-[10.5px] text-pb-faint">{note}</span>
-      </div>
+      {title && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-pb-subtle px-[18px] py-[13px]">
+          <h3 className="text-[12.5px] font-semibold">{title}</h3>
+          {note && (
+            <span className="font-number text-[10.5px] text-pb-faint">
+              {note}
+            </span>
+          )}
+        </div>
+      )}
       {children}
     </PbCard>
   );

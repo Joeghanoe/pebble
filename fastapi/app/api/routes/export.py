@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session, select
 
 from app.core.db import get_session
-from app.models import Asset, Exchange, NetWorthSnapshot, Transaction
+from app.models import Asset, Exchange, NetWorthSnapshot, Setting, Transaction
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -30,6 +30,7 @@ def export_db(session: Session = Depends(get_session)) -> JSONResponse:
             s.model_dump()
             for s in session.exec(select(NetWorthSnapshot).order_by(NetWorthSnapshot.date)).all()  # type: ignore[arg-type]
         ],
+        "settings": {s.name: s.value for s in session.exec(select(Setting)).all()},
     }
     filename = f"pebble-{date_cls.today().isoformat()}.json"
     return JSONResponse(

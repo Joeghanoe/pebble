@@ -173,6 +173,37 @@ export const HTTPValidationErrorSchema = {
   title: "HTTPValidationError",
 } as const;
 
+export const SettingsResponseSchema = {
+  properties: {
+    preferences: {
+      anyOf: [
+        {
+          additionalProperties: true,
+          type: "object",
+        },
+        {
+          type: "null",
+        },
+      ],
+      title: "Preferences",
+    },
+    strategy: {
+      anyOf: [
+        {
+          additionalProperties: true,
+          type: "object",
+        },
+        {
+          type: "null",
+        },
+      ],
+      title: "Strategy",
+    },
+  },
+  type: "object",
+  title: "SettingsResponse",
+} as const;
+
 export const TransactionCreateSchema = {
   properties: {
     asset_id: {

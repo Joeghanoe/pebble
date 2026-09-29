@@ -8,6 +8,7 @@ from app.api.routes import (
     net_worth,
     positions,
     prices,
+    settings,
     transactions,
     venues,
 )
@@ -21,4 +22,5 @@ api_router.include_router(positions.router)
 api_router.include_router(prices.router)
 api_router.include_router(net_worth.router)
 api_router.include_router(export.router)
+api_router.include_router(settings.router)
 api_router.include_router(venues.router)

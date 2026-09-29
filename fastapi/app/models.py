@@ -1,6 +1,8 @@
 from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import StringConstraints, model_validator
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
 # ============================================================================
@@ -76,6 +78,22 @@ class PositionSnapshot(SQLModel, table=True):
     price_eur: float
     value_eur: float
     invested_eur: float
+
+
+class Setting(SQLModel, table=True):
+    """One settings document per name, shared by every device the owner signs in on.
+
+    The value is opaque to the API: the SPA owns the shape, merges it over its own
+    defaults on read, and nothing server-side computes from it. Validating it here
+    would mean every new toggle needs a backend release.
+    """
+
+    __tablename__ = "setting"  # type: ignore[assignment]
+
+    name: str = Field(primary_key=True, max_length=50)
+    value: dict[str, Any] = Field(sa_column=Column(JSONB, nullable=False))
+    # ISO 8601 UTC, whole seconds, like transaction.deleted_at.
+    updated_at: str = Field(max_length=40)
 
 
 # ============================================================================
@@ -267,6 +285,17 @@ class GetVenuesResponse(SQLModel):
 class VenueRename(SQLModel):
     from_name: VenueName
     to_name: VenueName
+
+
+# The documents the SPA keeps. A closed set, so a typo in a client is a 422 rather than
+# a stray row nothing ever reads.
+SettingName = Literal["preferences", "strategy"]
+
+
+class SettingsResponse(SQLModel):
+    # None until the first device writes that document; the SPA then keeps its defaults.
+    preferences: Optional[dict[str, Any]] = None
+    strategy: Optional[dict[str, Any]] = None
 
 
 class Message(SQLModel):
