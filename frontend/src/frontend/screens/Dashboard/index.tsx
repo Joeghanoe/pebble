@@ -390,47 +390,7 @@ function AllocationCard({
           ))}
         </div>
       </div>
-
-      <div className="mt-auto grid grid-cols-2 gap-2">
-        <ExtremeTile label="Best" holding={portfolio.best} />
-        <ExtremeTile label="Worst" holding={portfolio.worst} />
-      </div>
     </PbCard>
-  );
-}
-
-function ExtremeTile({
-  label,
-  holding,
-}: {
-  readonly label: string;
-  readonly holding: HoldingRow | null;
-}) {
-  return (
-    <div className="rounded-[10px] border border-[#201C2D] bg-pb-raised px-2.5 py-2.5">
-      <span className="block font-number text-[9.5px] tracking-[0.1em] text-pb-muted uppercase">
-        {label}
-      </span>
-      {holding ? (
-        <span className="mt-0.5 flex items-baseline justify-between gap-2">
-          <span className="truncate font-number text-[12.5px]">
-            {holding.asset.symbol}
-          </span>
-          <span
-            className={cn(
-              "font-number text-[12px] tabular-nums",
-              pnlClass(holding.pnl_pct),
-            )}
-          >
-            {formatPct(holding.pnl_pct)}
-          </span>
-        </span>
-      ) : (
-        <span className="mt-0.5 block font-number text-[12.5px] text-pb-faint">
-          —
-        </span>
-      )}
-    </div>
   );
 }
 
