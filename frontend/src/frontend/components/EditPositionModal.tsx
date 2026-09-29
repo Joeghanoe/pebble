@@ -6,12 +6,11 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import type { Asset, Exchange } from "@/types/db";
+import type { Asset } from "@/types/db";
 import { PbGhostButton, PbSegmented } from "./pebble/primitives";
 
 interface Props {
   readonly asset: Asset;
-  readonly exchanges: Exchange[];
 }
 
 const TYPES = ["Crypto", "ETF", "Stock", "Cash"] as const;
@@ -26,7 +25,7 @@ const TYPE_VALUES: Record<(typeof TYPES)[number], Asset["type"]> = {
  * Corrects an existing asset — most often a price-feed identity that was wrong
  * or missing, which is why the position shows a cost basis and no live quote.
  */
-export function EditPositionModal({ asset, exchanges }: Props) {
+export function EditPositionModal({ asset }: Props) {
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -52,11 +51,7 @@ export function EditPositionModal({ asset, exchanges }: Props) {
         >
           {/* Radix unmounts the content while closed, so the form seeds itself
               from the asset on each open rather than in an effect. */}
-          <EditForm
-            asset={asset}
-            exchanges={exchanges}
-            onClose={() => setOpen(false)}
-          />
+          <EditForm asset={asset} onClose={() => setOpen(false)} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -65,11 +60,9 @@ export function EditPositionModal({ asset, exchanges }: Props) {
 
 function EditForm({
   asset,
-  exchanges,
   onClose,
 }: {
   readonly asset: Asset;
-  readonly exchanges: Exchange[];
   readonly onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -81,7 +74,6 @@ function EditForm({
   );
   const [symbol, setSymbol] = React.useState(asset.symbol);
   const [name, setName] = React.useState(asset.name);
-  const [exchangeId, setExchangeId] = React.useState(asset.exchange_id);
   const [yahooTicker, setYahooTicker] = React.useState(
     asset.yahoo_ticker ?? "",
   );
@@ -91,10 +83,6 @@ function EditForm({
   const [error, setError] = React.useState<string | null>(null);
 
   const assetType = TYPE_VALUES[type];
-  const available =
-    assetType === "crypto"
-      ? exchanges.filter((e) => e.type === "crypto")
-      : exchanges.filter((e) => e.type === "broker" || e.type === "manual");
 
   const updatePosition = useMutation({
     mutationFn: (body: Parameters<typeof api.updateAsset>[1]) =>
@@ -119,7 +107,6 @@ function EditForm({
       symbol: symbol.trim().toUpperCase(),
       name: name.trim(),
       type: assetType,
-      exchangeId,
       yahooTicker: yahooTicker.trim() || null,
       coingeckoId: coingeckoId.trim() || null,
     });
@@ -165,29 +152,14 @@ function EditForm({
             />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className={label}>Held at</span>
-            <select
-              value={exchangeId}
-              onChange={(event) => setExchangeId(Number(event.target.value))}
-              className={cn(input, "cursor-pointer")}
-            >
-              {available.map((exchange) => (
-                <option key={exchange.id} value={exchange.id}>
-                  {exchange.name}
-                </option>
-              ))}
-            </select>
+            <span className={label}>Name</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className={input}
+            />
           </label>
         </div>
-
-        <label className="flex flex-col gap-1.5">
-          <span className={label}>Name</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className={input}
-          />
-        </label>
 
         {assetType === "crypto" && (
           <label className="flex flex-col gap-1.5">

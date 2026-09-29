@@ -1,8 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ExchangesService } from "@/client";
-import type { GetExchangesResponse } from "@/types/api";
 import { AddTransactionModal } from "./AddTransactionModal";
 import { AddPositionModal, type PositionPrefill } from "./AddPositionModal";
 
@@ -40,14 +37,6 @@ export function TransactionModalProvider({
   const [positionOpen, setPositionOpen] = React.useState(false);
   const [prefill, setPrefill] = React.useState<PositionPrefill | undefined>();
 
-  // The position dialog needs somewhere to file the asset, and the list is tiny
-  // and rarely changes, so it is fetched once here rather than at each caller.
-  const { data } = useQuery({
-    queryKey: ["exchanges"],
-    queryFn: () =>
-      ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
-  });
-
   const value = React.useMemo<TransactionModalContext>(
     () => ({
       openTransaction: (next?: number) => {
@@ -73,7 +62,6 @@ export function TransactionModalProvider({
       <AddPositionModal
         open={positionOpen}
         onOpenChange={setPositionOpen}
-        exchanges={data?.exchanges ?? []}
         prefill={prefill}
       />
     </Context.Provider>

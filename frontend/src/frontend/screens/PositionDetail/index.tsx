@@ -3,15 +3,11 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import {
-  PositionsService,
-  TransactionsService,
-  ExchangesService,
-} from "@/client";
+import { PositionsService, TransactionsService } from "@/client";
 import type {
-  GetExchangesResponse,
   GetPositionHistoryResponse,
   GetTransactionsResponse,
+  VenueHolding,
 } from "@/types/api";
 import { api } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
@@ -45,6 +41,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { EditPositionModal } from "@/frontend/components/EditPositionModal";
 import { useTransactionModal } from "@/frontend/components/TransactionModalProvider";
 import {
+  PbBar,
   PbCadenceChart,
   PbCard,
   PbCardHeader,
@@ -60,7 +57,7 @@ import {
 
 /** Header and rows share one template. */
 const COLUMNS =
-  "110px 70px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 90px 28px";
+  "110px 70px minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 90px 28px";
 
 /**
  * One position: what it is worth now, what it cost, and every transaction that
@@ -93,12 +90,6 @@ export function PositionDetail() {
         assetId,
         period: timeframePeriod(timeframe),
       }) as unknown as Promise<GetPositionHistoryResponse>,
-  });
-
-  const { data: exchangesData } = useQuery({
-    queryKey: ["exchanges"],
-    queryFn: () =>
-      ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
   });
 
   const deleteTx = useMutation({
@@ -175,12 +166,7 @@ export function PositionDetail() {
   return (
     <>
       <SiteHeader name={symbol} onBack>
-        {position && (
-          <EditPositionModal
-            asset={position.asset}
-            exchanges={exchangesData?.exchanges ?? []}
-          />
-        )}
+        {position && <EditPositionModal asset={position.asset} />}
         <ConfirmButton
           title={`Delete ${symbol}?`}
           description="The position goes, and so do its transactions, cached prices and snapshots. This cannot be undone."
@@ -322,6 +308,16 @@ export function PositionDetail() {
           </div>
         </div>
 
+        {position && position.venues.length > 0 && (
+          <HeldAtCard
+            venues={position.venues}
+            unitPrice={unitPrice}
+            symbol={symbol}
+            isCash={position.asset.type === "cash"}
+            fullPrecision={prefs.fullPrecision}
+          />
+        )}
+
         {/* The pair the release build had below the hero: which buys are in
             profit, and how steadily they were made. */}
         <div className="grid grid-cols-1 gap-3.5 min-[980px]:grid-cols-2">
@@ -346,13 +342,14 @@ export function PositionDetail() {
           </PbCardHeader>
 
           <div className="overflow-x-auto">
-            <div className="min-w-[820px]">
+            <div className="min-w-[940px]">
               <div
                 className="grid gap-2.5 px-[18px] py-2 font-number text-[9.5px] tracking-[0.1em] text-pb-faint uppercase"
                 style={{ gridTemplateColumns: COLUMNS }}
               >
                 <span>Date</span>
                 <span>Type</span>
+                <span>Where</span>
                 <span className="text-right">Amount</span>
                 <span className="text-right">Unit price</span>
                 <span className="text-right">Paid</span>
@@ -370,6 +367,7 @@ export function PositionDetail() {
               {[...enriched].reverse().map((tx) => {
                 const paidPerUnit = tx.units > 0 ? tx.eur_amount / tx.units : 0;
                 const isSell = tx.type === "sell";
+                const isMove = tx.type === "move";
                 return (
                   <div
                     key={tx.id}
@@ -386,23 +384,34 @@ export function PositionDetail() {
                       <span
                         className="inline-block rounded-[5px] px-[7px] py-0.5 font-number text-[9.5px]"
                         style={{
-                          background: isSell
-                            ? "rgba(248,113,113,.1)"
-                            : "rgba(52,211,153,.1)",
-                          color: isSell ? "#F87171" : "#34D399",
+                          background: isMove
+                            ? "rgba(139,92,246,.14)"
+                            : isSell
+                              ? "rgba(248,113,113,.1)"
+                              : "rgba(52,211,153,.1)",
+                          color: isMove
+                            ? "#C084FC"
+                            : isSell
+                              ? "#F87171"
+                              : "#34D399",
                         }}
                       >
-                        {isSell ? "SELL" : "BUY"}
+                        {isMove ? "MOVE" : isSell ? "SELL" : "BUY"}
                       </span>
+                    </span>
+                    <span className="truncate text-[11.5px] text-pb-text-2">
+                      {isMove
+                        ? `${tx.venue ?? "Unassigned"} → ${tx.to_venue ?? "?"}`
+                        : (tx.venue ?? "—")}
                     </span>
                     <span className="text-right font-number text-[11.5px] tabular-nums">
                       {formatUnits(tx.units, prefs.fullPrecision)}
                     </span>
                     <span className="text-right font-number text-[11.5px] text-pb-text-3 tabular-nums">
-                      {formatEurPrice(paidPerUnit)}
+                      {isMove ? "—" : formatEurPrice(paidPerUnit)}
                     </span>
                     <span className="text-right font-number text-[11.5px] tabular-nums">
-                      {formatEur(tx.eur_amount)}
+                      {isMove ? "—" : formatEur(tx.eur_amount)}
                     </span>
                     <span className="text-right font-number text-[11.5px] tabular-nums">
                       {tx.currentVal === null ? "—" : formatEur(tx.currentVal)}
@@ -476,5 +485,70 @@ function LedgerPnl({
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * Where the position sits: units per venue, and what each slice is worth. For
+ * cash this is the balance at each bank and exchange.
+ */
+function HeldAtCard({
+  venues,
+  unitPrice,
+  symbol,
+  isCash,
+  fullPrecision,
+}: {
+  readonly venues: readonly VenueHolding[];
+  readonly unitPrice: number | null;
+  readonly symbol: string;
+  readonly isCash: boolean;
+  readonly fullPrecision: boolean;
+}) {
+  const total = venues.reduce((sum, v) => sum + v.units, 0);
+  return (
+    <PbCard>
+      <PbCardHeader
+        title="Held at"
+        note={`${venues.length} venue${venues.length === 1 ? "" : "s"}`}
+        className="border-b border-pb-subtle"
+      />
+      {venues.map((v) => {
+        const value = isCash
+          ? v.units
+          : unitPrice === null
+            ? null
+            : v.units * unitPrice;
+        return (
+          <div
+            key={v.venue ?? ""}
+            className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 border-b border-pb-hairline px-[18px] py-2.5 last:border-b-0"
+          >
+            <div className="min-w-0">
+              <span
+                className={cn(
+                  "block truncate text-[12.5px] font-medium",
+                  v.venue === null && "text-pb-muted italic",
+                )}
+              >
+                {v.venue ?? "Unassigned"}
+              </span>
+              <PbBar
+                percent={total > 0 ? (v.units / total) * 100 : 0}
+                color="#8B5CF6"
+              />
+            </div>
+            {!isCash && (
+              <span className="text-right font-number text-[11.5px] text-pb-text-3 tabular-nums">
+                {formatUnits(v.units, fullPrecision)} {symbol}
+              </span>
+            )}
+            <span className="min-w-[96px] text-right font-number text-[12px] tabular-nums">
+              {value === null ? "—" : formatEur(value)}
+            </span>
+          </div>
+        );
+      })}
+    </PbCard>
   );
 }

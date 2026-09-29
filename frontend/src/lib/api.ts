@@ -1,10 +1,10 @@
 import {
   OpenAPI,
   AssetsService,
-  ExchangesService,
   MeService,
   PricesService,
   TransactionsService,
+  VenuesService,
 } from "@/client";
 import type { RefreshPricesResponse } from "@/types/api";
 
@@ -31,15 +31,20 @@ export const api = {
     units: number;
     eurAmount: number;
     notes?: string;
+    venue?: string | null;
+    /** A move's destination; only a move has one. */
+    toVenue?: string | null;
   }) =>
     TransactionsService.createTransactionApiTransactionsPost({
       requestBody: {
         asset_id: body.assetId,
         date: body.date,
-        type: body.type as "buy" | "sell",
+        type: body.type as "buy" | "sell" | "move",
         units: body.units,
         eur_amount: body.eurAmount,
         notes: body.notes ?? null,
+        venue: body.venue || null,
+        to_venue: body.toVenue || null,
       },
     }),
 
@@ -48,22 +53,11 @@ export const api = {
       txId,
     }),
 
-  createExchange: (body: { name: string; type: string }) =>
-    ExchangesService.createExchangeApiExchangesPost({
-      requestBody: {
-        name: body.name,
-        type: body.type as "crypto" | "broker" | "manual",
-      },
-    }),
-
-  deleteExchange: (exchangeId: number) =>
-    ExchangesService.deleteExchangeApiExchangesExchangeIdDelete({ exchangeId }),
-
   createAsset: (body: {
     symbol: string;
     name: string;
     type: string;
-    exchangeId: number;
+    exchangeId?: number | null;
     yahooTicker?: string | null;
     coingeckoId?: string | null;
   }) =>
@@ -72,7 +66,7 @@ export const api = {
         symbol: body.symbol,
         name: body.name,
         type: body.type as "crypto" | "etf" | "cash" | "stock",
-        exchange_id: body.exchangeId,
+        exchange_id: body.exchangeId ?? null,
         yahoo_ticker: body.yahooTicker,
         coingecko_id: body.coingeckoId,
       },
@@ -99,6 +93,12 @@ export const api = {
         yahoo_ticker: body.yahooTicker,
         coingecko_id: body.coingeckoId,
       },
+    }),
+
+  /** Renames a venue on every transaction; onto an existing name, the two merge. */
+  renameVenue: (fromName: string, toName: string) =>
+    VenuesService.renameVenueApiVenuesRenamePost({
+      requestBody: { from_name: fromName, to_name: toName },
     }),
 
   /** Deletes the position outright, with its transactions, prices and snapshots. */

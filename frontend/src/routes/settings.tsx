@@ -5,14 +5,14 @@ import {
   SETTINGS_SECTIONS,
   type SettingsSection,
 } from "@/frontend/screens/Settings/sections";
-import { ExchangesService } from "@/client";
-import type { GetExchangesResponse } from "@/types/api";
+import { VenuesService } from "@/client";
+import type { GetVenuesResponse } from "@/types/api";
 
 export const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
   // The open section is a search param, not a child route: one screen, one
-  // loader, and /settings?section=exchanges still bookmarks and survives Back.
+  // loader, and /settings?section=venues still bookmarks and survives Back.
   validateSearch: (
     search: Record<string, unknown>,
   ): { section?: SettingsSection } => {
@@ -21,9 +21,9 @@ export const settingsRoute = createRoute({
   },
   loader: ({ context: { queryClient } }) => {
     void queryClient.prefetchQuery({
-      queryKey: ["exchanges"],
+      queryKey: ["venues"],
       queryFn: () =>
-        ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+        VenuesService.listVenuesApiVenuesGet() as unknown as Promise<GetVenuesResponse>,
     });
   },
   component: Settings,

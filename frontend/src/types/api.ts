@@ -1,9 +1,17 @@
 import type { Asset, Exchange, Transaction } from "./db";
 import type { PriceResult } from "./price";
 
+/** Units of a position held at one venue. `venue` is null for unassigned history. */
+export type VenueHolding = {
+  venue: string | null;
+  units: number;
+};
+
 export type Position = {
   asset: Asset;
-  exchange: Exchange;
+  exchange: Exchange | null;
+  /** Units per venue, largest first; they sum to `units_held`. */
+  venues: VenueHolding[];
   current_value_eur: number;
   total_invested_eur: number;
   units_held: number;
@@ -70,4 +78,14 @@ export type BtcDailyClose = {
 /** A year of daily BTC closes as cached, oldest first. Gaps are not filled. */
 export type GetBtcDailyResponse = {
   closes: BtcDailyClose[];
+};
+
+export type VenueSummary = {
+  name: string;
+  /** How many live transactions name it, at either end of a move. */
+  transactions: number;
+};
+
+export type GetVenuesResponse = {
+  venues: VenueSummary[];
 };

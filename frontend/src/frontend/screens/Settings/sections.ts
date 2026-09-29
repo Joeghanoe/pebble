@@ -32,9 +32,10 @@ export const SETTINGS_SECTIONS = [
       "When the Strategy page suggests trimming BTC. A signal, never an order.",
   },
   {
-    id: "exchanges",
-    label: "Exchanges",
-    description: "Where each position is held.",
+    id: "venues",
+    label: "Venues",
+    description:
+      "Where your money sits. Renaming onto an existing venue merges the two.",
   },
   {
     id: "account",
