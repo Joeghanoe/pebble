@@ -29,8 +29,6 @@ export interface Portfolio {
   allocation: { klass: AssetClass; value: number; fraction: number }[];
   /** The same total split by where it is held, largest first. */
   venues: VenueSlice[];
-  best: HoldingRow | null;
-  worst: HoldingRow | null;
   lastUpdated: string | null;
   isLoading: boolean;
 }
@@ -88,12 +86,6 @@ export function usePortfolio(): Portfolio {
     return { klass, value, fraction: totalValue > 0 ? value / totalValue : 0 };
   }).filter((entry) => entry.value > 0);
 
-  // Best and worst are about performance, so positions the feed cannot price are
-  // not candidates — their P&L is stale, not good or bad.
-  const ranked = positions
-    .filter((p) => p.unitPrice !== null && p.total_invested_eur > 0)
-    .sort((a, b) => b.pnl_pct - a.pnl_pct);
-
   return {
     positions,
     totalValue,
@@ -107,8 +99,6 @@ export function usePortfolio(): Portfolio {
     btcEurPrice,
     allocation,
     venues: venueBreakdown(raw),
-    best: ranked[0] ?? null,
-    worst: ranked.length > 1 ? ranked[ranked.length - 1] : null,
     lastUpdated: data?.last_updated ?? null,
     isLoading,
   };
