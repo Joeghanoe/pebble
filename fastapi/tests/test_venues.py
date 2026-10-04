@@ -21,7 +21,7 @@ from app.core.db import engine
 def _asset(client: TestClient, symbol: str = "BTC", type_: str = "crypto") -> int:
     # No exchange: new positions no longer need one.
     response = client.post(
-        "/api/assets/", json={"symbol": symbol, "name": symbol, "type": type_}
+        "/api/v1/assets/", json={"symbol": symbol, "name": symbol, "type": type_}
     )
     assert response.status_code == 201, response.text
     return response.json()["asset"]["id"]
@@ -30,12 +30,12 @@ def _asset(client: TestClient, symbol: str = "BTC", type_: str = "crypto") -> in
 def _tx(client: TestClient, asset_id: int, **fields) -> dict:  # noqa: ANN003
     body = {"asset_id": asset_id, "date": "2026-09-01", "units": 1, "eur_amount": 100}
     body.update(fields)
-    return client.post("/api/transactions/", json=body)
+    return client.post("/api/v1/transactions/", json=body)
 
 
 def _position(client: TestClient, asset_id: int) -> dict:
     return next(
-        p for p in client.get("/api/positions/").json()["positions"]
+        p for p in client.get("/api/v1/positions/").json()["positions"]
         if p["asset"]["id"] == asset_id
     )
 
@@ -109,7 +109,7 @@ def test_only_a_move_has_a_destination(client: TestClient) -> None:
 def test_venue_names_are_trimmed(client: TestClient) -> None:
     btc = _asset(client)
     _tx(client, btc, type="buy", venue="  Revolut ")
-    assert client.get("/api/venues/").json()["venues"] == [
+    assert client.get("/api/v1/venues/").json()["venues"] == [
         {"name": "Revolut", "transactions": 1}
     ]
 
@@ -119,7 +119,7 @@ def test_venues_list_counts_both_ends_of_a_move(client: TestClient) -> None:
     _tx(client, btc, type="buy", venue="Bitvavo")
     _tx(client, btc, type="move", venue="Bitvavo", to_venue="MetaMask")
 
-    assert client.get("/api/venues/").json()["venues"] == [
+    assert client.get("/api/v1/venues/").json()["venues"] == [
         {"name": "Bitvavo", "transactions": 2},
         {"name": "MetaMask", "transactions": 1},
     ]
@@ -132,7 +132,7 @@ def test_renaming_onto_an_existing_venue_merges_them(client: TestClient) -> None
     _tx(client, btc, type="move", units=1, venue="bitvavo", to_venue="MetaMask")
 
     response = client.post(
-        "/api/venues/rename", json={"from_name": "bitvavo", "to_name": "Bitvavo"}
+        "/api/v1/venues/rename", json={"from_name": "bitvavo", "to_name": "Bitvavo"}
     )
 
     assert response.json() == {"changed": 2}
@@ -143,7 +143,7 @@ def test_renaming_onto_an_existing_venue_merges_them(client: TestClient) -> None
 
 
 def test_renaming_an_unknown_venue_is_a_404(client: TestClient) -> None:
-    response = client.post("/api/venues/rename", json={"from_name": "Nowhere", "to_name": "X"})
+    response = client.post("/api/v1/venues/rename", json={"from_name": "Nowhere", "to_name": "X"})
     assert response.status_code == 404
 
 

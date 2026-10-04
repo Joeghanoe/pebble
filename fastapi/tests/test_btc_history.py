@@ -11,8 +11,9 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import Asset, Exchange, PriceCache
+from app.models import Exchange
 from app.services import btc_history
+from tests.factories import cache_price, make_asset
 
 
 class _FakePriceService:
@@ -28,19 +29,13 @@ def _btc(session: Session, coingecko_id: str | None = "bitcoin") -> int:
     exchange = Exchange(name="Venue", type="crypto")
     session.add(exchange)
     session.commit()
-    asset = Asset(
-        symbol="BTC", name="Bitcoin", type="crypto", exchange_id=exchange.id,
-        coingecko_id=coingecko_id,
+    return make_asset(
+        session, "BTC", name="Bitcoin", exchange_id=exchange.id, coingecko_id=coingecko_id  # type: ignore[arg-type]
     )
-    session.add(asset)
-    session.commit()
-    return asset.id  # type: ignore[return-value]
 
 
 def _price(session: Session, asset_id: int, day: date, price: float = 50_000.0) -> None:
-    session.add(
-        PriceCache(asset_id=asset_id, date=day.isoformat(), price_eur=price, exchange_rate=1.1)
-    )
+    cache_price(session, asset_id, day.isoformat(), price)
 
 
 def _fake(monkeypatch) -> _FakePriceService:  # noqa: ANN001
@@ -100,7 +95,7 @@ def test_endpoint_returns_the_year_oldest_first(client: TestClient, session: Ses
     _price(session, asset_id, today - timedelta(days=10), 2.0)
     session.commit()
 
-    closes = client.get("/api/prices/btc/daily").json()["closes"]
+    closes = client.get("/api/v1/prices/btc/daily").json()["closes"]
 
     assert closes == [
         {"date": (today - timedelta(days=10)).isoformat(), "price_eur": 2.0},
@@ -109,4 +104,4 @@ def test_endpoint_returns_the_year_oldest_first(client: TestClient, session: Ses
 
 
 def test_endpoint_is_empty_without_btc(client: TestClient) -> None:
-    assert client.get("/api/prices/btc/daily").json() == {"closes": []}
+    assert client.get("/api/v1/prices/btc/daily").json() == {"closes": []}

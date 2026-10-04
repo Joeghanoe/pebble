@@ -55,7 +55,7 @@ def record_snapshot_for_date(session: Session, date_str: str) -> None:
     """
     total_eur = 0.0
     for asset in _priced_assets(session):
-        price_row = crud.get_price_on_or_before(session, asset.id, date_str)
+        price_row = crud.get_price_on_or_before(session, asset.instrument_id, date_str)
         if not price_row:
             continue
         total_eur += _write_position_row(session, asset, date_str, price_row.price_eur)
@@ -96,7 +96,7 @@ def _is_fully_priced(session: Session, assets: list, date_str: str) -> bool:
     for asset in assets:
         if crud.get_units_held_on_date(session, asset.id, date_str) <= 0:
             continue
-        price_row = crud.get_price_on_or_before(session, asset.id, date_str)
+        price_row = crud.get_price_on_or_before(session, asset.instrument_id, date_str)
         if not price_row:
             return False
         if (target - date_cls.fromisoformat(price_row.date)).days > CARRY_FORWARD_DAYS:
@@ -195,10 +195,10 @@ async def run_snapshot_backfill(session: Session) -> None:
                 if units <= 0:
                     continue
 
-                price_row = crud.get_price_on_or_before(session, asset.id, date_str)
+                price_row = crud.get_price_on_or_before(session, asset.instrument_id, date_str)
                 if not price_row:
                     await price_service.fetch_historical_price(session, asset, date_str)
-                    price_row = crud.get_price_on_or_before(session, asset.id, date_str)
+                    price_row = crud.get_price_on_or_before(session, asset.instrument_id, date_str)
 
                 if not price_row:
                     all_prices_available = False

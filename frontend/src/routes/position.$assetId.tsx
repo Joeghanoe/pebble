@@ -16,12 +16,12 @@ export const positionRoute = createRoute({
     void queryClient.prefetchQuery({
       queryKey: ["positions"],
       queryFn: () =>
-        PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
+        PositionsService.getPositions() as unknown as Promise<GetPositionsResponse>,
     });
     void queryClient.prefetchQuery({
       queryKey: ["position-history", id, "1d"],
       queryFn: () =>
-        PositionsService.getPositionHistoryApiPositionsAssetIdHistoryGet({
+        PositionsService.getPositionHistory({
           assetId: id,
           period: "1d",
         }) as unknown as Promise<GetPositionHistoryResponse>,
@@ -29,7 +29,7 @@ export const positionRoute = createRoute({
     void queryClient.prefetchQuery({
       queryKey: ["transactions", id],
       queryFn: () =>
-        TransactionsService.listTransactionsApiTransactionsAssetIdGet({
+        TransactionsService.listTransactions({
           assetId: id,
         }) as unknown as Promise<GetTransactionsResponse>,
     });

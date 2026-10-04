@@ -17,10 +17,10 @@ export const SIGN_OUT_URL = "/oauth2/sign_out";
 
 export const api = {
   getMe: (): Promise<{ email: string }> =>
-    MeService.getMeApiMeGet() as unknown as Promise<{ email: string }>,
+    MeService.getMe() as unknown as Promise<{ email: string }>,
 
   refreshPrices: (force = false): Promise<RefreshPricesResponse> =>
-    PricesService.refreshPricesApiPricesRefreshPost({
+    PricesService.refreshPrices({
       force,
     }) as unknown as Promise<RefreshPricesResponse>,
 
@@ -35,7 +35,7 @@ export const api = {
     /** A move's destination; only a move has one. */
     toVenue?: string | null;
   }) =>
-    TransactionsService.createTransactionApiTransactionsPost({
+    TransactionsService.createTransaction({
       requestBody: {
         asset_id: body.assetId,
         date: body.date,
@@ -49,7 +49,7 @@ export const api = {
     }),
 
   deleteTransaction: (txId: number) =>
-    TransactionsService.deleteTransactionApiTransactionsTxIdDeleteDelete({
+    TransactionsService.deleteTransaction({
       txId,
     }),
 
@@ -61,7 +61,7 @@ export const api = {
     yahooTicker?: string | null;
     coingeckoId?: string | null;
   }) =>
-    AssetsService.createAssetApiAssetsPost({
+    AssetsService.createAsset({
       requestBody: {
         symbol: body.symbol,
         name: body.name,
@@ -83,7 +83,7 @@ export const api = {
       coingeckoId?: string | null;
     },
   ) =>
-    AssetsService.updateAssetApiAssetsAssetIdPut({
+    AssetsService.updateAsset({
       assetId,
       requestBody: {
         symbol: body.symbol,
@@ -97,11 +97,10 @@ export const api = {
 
   /** Renames a venue on every transaction; onto an existing name, the two merge. */
   renameVenue: (fromName: string, toName: string) =>
-    VenuesService.renameVenueApiVenuesRenamePost({
+    VenuesService.renameVenue({
       requestBody: { from_name: fromName, to_name: toName },
     }),
 
-  /** Deletes the position outright, with its transactions, prices and snapshots. */
-  deleteAsset: (assetId: number) =>
-    AssetsService.deleteAssetApiAssetsAssetIdDelete({ assetId }),
+  /** Deletes the position outright, with its transactions and snapshots. Prices stay with the instrument. */
+  deleteAsset: (assetId: number) => AssetsService.deleteAsset({ assetId }),
 };

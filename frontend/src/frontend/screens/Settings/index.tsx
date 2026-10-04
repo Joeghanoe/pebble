@@ -530,7 +530,7 @@ function VenuesSection() {
   const { data: venuesData } = useQuery({
     queryKey: ["venues"],
     queryFn: () =>
-      VenuesService.listVenuesApiVenuesGet() as unknown as Promise<GetVenuesResponse>,
+      VenuesService.listVenues() as unknown as Promise<GetVenuesResponse>,
   });
 
   const renameVenue = useMutation({
@@ -597,7 +597,7 @@ function AccountSection() {
         >
           {/* A plain link: the response carries its own Content-Disposition,
               and the browser handles the save without any script. */}
-          <a href={apiUrl("/api/export/")}>
+          <a href={apiUrl("/api/v1/export/")}>
             <PbGhostButton>Export</PbGhostButton>
           </a>
         </Row>

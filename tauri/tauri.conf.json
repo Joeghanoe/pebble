@@ -13,8 +13,7 @@
         "width": 1280,
         "height": 800,
         "minWidth": 900,
-        "minHeight": 600,
-        "url": "https://REPLACE-ME.up.railway.app"
+        "minHeight": 600
       }
     ],
     "security": {

@@ -2,6 +2,7 @@ import time
 from collections.abc import Generator
 
 from loguru import logger
+from psycopg.types.numeric import FloatLoader
 from sqlalchemy import event
 from sqlmodel import Session, create_engine
 
@@ -16,6 +17,19 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_recycle=1800,
 )
+
+
+
+@event.listens_for(engine, "connect")
+def _numeric_as_float(dbapi_connection, connection_record):  # noqa: ARG001
+    """Read `numeric` as float on every connection, raw SQL included.
+
+    Amounts are numeric in Postgres for exact storage and sums (migration 007), but the
+    valuation code is float arithmetic, and a Decimal from a `text()` query mixed with a
+    float raises TypeError. The ORM columns already say asdecimal=False; this makes the
+    hand-written queries in crud.py follow the same rule without a cast in each one.
+    """
+    dbapi_connection.adapters.register_loader("numeric", FloatLoader)
 
 
 if settings.ENVIRONMENT == "local":

@@ -4,46 +4,46 @@ import type { CancelablePromise } from "./core/CancelablePromise";
 import { OpenAPI } from "./core/OpenAPI";
 import { request as __request } from "./core/request";
 import type {
-  ListAssetsApiAssetsGetResponse,
-  CreateAssetApiAssetsPostData,
-  CreateAssetApiAssetsPostResponse,
-  GetAssetApiAssetsAssetIdGetData,
-  GetAssetApiAssetsAssetIdGetResponse,
-  UpdateAssetApiAssetsAssetIdPutData,
-  UpdateAssetApiAssetsAssetIdPutResponse,
-  DeleteAssetApiAssetsAssetIdDeleteData,
-  DeleteAssetApiAssetsAssetIdDeleteResponse,
-  RootGetResponse,
-  HealthCheckApiHealthGetResponse,
-  ListExchangesApiExchangesGetResponse,
-  CreateExchangeApiExchangesPostData,
-  CreateExchangeApiExchangesPostResponse,
-  DeleteExchangeApiExchangesExchangeIdDeleteData,
-  DeleteExchangeApiExchangesExchangeIdDeleteResponse,
-  ExportDbApiExportGetResponse,
-  GetMeApiMeGetResponse,
-  GetNetWorthApiNetWorthGetData,
-  GetNetWorthApiNetWorthGetResponse,
-  GetPositionsApiPositionsGetResponse,
-  GetPositionHistoryApiPositionsAssetIdHistoryGetData,
-  GetPositionHistoryApiPositionsAssetIdHistoryGetResponse,
-  RefreshPricesApiPricesRefreshPostData,
-  RefreshPricesApiPricesRefreshPostResponse,
-  GetBtcDailyApiPricesBtcDailyGetResponse,
-  GetSettingsApiSettingsGetResponse,
-  PutSettingApiSettingsNamePutData,
-  PutSettingApiSettingsNamePutResponse,
-  CreateTransactionApiTransactionsPostData,
-  CreateTransactionApiTransactionsPostResponse,
-  ListTransactionsApiTransactionsAssetIdGetData,
-  ListTransactionsApiTransactionsAssetIdGetResponse,
-  UpdateTransactionApiTransactionsTxIdUpdatePutData,
-  UpdateTransactionApiTransactionsTxIdUpdatePutResponse,
-  DeleteTransactionApiTransactionsTxIdDeleteDeleteData,
-  DeleteTransactionApiTransactionsTxIdDeleteDeleteResponse,
-  ListVenuesApiVenuesGetResponse,
-  RenameVenueApiVenuesRenamePostData,
-  RenameVenueApiVenuesRenamePostResponse,
+  AssetsListAssetsResponse,
+  AssetsCreateAssetData,
+  AssetsCreateAssetResponse,
+  AssetsGetAssetData,
+  AssetsGetAssetResponse,
+  AssetsUpdateAssetData,
+  AssetsUpdateAssetResponse,
+  AssetsDeleteAssetData,
+  AssetsDeleteAssetResponse,
+  RootResponse,
+  HealthCheckResponse,
+  ExchangesListExchangesResponse,
+  ExchangesCreateExchangeData,
+  ExchangesCreateExchangeResponse,
+  ExchangesDeleteExchangeData,
+  ExchangesDeleteExchangeResponse,
+  ExportExportDbResponse,
+  MeGetMeResponse,
+  NetWorthGetNetWorthData,
+  NetWorthGetNetWorthResponse,
+  PositionsGetPositionsResponse,
+  PositionsGetPositionHistoryData,
+  PositionsGetPositionHistoryResponse,
+  PricesRefreshPricesData,
+  PricesRefreshPricesResponse,
+  PricesGetBtcDailyResponse,
+  SettingsGetSettingsResponse,
+  SettingsPutSettingData,
+  SettingsPutSettingResponse,
+  TransactionsCreateTransactionData,
+  TransactionsCreateTransactionResponse,
+  TransactionsListTransactionsData,
+  TransactionsListTransactionsResponse,
+  TransactionsUpdateTransactionData,
+  TransactionsUpdateTransactionResponse,
+  TransactionsDeleteTransactionData,
+  TransactionsDeleteTransactionResponse,
+  VenuesListVenuesResponse,
+  VenuesRenameVenueData,
+  VenuesRenameVenueResponse,
 } from "./types.gen";
 
 export class AssetsService {
@@ -52,10 +52,10 @@ export class AssetsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static listAssetsApiAssetsGet(): CancelablePromise<ListAssetsApiAssetsGetResponse> {
+  public static listAssets(): CancelablePromise<AssetsListAssetsResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/assets/",
+      url: "/api/v1/assets/",
     });
   }
 
@@ -66,12 +66,12 @@ export class AssetsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static createAssetApiAssetsPost(
-    data: CreateAssetApiAssetsPostData,
-  ): CancelablePromise<CreateAssetApiAssetsPostResponse> {
+  public static createAsset(
+    data: AssetsCreateAssetData,
+  ): CancelablePromise<AssetsCreateAssetResponse> {
     return __request(OpenAPI, {
       method: "POST",
-      url: "/api/assets/",
+      url: "/api/v1/assets/",
       body: data.requestBody,
       mediaType: "application/json",
       errors: {
@@ -87,12 +87,12 @@ export class AssetsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static getAssetApiAssetsAssetIdGet(
-    data: GetAssetApiAssetsAssetIdGetData,
-  ): CancelablePromise<GetAssetApiAssetsAssetIdGetResponse> {
+  public static getAsset(
+    data: AssetsGetAssetData,
+  ): CancelablePromise<AssetsGetAssetResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/assets/{asset_id}",
+      url: "/api/v1/assets/{asset_id}",
       path: {
         asset_id: data.assetId,
       },
@@ -110,12 +110,12 @@ export class AssetsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static updateAssetApiAssetsAssetIdPut(
-    data: UpdateAssetApiAssetsAssetIdPutData,
-  ): CancelablePromise<UpdateAssetApiAssetsAssetIdPutResponse> {
+  public static updateAsset(
+    data: AssetsUpdateAssetData,
+  ): CancelablePromise<AssetsUpdateAssetResponse> {
     return __request(OpenAPI, {
       method: "PUT",
-      url: "/api/assets/{asset_id}",
+      url: "/api/v1/assets/{asset_id}",
       path: {
         asset_id: data.assetId,
       },
@@ -129,18 +129,20 @@ export class AssetsService {
 
   /**
    * Delete Asset
-   * Delete a position outright, with its transactions, cached prices and snapshots.
+   * Delete a position outright, with its transactions and snapshots.
+   *
+   * Cached prices stay with the instrument, which other positions may share.
    * @param data The data for the request.
    * @param data.assetId
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static deleteAssetApiAssetsAssetIdDelete(
-    data: DeleteAssetApiAssetsAssetIdDeleteData,
-  ): CancelablePromise<DeleteAssetApiAssetsAssetIdDeleteResponse> {
+  public static deleteAsset(
+    data: AssetsDeleteAssetData,
+  ): CancelablePromise<AssetsDeleteAssetResponse> {
     return __request(OpenAPI, {
       method: "DELETE",
-      url: "/api/assets/{asset_id}",
+      url: "/api/v1/assets/{asset_id}",
       path: {
         asset_id: data.assetId,
       },
@@ -158,7 +160,7 @@ export class DefaultService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static rootGet(): CancelablePromise<RootGetResponse> {
+  public static root(): CancelablePromise<RootResponse> {
     return __request(OpenAPI, {
       method: "GET",
       url: "/",
@@ -171,7 +173,7 @@ export class DefaultService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static healthCheckApiHealthGet(): CancelablePromise<HealthCheckApiHealthGetResponse> {
+  public static healthCheck(): CancelablePromise<HealthCheckResponse> {
     return __request(OpenAPI, {
       method: "GET",
       url: "/api/health",
@@ -185,10 +187,10 @@ export class ExchangesService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static listExchangesApiExchangesGet(): CancelablePromise<ListExchangesApiExchangesGetResponse> {
+  public static listExchanges(): CancelablePromise<ExchangesListExchangesResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/exchanges/",
+      url: "/api/v1/exchanges/",
     });
   }
 
@@ -199,12 +201,12 @@ export class ExchangesService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static createExchangeApiExchangesPost(
-    data: CreateExchangeApiExchangesPostData,
-  ): CancelablePromise<CreateExchangeApiExchangesPostResponse> {
+  public static createExchange(
+    data: ExchangesCreateExchangeData,
+  ): CancelablePromise<ExchangesCreateExchangeResponse> {
     return __request(OpenAPI, {
       method: "POST",
-      url: "/api/exchanges/",
+      url: "/api/v1/exchanges/",
       body: data.requestBody,
       mediaType: "application/json",
       errors: {
@@ -220,12 +222,12 @@ export class ExchangesService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static deleteExchangeApiExchangesExchangeIdDelete(
-    data: DeleteExchangeApiExchangesExchangeIdDeleteData,
-  ): CancelablePromise<DeleteExchangeApiExchangesExchangeIdDeleteResponse> {
+  public static deleteExchange(
+    data: ExchangesDeleteExchangeData,
+  ): CancelablePromise<ExchangesDeleteExchangeResponse> {
     return __request(OpenAPI, {
       method: "DELETE",
-      url: "/api/exchanges/{exchange_id}",
+      url: "/api/v1/exchanges/{exchange_id}",
       path: {
         exchange_id: data.exchangeId,
       },
@@ -247,10 +249,10 @@ export class ExportService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static dbApiExportGet(): CancelablePromise<ExportDbApiExportGetResponse> {
+  public static exportDb(): CancelablePromise<ExportExportDbResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/export/",
+      url: "/api/v1/export/",
     });
   }
 }
@@ -262,10 +264,10 @@ export class MeService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static getMeApiMeGet(): CancelablePromise<GetMeApiMeGetResponse> {
+  public static getMe(): CancelablePromise<MeGetMeResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/me/",
+      url: "/api/v1/me/",
     });
   }
 }
@@ -278,12 +280,12 @@ export class NetWorthService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static getNetWorthApiNetWorthGet(
-    data: GetNetWorthApiNetWorthGetData = {},
-  ): CancelablePromise<GetNetWorthApiNetWorthGetResponse> {
+  public static getNetWorth(
+    data: NetWorthGetNetWorthData = {},
+  ): CancelablePromise<NetWorthGetNetWorthResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/net-worth/",
+      url: "/api/v1/net-worth/",
       query: {
         period: data.period,
       },
@@ -300,10 +302,10 @@ export class PositionsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static getPositionsApiPositionsGet(): CancelablePromise<GetPositionsApiPositionsGetResponse> {
+  public static getPositions(): CancelablePromise<PositionsGetPositionsResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/positions/",
+      url: "/api/v1/positions/",
     });
   }
 
@@ -320,12 +322,12 @@ export class PositionsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static getPositionHistoryApiPositionsAssetIdHistoryGet(
-    data: GetPositionHistoryApiPositionsAssetIdHistoryGetData,
-  ): CancelablePromise<GetPositionHistoryApiPositionsAssetIdHistoryGetResponse> {
+  public static getPositionHistory(
+    data: PositionsGetPositionHistoryData,
+  ): CancelablePromise<PositionsGetPositionHistoryResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/positions/{asset_id}/history",
+      url: "/api/v1/positions/{asset_id}/history",
       path: {
         asset_id: data.assetId,
       },
@@ -342,17 +344,21 @@ export class PositionsService {
 export class PricesService {
   /**
    * Refresh Prices
+   * Pull live quotes unless another process did so recently or is doing so now.
+   *
+   * The throttle is shared through Postgres (see app/services/refresh.py), so it
+   * holds across workers, replicas and the scheduled job.
    * @param data The data for the request.
    * @param data.force Bypass the routine cooldown. For an explicit user-initiated refresh.
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static refreshPricesApiPricesRefreshPost(
-    data: RefreshPricesApiPricesRefreshPostData = {},
-  ): CancelablePromise<RefreshPricesApiPricesRefreshPostResponse> {
+  public static refreshPrices(
+    data: PricesRefreshPricesData = {},
+  ): CancelablePromise<PricesRefreshPricesResponse> {
     return __request(OpenAPI, {
       method: "POST",
-      url: "/api/prices/refresh",
+      url: "/api/v1/prices/refresh",
       query: {
         force: data.force,
       },
@@ -372,10 +378,10 @@ export class PricesService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static getBtcDailyApiPricesBtcDailyGet(): CancelablePromise<GetBtcDailyApiPricesBtcDailyGetResponse> {
+  public static getBtcDaily(): CancelablePromise<PricesGetBtcDailyResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/prices/btc/daily",
+      url: "/api/v1/prices/btc/daily",
     });
   }
 }
@@ -386,10 +392,10 @@ export class SettingsService {
    * @returns SettingsResponse Successful Response
    * @throws ApiError
    */
-  public static getSettingsApiSettingsGet(): CancelablePromise<GetSettingsApiSettingsGetResponse> {
+  public static getSettings(): CancelablePromise<SettingsGetSettingsResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/settings/",
+      url: "/api/v1/settings/",
     });
   }
 
@@ -402,12 +408,12 @@ export class SettingsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static putSettingApiSettingsNamePut(
-    data: PutSettingApiSettingsNamePutData,
-  ): CancelablePromise<PutSettingApiSettingsNamePutResponse> {
+  public static putSetting(
+    data: SettingsPutSettingData,
+  ): CancelablePromise<SettingsPutSettingResponse> {
     return __request(OpenAPI, {
       method: "PUT",
-      url: "/api/settings/{name}",
+      url: "/api/v1/settings/{name}",
       path: {
         name: data.name,
       },
@@ -428,12 +434,12 @@ export class TransactionsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static createTransactionApiTransactionsPost(
-    data: CreateTransactionApiTransactionsPostData,
-  ): CancelablePromise<CreateTransactionApiTransactionsPostResponse> {
+  public static createTransaction(
+    data: TransactionsCreateTransactionData,
+  ): CancelablePromise<TransactionsCreateTransactionResponse> {
     return __request(OpenAPI, {
       method: "POST",
-      url: "/api/transactions/",
+      url: "/api/v1/transactions/",
       body: data.requestBody,
       mediaType: "application/json",
       errors: {
@@ -449,12 +455,12 @@ export class TransactionsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static listTransactionsApiTransactionsAssetIdGet(
-    data: ListTransactionsApiTransactionsAssetIdGetData,
-  ): CancelablePromise<ListTransactionsApiTransactionsAssetIdGetResponse> {
+  public static listTransactions(
+    data: TransactionsListTransactionsData,
+  ): CancelablePromise<TransactionsListTransactionsResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/transactions/{asset_id}",
+      url: "/api/v1/transactions/{asset_id}",
       path: {
         asset_id: data.assetId,
       },
@@ -472,12 +478,12 @@ export class TransactionsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static updateTransactionApiTransactionsTxIdUpdatePut(
-    data: UpdateTransactionApiTransactionsTxIdUpdatePutData,
-  ): CancelablePromise<UpdateTransactionApiTransactionsTxIdUpdatePutResponse> {
+  public static updateTransaction(
+    data: TransactionsUpdateTransactionData,
+  ): CancelablePromise<TransactionsUpdateTransactionResponse> {
     return __request(OpenAPI, {
       method: "PUT",
-      url: "/api/transactions/{tx_id}/update",
+      url: "/api/v1/transactions/{tx_id}/update",
       path: {
         tx_id: data.txId,
       },
@@ -496,12 +502,12 @@ export class TransactionsService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static deleteTransactionApiTransactionsTxIdDeleteDelete(
-    data: DeleteTransactionApiTransactionsTxIdDeleteDeleteData,
-  ): CancelablePromise<DeleteTransactionApiTransactionsTxIdDeleteDeleteResponse> {
+  public static deleteTransaction(
+    data: TransactionsDeleteTransactionData,
+  ): CancelablePromise<TransactionsDeleteTransactionResponse> {
     return __request(OpenAPI, {
       method: "DELETE",
-      url: "/api/transactions/{tx_id}/delete",
+      url: "/api/v1/transactions/{tx_id}/delete",
       path: {
         tx_id: data.txId,
       },
@@ -520,10 +526,10 @@ export class VenuesService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static listVenuesApiVenuesGet(): CancelablePromise<ListVenuesApiVenuesGetResponse> {
+  public static listVenues(): CancelablePromise<VenuesListVenuesResponse> {
     return __request(OpenAPI, {
       method: "GET",
-      url: "/api/venues/",
+      url: "/api/v1/venues/",
     });
   }
 
@@ -535,12 +541,12 @@ export class VenuesService {
    * @returns unknown Successful Response
    * @throws ApiError
    */
-  public static renameVenueApiVenuesRenamePost(
-    data: RenameVenueApiVenuesRenamePostData,
-  ): CancelablePromise<RenameVenueApiVenuesRenamePostResponse> {
+  public static renameVenue(
+    data: VenuesRenameVenueData,
+  ): CancelablePromise<VenuesRenameVenueResponse> {
     return __request(OpenAPI, {
       method: "POST",
-      url: "/api/venues/rename",
+      url: "/api/v1/venues/rename",
       body: data.requestBody,
       mediaType: "application/json",
       errors: {

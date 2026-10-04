@@ -10,14 +10,14 @@ export function pushSetting(
   name: SettingName,
   value: object,
 ): Promise<unknown> {
-  return SettingsService.putSettingApiSettingsNamePut({
+  return SettingsService.putSetting({
     name,
     requestBody: value as Record<string, unknown>,
   });
 }
 
 export function fetchSettings() {
-  return SettingsService.getSettingsApiSettingsGet();
+  return SettingsService.getSettings();
 }
 
 export function reportSyncError(error: unknown): void {

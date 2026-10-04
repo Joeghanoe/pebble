@@ -31,7 +31,7 @@ from app.core.config import settings
 
 # Railway's healthcheck hits the service directly on the private network, with no proxy
 # in front and therefore no identity header. Keep it open or deploys never go healthy.
-_OPEN_PATHS = frozenset({"/", f"{settings.API_V1_STR}/health"})
+_OPEN_PATHS = frozenset({"/", settings.HEALTH_PATH})
 
 
 def _unauthorised(detail: str) -> JSONResponse:

@@ -76,7 +76,7 @@ export function PositionDetail() {
   const { data: txData, isLoading: txLoading } = useQuery({
     queryKey: ["transactions", assetId],
     queryFn: () =>
-      TransactionsService.listTransactionsApiTransactionsAssetIdGet({
+      TransactionsService.listTransactions({
         assetId,
       }) as unknown as Promise<GetTransactionsResponse>,
   });
@@ -84,7 +84,7 @@ export function PositionDetail() {
   const { data: history } = useQuery({
     queryKey: ["position-history", assetId, timeframePeriod(timeframe)],
     queryFn: () =>
-      PositionsService.getPositionHistoryApiPositionsAssetIdHistoryGet({
+      PositionsService.getPositionHistory({
         assetId,
         period: timeframePeriod(timeframe),
       }) as unknown as Promise<GetPositionHistoryResponse>,
@@ -167,7 +167,7 @@ export function PositionDetail() {
         {position && <EditPositionModal asset={position.asset} />}
         <ConfirmButton
           title={`Delete ${symbol}?`}
-          description="The position goes, and so do its transactions, cached prices and snapshots. This cannot be undone."
+          description="The position goes, and so do its transactions and snapshots. This cannot be undone."
           confirmLabel="Delete position"
           onConfirm={() => deletePosition.mutateAsync()}
         >

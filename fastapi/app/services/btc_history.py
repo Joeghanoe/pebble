@@ -26,7 +26,7 @@ async def ensure_btc_daily_history(session: Session) -> int:
     year in one ranged request, and only when a day is actually missing, so once
     the year is full it costs nothing.
 
-    A portfolio without BTC has no BTC asset to cache prices against, so there is
+    A portfolio without BTC has no BTC instrument to cache prices against, so there is
     nothing to fill; the strategy view reports that as insufficient data.
     """
     btc = crud.get_btc_asset(session)
@@ -35,7 +35,7 @@ async def ensure_btc_daily_history(session: Session) -> int:
 
     today = date_cls.today()
     start = btc_history_start(today)
-    have = {p.date for p in crud.list_prices_since(session, btc.id, start)}  # type: ignore[arg-type]
+    have = {p.date for p in crud.list_prices_since(session, btc.instrument_id, start)}
     # Today is left out: its close does not exist yet, and the live quote already
     # writes today's row on every refresh.
     missing = [

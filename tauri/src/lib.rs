@@ -10,7 +10,8 @@
 //! of the ledger, reachable from a phone as well as the mac. The cost is that the desktop
 //! app no longer works offline.
 //!
-//! The window's URL is `app.windows[0].url` in `tauri.conf.json`.
+//! The window's URL is not in `tauri.conf.json`: `make desktop` merges `PEBBLE_URL` into
+//! the window config at build time, so a fork never has to edit a committed file.
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;

@@ -11,12 +11,12 @@ export const strategyRoute = createRoute({
     void queryClient.prefetchQuery({
       queryKey: ["positions"],
       queryFn: () =>
-        PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
+        PositionsService.getPositions() as unknown as Promise<GetPositionsResponse>,
     });
     void queryClient.prefetchQuery({
       queryKey: ["btc-daily"],
       queryFn: () =>
-        PricesService.getBtcDailyApiPricesBtcDailyGet() as unknown as Promise<GetBtcDailyResponse>,
+        PricesService.getBtcDaily() as unknown as Promise<GetBtcDailyResponse>,
     });
   },
   component: Strategy,

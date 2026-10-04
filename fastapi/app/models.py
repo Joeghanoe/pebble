@@ -1,9 +1,19 @@
 from typing import Annotated, Any, Literal, Optional, Union
 
+import sqlalchemy as sa
 from pydantic import StringConstraints, model_validator
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
+
+from app.core.types import IsoDate as IsoDateColumn
+from app.core.types import IsoTimestamp
+
+# Money, units and rates are numeric(28, 10) in Postgres (migration 007): exact storage
+# and exact SQL sums. asdecimal=False keeps them floats in Python, where the FIFO and
+# valuation arithmetic lives; see app/core/db.py for the same rule on raw SQL.
+Amount = sa.Numeric(28, 10, asdecimal=False)
+
 
 # ============================================================================
 # Database Table Models
@@ -18,18 +28,35 @@ class Exchange(SQLModel, table=True):
     type: str = Field(max_length=20)  # crypto | broker | manual
 
 
+class Instrument(SQLModel, table=True):
+    """What is held and where its price comes from. Global: no owner (migration 009).
+
+    Holdings that name the same feed share one instrument, so a price is fetched
+    and cached once however many positions -- and later, portfolios -- hold it.
+    """
+
+    __tablename__ = "instrument"  # type: ignore[assignment]
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    type: str = Field(max_length=20)  # crypto | etf | cash | stock
+    symbol: str = Field(max_length=50)
+    name: str = Field(max_length=255)
+    yahoo_ticker: Optional[str] = Field(default=None, max_length=50)
+    coingecko_id: Optional[str] = Field(default=None, max_length=100)
+
+
 class Asset(SQLModel, table=True):
+    """A holding: one instrument, on one exchange, under the label its owner gave it."""
+
     __tablename__ = "asset"  # type: ignore[assignment]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     symbol: str = Field(max_length=50)
     name: str = Field(max_length=255)
-    type: str = Field(max_length=20)  # crypto | etf | cash | stock
     # Legacy: where a position lived before venues moved to the transaction
     # (migration 004). Optional now, and nothing new sets it.
     exchange_id: Optional[int] = Field(default=None, foreign_key="exchange.id")
-    yahoo_ticker: Optional[str] = Field(default=None, max_length=50)
-    coingecko_id: Optional[str] = Field(default=None, max_length=100)
+    instrument_id: int = Field(foreign_key="instrument.id")
 
 
 class Transaction(SQLModel, table=True):
@@ -37,10 +64,10 @@ class Transaction(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     asset_id: int = Field(foreign_key="asset.id")
-    date: str = Field(max_length=10)  # YYYY-MM-DD
+    date: str = Field(sa_type=IsoDateColumn)  # a `date`, read as YYYY-MM-DD
     type: str = Field(max_length=10)  # buy | sell | move
-    units: float
-    eur_amount: float
+    units: float = Field(sa_type=Amount)
+    eur_amount: float = Field(sa_type=Amount)
     notes: Optional[str] = Field(default=None)
     # Where it happened: a broker, exchange, wallet or bank. For a move, where
     # the units left from; `to_venue` is where they arrived.
@@ -48,36 +75,36 @@ class Transaction(SQLModel, table=True):
     to_venue: Optional[str] = Field(default=None, max_length=100)
     source: str = Field(default="manual", max_length=20)  # manual | imported
     external_id: Optional[str] = Field(default=None)
-    # ISO 8601 UTC, whole seconds. 40 rather than 30: see migration 003.
-    deleted_at: Optional[str] = Field(default=None, max_length=40)
+    # A timestamptz, read as ISO 8601 in UTC (migration 008).
+    deleted_at: Optional[str] = Field(default=None, sa_type=IsoTimestamp)
 
 
 class PriceCache(SQLModel, table=True):
     __tablename__ = "price_cache"  # type: ignore[assignment]
 
-    asset_id: int = Field(foreign_key="asset.id", primary_key=True)
-    date: str = Field(primary_key=True, max_length=10)
-    price_eur: float
-    exchange_rate: float
+    instrument_id: int = Field(foreign_key="instrument.id", primary_key=True)
+    date: str = Field(primary_key=True, sa_type=IsoDateColumn)
+    price_eur: float = Field(sa_type=Amount)
+    exchange_rate: float = Field(sa_type=Amount)
 
 
 class NetWorthSnapshot(SQLModel, table=True):
     __tablename__ = "net_worth_snapshot"  # type: ignore[assignment]
 
-    date: str = Field(primary_key=True, max_length=10)
-    total_eur: float
-    invested_eur: float = Field(default=0.0)
+    date: str = Field(primary_key=True, sa_type=IsoDateColumn)
+    total_eur: float = Field(sa_type=Amount)
+    invested_eur: float = Field(default=0.0, sa_type=Amount)
 
 
 class PositionSnapshot(SQLModel, table=True):
     __tablename__ = "position_snapshot"  # type: ignore[assignment]
 
-    date: str = Field(primary_key=True, max_length=10)
+    date: str = Field(primary_key=True, sa_type=IsoDateColumn)
     asset_id: int = Field(foreign_key="asset.id", primary_key=True)
-    units_held: float
-    price_eur: float
-    value_eur: float
-    invested_eur: float
+    units_held: float = Field(sa_type=Amount)
+    price_eur: float = Field(sa_type=Amount)
+    value_eur: float = Field(sa_type=Amount)
+    invested_eur: float = Field(sa_type=Amount)
 
 
 class Setting(SQLModel, table=True):
@@ -180,6 +207,24 @@ class TransactionUpdate(SQLModel):
 # ============================================================================
 
 
+class AssetPublic(SQLModel):
+    """A holding as the API presents it: its label plus its instrument, flattened.
+
+    The shape `asset` had before migration 009 split the instrument out, plus
+    `instrument_id`, so the client did not have to change. It is also what the price,
+    snapshot and position services take: everything they need in one object.
+    """
+
+    id: int
+    symbol: str
+    name: str
+    type: str
+    exchange_id: Optional[int] = None
+    yahoo_ticker: Optional[str] = None
+    coingecko_id: Optional[str] = None
+    instrument_id: int
+
+
 class PriceResultOk(SQLModel):
     status: Literal["ok"] = "ok"
     price_eur: float
@@ -208,7 +253,7 @@ class VenueHolding(SQLModel):
 
 
 class PositionRow(SQLModel):
-    asset: Asset
+    asset: AssetPublic
     exchange: Optional[Exchange] = None
     # Units held per venue, largest first. Sums to `units_held`.
     venues: list[VenueHolding] = []

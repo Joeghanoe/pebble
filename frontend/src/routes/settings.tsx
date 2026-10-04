@@ -23,7 +23,7 @@ export const settingsRoute = createRoute({
     void queryClient.prefetchQuery({
       queryKey: ["venues"],
       queryFn: () =>
-        VenuesService.listVenuesApiVenuesGet() as unknown as Promise<GetVenuesResponse>,
+        VenuesService.listVenues() as unknown as Promise<GetVenuesResponse>,
     });
   },
   component: Settings,

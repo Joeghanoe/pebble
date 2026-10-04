@@ -6,7 +6,12 @@ from app.clients.coingecko import CoinGeckoClient
 from app.clients.stooq import StooqClient, is_eur_listing
 from app.clients.yahoo import YahooClient
 from app.crud import get_latest_price, upsert_price
-from app.models import Asset, PriceResultOk, PriceResultStale, PriceResultUnavailable
+from app.models import (
+    AssetPublic,
+    PriceResultOk,
+    PriceResultStale,
+    PriceResultUnavailable,
+)
 from app.services.currency import CurrencyService
 
 logger = logging.getLogger(__name__)
@@ -29,7 +34,7 @@ class PriceService:
         self.currency = currency
 
     async def fetch_live_price(
-        self, session: Session, asset: Asset
+        self, session: Session, asset: AssetPublic
     ) -> PriceResultOk | PriceResultStale | PriceResultUnavailable:
         from datetime import date as date_cls
 
@@ -42,18 +47,18 @@ class PriceService:
         return PriceResultUnavailable()
 
     async def fetch_historical_price(
-        self, session: Session, asset: Asset, date: str
+        self, session: Session, asset: AssetPublic, date: str
     ) -> PriceResultOk | PriceResultStale | PriceResultUnavailable:
         rate = await self._get_rate_safe(date)
 
         if asset.type == "crypto":
             if not asset.coingecko_id:
-                return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
+                return self._stale_or_unavailable(session, asset.instrument_id)  # type: ignore[arg-type]
             price = await self.coingecko.get_historical_price(asset.coingecko_id, date)
             if price is not None:
-                upsert_price(session, asset.id, date, price, rate)  # type: ignore[arg-type]
+                upsert_price(session, asset.instrument_id, date, price, rate)  # type: ignore[arg-type]
                 return PriceResultOk(price_eur=price, date=date, exchange_rate=rate)
-            return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
+            return self._stale_or_unavailable(session, asset.instrument_id)  # type: ignore[arg-type]
 
         if asset.type in ("etf", "stock"):
             if not asset.yahoo_ticker:
@@ -61,14 +66,14 @@ class PriceService:
             price = await self.yahoo.get_historical_price(asset.yahoo_ticker, date)
             if price is not None:
                 price_eur = price if is_eur_listing(asset.yahoo_ticker) else price / rate
-                upsert_price(session, asset.id, date, price_eur, rate)  # type: ignore[arg-type]
+                upsert_price(session, asset.instrument_id, date, price_eur, rate)  # type: ignore[arg-type]
                 return PriceResultOk(price_eur=price_eur, date=date, exchange_rate=rate)
-            return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
+            return self._stale_or_unavailable(session, asset.instrument_id)  # type: ignore[arg-type]
 
         return PriceResultUnavailable()
 
     async def backfill_price_range(
-        self, session: Session, asset: Asset, start: str, end: str
+        self, session: Session, asset: AssetPublic, start: str, end: str
     ) -> int:
         """Cache every daily price an upstream has for `start`..`end`.
 
@@ -88,7 +93,7 @@ class PriceService:
             written = 0
             for date, price in sorted(prices.items()):
                 rate = await self._get_rate_safe(date)
-                upsert_price(session, asset.id, date, price, rate)  # type: ignore[arg-type]
+                upsert_price(session, asset.instrument_id, date, price, rate)  # type: ignore[arg-type]
                 written += 1
             return written
 
@@ -110,8 +115,8 @@ class PriceService:
             written = 0
             for date, price in sorted(prices.items()):
                 rate = await self._get_rate_safe(date)
-                upsert_price(  # type: ignore[arg-type]
-                    session, asset.id, date, price if in_eur else price / rate, rate
+                upsert_price(
+                    session, asset.instrument_id, date, price if in_eur else price / rate, rate
                 )
                 written += 1
             return written
@@ -119,27 +124,27 @@ class PriceService:
         return 0
 
     async def _fetch_live_crypto(
-        self, session: Session, asset: Asset, today: str
+        self, session: Session, asset: AssetPublic, today: str
     ) -> PriceResultOk | PriceResultStale | PriceResultUnavailable:
         rate = await self._get_rate_safe(today)
         if asset.coingecko_id:
             price = await self.coingecko.get_live_price(asset.coingecko_id)
             if price is not None:
-                upsert_price(session, asset.id, today, price, rate)  # type: ignore[arg-type]
+                upsert_price(session, asset.instrument_id, today, price, rate)  # type: ignore[arg-type]
                 return PriceResultOk(price_eur=price, date=today, exchange_rate=rate)
-        return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
+        return self._stale_or_unavailable(session, asset.instrument_id)  # type: ignore[arg-type]
 
     async def _fetch_live_etf(
-        self, session: Session, asset: Asset, today: str
+        self, session: Session, asset: AssetPublic, today: str
     ) -> PriceResultOk | PriceResultStale | PriceResultUnavailable:
         if not asset.yahoo_ticker:
-            return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
+            return self._stale_or_unavailable(session, asset.instrument_id)  # type: ignore[arg-type]
 
         price = await self.stooq.get_live_price(asset.yahoo_ticker)
         if price is not None:
             rate = await self._get_rate_safe(today)
             price_eur = price if is_eur_listing(asset.yahoo_ticker) else price / rate
-            upsert_price(session, asset.id, today, price_eur, rate)  # type: ignore[arg-type]
+            upsert_price(session, asset.instrument_id, today, price_eur, rate)  # type: ignore[arg-type]
             return PriceResultOk(price_eur=price_eur, date=today, exchange_rate=rate)
 
         # Stooq simply does not carry some listings (exus.de and vuaa.uk both
@@ -162,17 +167,17 @@ class PriceService:
                     asset.yahoo_ticker,
                     currency,
                 )
-                return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
-            upsert_price(session, asset.id, today, price_eur, rate)  # type: ignore[arg-type]
+                return self._stale_or_unavailable(session, asset.instrument_id)  # type: ignore[arg-type]
+            upsert_price(session, asset.instrument_id, today, price_eur, rate)  # type: ignore[arg-type]
             return PriceResultOk(price_eur=price_eur, date=today, exchange_rate=rate)
 
         logger.warning("no live price for %s from stooq or yahoo", asset.yahoo_ticker)
-        return self._stale_or_unavailable(session, asset.id)  # type: ignore[arg-type]
+        return self._stale_or_unavailable(session, asset.instrument_id)  # type: ignore[arg-type]
 
     def _stale_or_unavailable(
-        self, session: Session, asset_id: int
+        self, session: Session, instrument_id: int
     ) -> PriceResultStale | PriceResultUnavailable:
-        latest = get_latest_price(session, asset_id)
+        latest = get_latest_price(session, instrument_id)
         if latest:
             return PriceResultStale(
                 price_eur=latest.price_eur,

@@ -65,6 +65,11 @@ jobs:
       # PGPASSWORD so `createdb` can authenticate rather than stopping to ask. The
       # Makefile now feeds it /dev/null as well, so the worst case is a fast
       # failure instead of the four-minute hang that cancelled the first run.
+      # The API contract is committed (fastapi/openapi.snapshot.json). A route or model
+      # change that does not update it fails here, so the diff shows up in review.
+      - name: API contract unchanged
+        run: make openapi-check
+
       - name: make test
         run: make test
         env:

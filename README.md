@@ -73,15 +73,43 @@ All on the `api` service.
 | `REQUIRE_PROXY_IDENTITY` | `true` | Set `false` only for local development with no proxy in front. Never in a deployment. |
 | `MIGRATE_ON_STARTUP` | `true` | Run Alembic migrations on boot. The API is the only writer of the schema. |
 | `COINGECKO_API_KEY` | empty | Lifts CoinGecko's anonymous rate limit for crypto prices. Stooq, Yahoo and Frankfurter need no key; without it refreshes still work and are throttled harder. |
+| `PRICE_PROVIDERS` | `coingecko,stooq,yahoo` | Which upstreams to ask for prices. Stooq and Yahoo are unofficial endpoints with no published terms for this use — fine for a personal instance, worth dropping where that matters. A disabled source answers "no price", so its holdings show as stale or unavailable. An unknown name stops the API from starting. |
 | `PROXY_EMAIL_HEADER` | `X-Forwarded-Email` | The header identity is read from. Change only if the proxy is configured differently. |
 | `ENVIRONMENT` | `local` | `local` logs every SQL statement with timings. |
 
 `/` and `/api/health` are the only unauthenticated routes, because Railway probes them
 directly on the private network with no proxy in front.
 
-## Deploying
+## API
 
-`.railway/README.md` is the runbook. In short: `railway config apply` creates the four
+Every business route lives under **`/api/v1`**; the health check and `/` stay unversioned
+because infrastructure probes them, not clients. The contract is committed as
+`fastapi/openapi.snapshot.json` and CI fails when the app disagrees with it, so a change
+to the API is always a visible diff. `make generate-client` refreshes the snapshot and
+regenerates the TypeScript client in `frontend/src/client/`. A breaking change gets a new
+version mounted next to the old one rather than an edit in place.
+
+## Self-hosting
+
+`docker-compose.prod.yml` runs the same four pieces on any Docker host, with any OIDC
+provider:
+
+```bash
+cp .env.example .env      # PEBBLE_URL, ALLOWED_EMAILS, provider credentials, ...
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Only `proxy` publishes a port (4180). Put TLS in front of it — the session cookie is
+`Secure` — and register `$PEBBLE_URL/oauth2/callback` as the redirect URI with your
+provider. For anything other than Google set `OAUTH2_PROXY_PROVIDER=oidc` and
+`OAUTH2_PROXY_OIDC_ISSUER_URL` (Keycloak, Zitadel, Authentik, Entra ID and so on).
+
+The api must stay unpublished: it trusts the identity header the proxy sets, so anything
+that can reach it directly can claim to be anyone. `SECURITY.md` has the full model.
+
+## Deploying on Railway
+
+`.railway/README.md` is the runbook. In short: `railway config apply` creates the five
 resources, then `proxy` gets the public domain and the Google client credentials.
 
 Postgres is Railway's **managed** Postgres, which is what gives the service a **Data** tab
@@ -156,6 +184,8 @@ Two things it does that a hand-rolled insert loop tends to miss:
   and `Manual` (id 2) into every Pebble database, so a plain `INSERT` collides on the
   primary key before it reaches your own rows. Rows are upserted by id, and the local
   file wins.
+- **The desktop file predates instruments.** Each of its assets is resolved to an
+  instrument by the same rule migration 009 uses, and its prices move to the instrument.
 - **Explicit ids do not advance a Postgres sequence.** Import ids 1–9 and leave it
   there, and the next position you add in the app is handed id 1 again — a duplicate
   key error, and the same fault migration 002 exists to repair. Every sequence is
@@ -173,12 +203,12 @@ one transaction, so a refusal leaves the hosted ledger untouched.
 FastAPI sidecar or a local SQLite database, so the mac and the phone read the same
 ledger — at the cost of no offline use.
 
-Set the URL in `tauri/tauri.conf.json` (`app.windows[0].url`, currently a placeholder),
-then:
+Point it at your deployment with `PEBBLE_URL`; the window URL is merged in at build time
+rather than committed:
 
 ```bash
-make desktop         # cargo tauri dev
-make desktop-build   # installers in tauri/target/release/bundle/
+PEBBLE_URL=https://pebble.example.com make desktop         # cargo tauri dev
+PEBBLE_URL=https://pebble.example.com make desktop-build   # installers in tauri/target/release/bundle/
 ```
 
 **Google may refuse to sign in inside the window.** Google blocks its OAuth flow in
@@ -190,27 +220,44 @@ the webview's user agent is possible but is deliberately not configured here.
 ## Architecture notes
 
 **Prices.** `services/prices.py` fans out to CoinGecko (crypto), Stooq and Yahoo
-(equities and ETFs) and Frankfurter (USD→EUR), and caches each answer per asset per day in
-`price_cache`. A position whose price has never been fetched reports `unavailable` rather
-than guessing; a stale one reports `stale` with the date it is from. Refresh is throttled
-to once every 15 minutes.
+(equities and ETFs) and Frankfurter (USD→EUR), and caches each answer per **instrument**
+per day in `price_cache`. A position whose price has never been fetched reports `unavailable` rather
+than guessing; a stale one reports `stale` with the date it is from. A routine refresh
+(opening the app) runs at most every six hours, a forced one (the button) at most every
+minute.
 
-That throttle is a module-level global in `api/routes/prices.py`, which is why the api
-service runs a single uvicorn worker and one replica. Scale it up only after the cooldown
-moves into Postgres.
+The throttle lives in Postgres, not the process: `services/refresh.py` claims a lease on
+the `refresh_state` row with one conditional `UPDATE`, so any number of api replicas, and
+the daily `jobs` cron (`python -m app.jobs.refresh`), share it and never refresh twice at
+once. A lease that outlives a crashed process expires after 15 minutes.
 
 **Cost basis.** Realized P&L is FIFO: sells consume the oldest buy lots first
 (`crud.compute_realized_pnl`). Buy rows whose units have all been sold show as `Closed`.
 
 **Deleted transactions** are soft-deleted — `deleted_at` is set and every query filters on
 it — so a mistaken delete is recoverable in the database. Deleting a *position* is not
-soft: it takes the asset's transactions, cached prices and snapshots with it, because
-orphaned rows would keep counting towards net worth while the position was gone from the
-list.
+soft: it takes the position's transactions and snapshots with it, because orphaned rows
+would keep counting towards net worth while the position was gone from the list. Its
+cached prices stay with the instrument.
 
-**Dates** are stored as `YYYY-MM-DD` strings, not dates. Every comparison in the raw SQL
-relies on ISO dates sorting lexicographically, which is why `TransactionCreate.date` is
-pattern-checked rather than free-form.
+**Holdings and instruments.** An `asset` is a holding: a label, an exchange and an
+`instrument_id`. The `instrument` is the market identity — type plus `coingecko_id` /
+`yahoo_ticker` — and has no owner. Holdings naming the same feed share one instrument, so
+BTC on two exchanges is fetched and cached once; holdings with no feed id (cash, manual
+entries) each get their own. Changing a holding's type or feed id points it at another
+instrument rather than editing a shared one. The API flattens the two back into the
+`asset` shape it always had, plus `instrument_id`.
+
+**Types.** Amounts, units and rates are `numeric(28, 10)` — exact storage and exact SQL
+sums — and are read as floats in Python (`app/core/db.py`). Dates are `date` and the
+soft-delete stamp is `timestamptz`; `app/core/types.py` converts them to and from the
+`YYYY-MM-DD` / ISO 8601 strings the services and the API use. Raw SQL casts its date
+parameters explicitly (`CAST(:date AS date)`), because SQLAlchemy binds strings as
+`VARCHAR`, which does not compare with `date`.
+
+## Contributing
+
+See `CONTRIBUTING.md`. Security reports go through `SECURITY.md`, not issues.
 
 ## License
 

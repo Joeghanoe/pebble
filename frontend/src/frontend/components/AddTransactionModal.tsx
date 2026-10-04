@@ -116,7 +116,7 @@ function TransactionForm({
   const { data: venuesData } = useQuery({
     queryKey: ["venues"],
     queryFn: () =>
-      VenuesService.listVenuesApiVenuesGet() as unknown as Promise<GetVenuesResponse>,
+      VenuesService.listVenues() as unknown as Promise<GetVenuesResponse>,
   });
   const knownVenues = (venuesData?.venues ?? []).map((v) => v.name);
   const holdings = position?.venues ?? [];

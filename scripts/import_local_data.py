@@ -27,6 +27,11 @@ Two things this handles that a naive INSERT loop gets wrong:
    next position you add in the app collides on the primary key — the same fault
    migration 002 exists to repair. Every sequence is realigned at the end.
 
+3. The desktop file predates migration 009: its `asset` rows carry the instrument
+   (type and feed ids) and its prices are per asset. Each asset is resolved to an
+   instrument by the same rule the migration uses -- holdings naming the same feed
+   share one, feedless holdings get their own -- and prices move to the instrument.
+
 It also checks the values SQLite never enforced. That engine ignores declared column
 widths and had no enum for `type`, so a file can hold rows Postgres will reject; they
 are reported up front rather than failing the import halfway through.
@@ -45,8 +50,9 @@ import psycopg
 
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-# The live schema, in foreign-key order: exchange before asset before the rest.
-# (table, columns, primary key) — the primary key is what an upsert conflicts on.
+# The desktop schema as read from SQLite, in foreign-key order: exchange before asset
+# before the rest. (table, columns, primary key) — the primary key is what an upsert
+# conflicts on. `asset` and `price_cache` are reshaped for Postgres in `load`.
 TABLES: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = [
     ("exchange", ("id", "name", "type"), ("id",)),
     ("asset", ("id", "symbol", "name", "type", "exchange_id", "yahoo_ticker", "coingecko_id"), ("id",)),
@@ -59,7 +65,7 @@ TABLES: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = [
 ]
 
 # Tables whose id comes from a sequence. Realigned after the load.
-SEQUENCED = ("exchange", "asset", "transaction")
+SEQUENCED = ("exchange", "instrument", "asset", "transaction")
 
 # What Postgres will enforce and SQLite did not.
 ENUMS = {
@@ -154,32 +160,92 @@ def check(data: dict[str, list[dict]]) -> list[str]:
     return problems
 
 
+def _instrument_for(cur: psycopg.Cursor, asset: dict) -> int:
+    """The instrument a desktop asset belongs to, created if Postgres has none.
+
+    Same identity as migration 009: type plus feed ids, case-insensitive ticker, and
+    an instrument of its own for a holding with no feed. A re-run keeps the
+    instrument the asset already points at rather than minting a second one.
+    """
+    coingecko_id = asset["coingecko_id"] or None
+    yahoo_ticker = asset["yahoo_ticker"] or None
+    if coingecko_id or yahoo_ticker:
+        cur.execute(
+            """
+            SELECT id FROM instrument
+            WHERE type = %s AND COALESCE(coingecko_id, '') = COALESCE(%s, '')
+              AND COALESCE(lower(yahoo_ticker), '') = COALESCE(lower(%s), '')
+            """,
+            (asset["type"], coingecko_id, yahoo_ticker),
+        )
+    else:
+        cur.execute(
+            "SELECT instrument_id FROM asset a JOIN instrument i ON i.id = a.instrument_id "
+            "WHERE a.id = %s AND i.coingecko_id IS NULL AND i.yahoo_ticker IS NULL",
+            (asset["id"],),
+        )
+    found = cur.fetchone()
+    if found:
+        return found[0]
+    cur.execute(
+        "INSERT INTO instrument (type, symbol, name, yahoo_ticker, coingecko_id) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (asset["type"], asset["symbol"], asset["name"], yahoo_ticker, coingecko_id),
+    )
+    return cur.fetchone()[0]
+
+
+def _reshape(cur: psycopg.Cursor, data: dict[str, list[dict]]) -> dict[str, list[dict]]:
+    """Desktop rows in Postgres' shape: holdings point at instruments, prices follow."""
+    instrument_of = {
+        a["id"]: _instrument_for(cur, a) for a in sorted(data["asset"], key=lambda a: a["id"])
+    }
+    assets = [
+        {"id": a["id"], "symbol": a["symbol"], "name": a["name"],
+         "exchange_id": a["exchange_id"], "instrument_id": instrument_of[a["id"]]}
+        for a in data["asset"]
+    ]
+    # Two holdings of one instrument may both have cached a day; keep the oldest
+    # asset's row, as the migration does.
+    prices: dict[tuple[int, str], dict] = {}
+    for row in sorted(data["price_cache"], key=lambda r: r["asset_id"]):
+        key = (instrument_of[row["asset_id"]], row["date"])
+        prices.setdefault(key, {"instrument_id": key[0], "date": row["date"],
+                                "price_eur": row["price_eur"],
+                                "exchange_rate": row["exchange_rate"]})
+    return {**data, "asset": assets, "price_cache": list(prices.values())}
+
+
+# What `load` writes, once reshaped. Same order and rule as TABLES.
+TARGET_TABLES: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = [
+    TABLES[0],
+    ("asset", ("id", "symbol", "name", "exchange_id", "instrument_id"), ("id",)),
+    TABLES[2],
+    ("price_cache", ("instrument_id", "date", "price_eur", "exchange_rate"),
+     ("instrument_id", "date")),
+    TABLES[4],
+    TABLES[5],
+]
+
+
 def load(conn: psycopg.Connection, data: dict[str, list[dict]], replace: bool) -> None:
     with conn.cursor() as cur:
         if replace:
             cur.execute(
                 'TRUNCATE "transaction", price_cache, position_snapshot, '
-                "net_worth_snapshot, asset, exchange RESTART IDENTITY CASCADE"
+                "net_worth_snapshot, asset, instrument, exchange RESTART IDENTITY CASCADE"
             )
             print("  truncated the target tables")
 
-        for table, columns, pk in TABLES:
-            rows = data[table]
-            if not rows:
-                continue
-            cols = ", ".join(f'"{c}"' for c in columns)
-            slots = ", ".join(["%s"] * len(columns))
-            updates = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in columns if c not in pk)
-            conflict = ", ".join(f'"{c}"' for c in pk)
-            # DO UPDATE so a second run corrects rows instead of failing on the
-            # seeded exchanges; DO NOTHING would silently keep stale values.
-            action = f"DO UPDATE SET {updates}" if updates else "DO NOTHING"
-            cur.executemany(
-                f'INSERT INTO "{table}" ({cols}) VALUES ({slots}) '
-                f"ON CONFLICT ({conflict}) {action}",
-                [tuple(r[c] for c in columns) for r in rows],
-            )
-            print(f"  {table}: {len(rows)} rows")
+        # Exchanges first: assets reference them, and instruments are resolved
+        # while reshaping the assets.
+        table, columns, pk = TARGET_TABLES[0]
+        _upsert(cur, table, columns, pk, data[table])
+        data = _reshape(cur, data)
+        print(f"  instrument: {len(set(a['instrument_id'] for a in data['asset']))} in use")
+
+        for table, columns, pk in TARGET_TABLES[1:]:
+            _upsert(cur, table, columns, pk, data[table])
 
         # The point of the whole exercise. Without this the next insert from the app
         # reuses an id that is already taken.
@@ -194,6 +260,28 @@ def load(conn: psycopg.Connection, data: dict[str, list[dict]], replace: bool) -
                 """
             )
         print(f"  realigned sequences: {', '.join(SEQUENCED)}")
+
+
+def _upsert(
+    cur: psycopg.Cursor, table: str, columns: tuple[str, ...], pk: tuple[str, ...],
+    rows: list[dict],
+) -> None:
+    if not rows:
+        return
+    cols = ", ".join(f'"{c}"' for c in columns)
+    slots = ", ".join(["%s"] * len(columns))
+    updates = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in columns if c not in pk)
+    conflict = ", ".join(f'"{c}"' for c in pk)
+    # DO UPDATE so a second run corrects rows instead of failing on the
+    # seeded exchanges; DO NOTHING would silently keep stale values.
+    action = f"DO UPDATE SET {updates}" if updates else "DO NOTHING"
+    cur.executemany(
+        f'INSERT INTO "{table}" ({cols}) VALUES ({slots}) '
+        f"ON CONFLICT ({conflict}) {action}",
+        [tuple(r[c] for c in columns) for r in rows],
+    )
+    print(f"  {table}: {len(rows)} rows")
+
 
 
 def main() -> None:
@@ -247,7 +335,7 @@ def main() -> None:
 
         with conn.cursor() as cur:
             print("\nIn Postgres now:")
-            for table, _c, _pk in TABLES:
+            for table, _c, _pk in TARGET_TABLES:
                 cur.execute(f'SELECT count(*) FROM "{table}"')
                 print(f"  {table}: {cur.fetchone()[0]} rows")
 
