@@ -56,138 +56,138 @@ export type ValidationError = {
   type: string;
 };
 
-export type ListAssetsApiAssetsGetResponse = {
+export type AssetsListAssetsResponse = {
   [key: string]: unknown;
 };
 
-export type CreateAssetApiAssetsPostData = {
+export type AssetsCreateAssetData = {
   requestBody: AssetCreate;
 };
 
-export type CreateAssetApiAssetsPostResponse = {
+export type AssetsCreateAssetResponse = {
   [key: string]: unknown;
 };
 
-export type GetAssetApiAssetsAssetIdGetData = {
+export type AssetsGetAssetData = {
   assetId: number;
 };
 
-export type GetAssetApiAssetsAssetIdGetResponse = {
+export type AssetsGetAssetResponse = {
   [key: string]: unknown;
 };
 
-export type UpdateAssetApiAssetsAssetIdPutData = {
+export type AssetsUpdateAssetData = {
   assetId: number;
   requestBody: AssetUpdate;
 };
 
-export type UpdateAssetApiAssetsAssetIdPutResponse = {
+export type AssetsUpdateAssetResponse = {
   [key: string]: unknown;
 };
 
-export type DeleteAssetApiAssetsAssetIdDeleteData = {
+export type AssetsDeleteAssetData = {
   assetId: number;
 };
 
-export type DeleteAssetApiAssetsAssetIdDeleteResponse = {
+export type AssetsDeleteAssetResponse = {
   [key: string]: unknown;
 };
 
-export type RootGetResponse = unknown;
+export type RootResponse = unknown;
 
-export type HealthCheckApiHealthGetResponse = unknown;
+export type HealthCheckResponse = unknown;
 
-export type ListExchangesApiExchangesGetResponse = {
+export type ExchangesListExchangesResponse = {
   [key: string]: unknown;
 };
 
-export type CreateExchangeApiExchangesPostData = {
+export type ExchangesCreateExchangeData = {
   requestBody: ExchangeCreate;
 };
 
-export type CreateExchangeApiExchangesPostResponse = {
+export type ExchangesCreateExchangeResponse = {
   [key: string]: unknown;
 };
 
-export type DeleteExchangeApiExchangesExchangeIdDeleteData = {
+export type ExchangesDeleteExchangeData = {
   exchangeId: number;
 };
 
-export type DeleteExchangeApiExchangesExchangeIdDeleteResponse = {
+export type ExchangesDeleteExchangeResponse = {
   [key: string]: unknown;
 };
 
-export type ExportDbApiExportGetResponse = unknown;
+export type ExportExportDbResponse = unknown;
 
-export type GetMeApiMeGetResponse = {
+export type MeGetMeResponse = {
   [key: string]: unknown;
 };
 
-export type GetNetWorthApiNetWorthGetData = {
+export type NetWorthGetNetWorthData = {
   period?: string;
 };
 
-export type GetNetWorthApiNetWorthGetResponse = {
+export type NetWorthGetNetWorthResponse = {
   [key: string]: unknown;
 };
 
-export type GetPositionsApiPositionsGetResponse = {
+export type PositionsGetPositionsResponse = {
   [key: string]: unknown;
 };
 
-export type GetPositionHistoryApiPositionsAssetIdHistoryGetData = {
+export type PositionsGetPositionHistoryData = {
   assetId: number;
   period?: string;
 };
 
-export type GetPositionHistoryApiPositionsAssetIdHistoryGetResponse = {
+export type PositionsGetPositionHistoryResponse = {
   [key: string]: unknown;
 };
 
-export type RefreshPricesApiPricesRefreshPostData = {
+export type PricesRefreshPricesData = {
   /**
    * Bypass the routine cooldown. For an explicit user-initiated refresh.
    */
   force?: boolean;
 };
 
-export type RefreshPricesApiPricesRefreshPostResponse = {
+export type PricesRefreshPricesResponse = {
   [key: string]: unknown;
 };
 
-export type GetBtcDailyApiPricesBtcDailyGetResponse = {
+export type PricesGetBtcDailyResponse = {
   [key: string]: unknown;
 };
 
-export type CreateTransactionApiTransactionsPostData = {
+export type TransactionsCreateTransactionData = {
   requestBody: TransactionCreate;
 };
 
-export type CreateTransactionApiTransactionsPostResponse = {
+export type TransactionsCreateTransactionResponse = {
   [key: string]: unknown;
 };
 
-export type ListTransactionsApiTransactionsAssetIdGetData = {
+export type TransactionsListTransactionsData = {
   assetId: number;
 };
 
-export type ListTransactionsApiTransactionsAssetIdGetResponse = {
+export type TransactionsListTransactionsResponse = {
   [key: string]: unknown;
 };
 
-export type UpdateTransactionApiTransactionsTxIdUpdatePutData = {
+export type TransactionsUpdateTransactionData = {
   requestBody: TransactionUpdate;
   txId: number;
 };
 
-export type UpdateTransactionApiTransactionsTxIdUpdatePutResponse = {
+export type TransactionsUpdateTransactionResponse = {
   [key: string]: unknown;
 };
 
-export type DeleteTransactionApiTransactionsTxIdDeleteDeleteData = {
+export type TransactionsDeleteTransactionData = {
   txId: number;
 };
 
-export type DeleteTransactionApiTransactionsTxIdDeleteDeleteResponse = {
+export type TransactionsDeleteTransactionResponse = {
   [key: string]: unknown;
 };

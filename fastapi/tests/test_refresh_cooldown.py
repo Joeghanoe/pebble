@@ -27,7 +27,7 @@ def test_the_cooldown_is_six_hours() -> None:
 def test_a_visit_inside_the_window_is_a_no_op(client: TestClient) -> None:
     _last_refreshed_hours_ago(1)
 
-    body = client.post("/api/prices/refresh").json()
+    body = client.post("/api/v1/prices/refresh").json()
 
     assert body["throttled"] is True
     assert body["reason"] == "cooldown"
@@ -37,7 +37,7 @@ def test_a_visit_inside_the_window_is_a_no_op(client: TestClient) -> None:
 def test_a_visit_after_the_window_pulls(client: TestClient) -> None:
     _last_refreshed_hours_ago(7)
 
-    body = client.post("/api/prices/refresh").json()
+    body = client.post("/api/v1/prices/refresh").json()
 
     assert body["throttled"] is False
 
@@ -48,7 +48,7 @@ def test_the_button_still_works_inside_the_window(client: TestClient) -> None:
     """
     _last_refreshed_hours_ago(1)
 
-    body = client.post("/api/prices/refresh?force=true").json()
+    body = client.post("/api/v1/prices/refresh?force=true").json()
 
     assert body["throttled"] is False
 
@@ -58,7 +58,7 @@ def test_a_double_click_is_still_held_off(client: TestClient) -> None:
     seconds_ago = prices.FORCE_REFRESH_FLOOR_S / 2
     prices._last_refresh_at = datetime.now(UTC).timestamp() - seconds_ago
 
-    body = client.post("/api/prices/refresh?force=true").json()
+    body = client.post("/api/v1/prices/refresh?force=true").json()
 
     assert body["throttled"] is True
     assert body["reason"] == "cooldown"

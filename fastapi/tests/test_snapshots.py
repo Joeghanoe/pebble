@@ -43,7 +43,7 @@ def test_daily_returns_every_snapshot_oldest_first(
 ) -> None:
     _seed(session, "2026-03-01", "2026-03-02", "2026-03-03")
 
-    dates = [s["date"] for s in client.get("/api/net-worth/?period=1d").json()["snapshots"]]
+    dates = [s["date"] for s in client.get("/api/v1/net-worth/?period=1d").json()["snapshots"]]
     assert dates == ["2026-03-01", "2026-03-02", "2026-03-03"]
 
 
@@ -52,7 +52,7 @@ def test_monthly_keeps_the_last_snapshot_of_each_month(
 ) -> None:
     _seed(session, "2026-01-05", "2026-01-31", "2026-02-02", "2026-02-27", "2026-03-10")
 
-    dates = [s["date"] for s in client.get("/api/net-worth/?period=1m").json()["snapshots"]]
+    dates = [s["date"] for s in client.get("/api/v1/net-worth/?period=1m").json()["snapshots"]]
     assert dates == ["2026-01-31", "2026-02-27", "2026-03-10"]
 
 
@@ -62,7 +62,7 @@ def test_weekly_keeps_the_last_snapshot_of_each_iso_week(
     # 2026-03-02 is a Monday, so 02-08 is one ISO week and 09-15 the next.
     _seed(session, "2026-03-02", "2026-03-05", "2026-03-08", "2026-03-09", "2026-03-12")
 
-    dates = [s["date"] for s in client.get("/api/net-worth/?period=1w").json()["snapshots"]]
+    dates = [s["date"] for s in client.get("/api/v1/net-worth/?period=1w").json()["snapshots"]]
     assert dates == ["2026-03-08", "2026-03-12"]
 
 
@@ -72,14 +72,14 @@ def test_weekly_spans_a_year_boundary_without_collapsing_buckets(
     """A plain 'week number' bucket would merge week 1 of two different years."""
     _seed(session, "2025-01-03", "2026-01-02")
 
-    dates = [s["date"] for s in client.get("/api/net-worth/?period=1w").json()["snapshots"]]
+    dates = [s["date"] for s in client.get("/api/v1/net-worth/?period=1w").json()["snapshots"]]
     assert dates == ["2025-01-03", "2026-01-02"]
 
 
 def test_values_travel_with_the_selected_dates(client: TestClient, session: Session) -> None:
     _seed(session, "2026-01-05", "2026-01-31")
 
-    snapshots = client.get("/api/net-worth/?period=1m").json()["snapshots"]
+    snapshots = client.get("/api/v1/net-worth/?period=1m").json()["snapshots"]
     assert len(snapshots) == 1
     assert snapshots[0] == {
         "date": "2026-01-31",
@@ -93,13 +93,13 @@ def test_values_travel_with_the_selected_dates(client: TestClient, session: Sess
 def test_an_unknown_period_falls_back_to_monthly(client: TestClient, session: Session) -> None:
     _seed(session, "2026-01-05", "2026-01-31")
 
-    response = client.get("/api/net-worth/?period=nonsense")
+    response = client.get("/api/v1/net-worth/?period=nonsense")
     assert response.status_code == 200
     assert [s["date"] for s in response.json()["snapshots"]] == ["2026-01-31"]
 
 
 def test_no_snapshots_is_an_empty_list(client: TestClient) -> None:
-    assert client.get("/api/net-worth/?period=1m").json()["snapshots"] == []
+    assert client.get("/api/v1/net-worth/?period=1m").json()["snapshots"] == []
 
 
 def _seed_position(session: Session, asset_id: int, *dates: str) -> None:
@@ -123,7 +123,7 @@ def test_position_history_buckets_like_net_worth(client: TestClient, session: Se
 
     dates = [
         p["date"]
-        for p in client.get(f"/api/positions/{asset}/history?period=1m").json()["points"]
+        for p in client.get(f"/api/v1/positions/{asset}/history?period=1m").json()["points"]
     ]
     assert dates == ["2026-01-31", "2026-02-27"]
 
@@ -138,7 +138,7 @@ def test_position_history_is_scoped_to_the_asset(client: TestClient, session: Se
     _seed_position(session, mine, "2026-01-10")
     _seed_position(session, theirs, "2026-01-20")
 
-    points = client.get(f"/api/positions/{mine}/history?period=1m").json()["points"]
+    points = client.get(f"/api/v1/positions/{mine}/history?period=1m").json()["points"]
     assert [p["date"] for p in points] == ["2026-01-10"]
 
 
@@ -148,13 +148,13 @@ def test_position_history_daily_is_oldest_first(client: TestClient, session: Ses
 
     dates = [
         p["date"]
-        for p in client.get(f"/api/positions/{asset}/history?period=1d").json()["points"]
+        for p in client.get(f"/api/v1/positions/{asset}/history?period=1d").json()["points"]
     ]
     assert dates == ["2026-03-01", "2026-03-02", "2026-03-03"]
 
 
 def test_position_history_without_snapshots_is_empty(client: TestClient, session: Session) -> None:
-    assert client.get(f"/api/positions/{_asset(session)}/history").json()["points"] == []
+    assert client.get(f"/api/v1/positions/{_asset(session)}/history").json()["points"] == []
 
 
 def test_a_refresh_writes_the_position_rows_behind_the_total(
@@ -173,9 +173,9 @@ def test_a_refresh_writes_the_position_rows_behind_the_total(
     session.add(PriceCache(asset_id=asset, date="2026-01-05", price_eur=80.0, exchange_rate=1.1))
     session.commit()
 
-    assert client.post("/api/prices/refresh").status_code == 200
+    assert client.post("/api/v1/prices/refresh").status_code == 200
 
-    points = client.get(f"/api/positions/{asset}/history?period=1d").json()["points"]
+    points = client.get(f"/api/v1/positions/{asset}/history?period=1d").json()["points"]
     assert points, "a refresh must leave the position with a series to chart"
     latest = points[-1]
     assert latest["units_held"] == 2.0
@@ -200,11 +200,11 @@ def test_the_backfill_builds_position_rows_for_imported_months(
     session.add(NetWorthSnapshot(date="2026-01-31", total_eur=160.0, invested_eur=100.0))
     session.commit()
 
-    assert client.post("/api/prices/refresh").status_code == 200
+    assert client.post("/api/v1/prices/refresh").status_code == 200
 
     dates = [
         p["date"]
-        for p in client.get(f"/api/positions/{asset}/history?period=1d").json()["points"]
+        for p in client.get(f"/api/v1/positions/{asset}/history?period=1d").json()["points"]
     ]
     assert "2026-01-31" in dates
 
@@ -220,9 +220,9 @@ def test_a_position_held_later_gets_no_row_for_earlier_months(
     session.add(PriceCache(asset_id=asset, date="2026-01-01", price_eur=40.0, exchange_rate=1.1))
     session.commit()
 
-    assert client.post("/api/prices/refresh").status_code == 200
+    assert client.post("/api/v1/prices/refresh").status_code == 200
 
-    points = client.get(f"/api/positions/{asset}/history?period=1d").json()["points"]
+    points = client.get(f"/api/v1/positions/{asset}/history?period=1d").json()["points"]
     assert points, "today's snapshot should still be recorded"
     assert all(p["date"] >= "2026-03-05" for p in points)
     assert all(p["units_held"] > 0 for p in points)
@@ -256,9 +256,9 @@ def test_cash_counts_towards_the_charted_total(client: TestClient, session: Sess
     session.commit()
     _cash_asset(session, units=500.0, date="2026-01-05")
 
-    assert client.post("/api/prices/refresh").status_code == 200
+    assert client.post("/api/v1/prices/refresh").status_code == 200
 
-    latest = client.get("/api/net-worth/?period=1d").json()["snapshots"][-1]
+    latest = client.get("/api/v1/net-worth/?period=1d").json()["snapshots"][-1]
     assert latest["invested_eur"] == 600.0, "cost basis covers the cash deposit"
     assert latest["total_eur"] == 620.0, "2 units at 60 plus 500 cash"
 
@@ -271,7 +271,7 @@ def test_cash_reaches_totals_imported_without_it(client: TestClient, session: Se
     session.add(NetWorthSnapshot(date="2026-01-31", total_eur=1000.0, invested_eur=1250.0))
     session.commit()
 
-    latest = client.get("/api/net-worth/?period=1d").json()["snapshots"][-1]
+    latest = client.get("/api/v1/net-worth/?period=1d").json()["snapshots"][-1]
     assert latest["total_eur"] == 1250.0
 
 
@@ -286,7 +286,7 @@ def test_cash_is_counted_as_of_each_date_not_today(
 
     by_date = {
         s["date"]: s["total_eur"]
-        for s in client.get("/api/net-worth/?period=1d").json()["snapshots"]
+        for s in client.get("/api/v1/net-worth/?period=1d").json()["snapshots"]
     }
     assert by_date["2026-01-31"] == 1000.0
     assert by_date["2026-02-28"] == 1400.0
@@ -549,7 +549,7 @@ def test_snapshots_carry_the_btc_price_of_each_day(
 
     by_date = {
         s["date"]: s["btc_eur"]
-        for s in client.get("/api/net-worth/?period=1d").json()["snapshots"]
+        for s in client.get("/api/v1/net-worth/?period=1d").json()["snapshots"]
     }
     assert by_date == {"2026-01-31": 60000.0, "2026-02-28": 80000.0}
 
@@ -568,7 +568,7 @@ def test_the_btc_price_carries_forward_to_a_day_without_one(
     session.add(NetWorthSnapshot(date="2026-02-28", total_eur=60000.0, invested_eur=50000.0))
     session.commit()
 
-    snapshot = client.get("/api/net-worth/?period=1d").json()["snapshots"][0]
+    snapshot = client.get("/api/v1/net-worth/?period=1d").json()["snapshots"][0]
     assert snapshot["btc_eur"] == 60000.0
 
 
@@ -581,7 +581,7 @@ def test_a_day_before_any_btc_price_has_none(client: TestClient, session: Sessio
     session.add(NetWorthSnapshot(date="2026-01-31", total_eur=1000.0, invested_eur=1000.0))
     session.commit()
 
-    snapshot = client.get("/api/net-worth/?period=1d").json()["snapshots"][0]
+    snapshot = client.get("/api/v1/net-worth/?period=1d").json()["snapshots"][0]
     assert snapshot["btc_eur"] is None
 
 
@@ -594,5 +594,5 @@ def test_a_portfolio_without_btc_reports_no_btc_price(
     session.add(NetWorthSnapshot(date="2026-01-31", total_eur=3000.0, invested_eur=2000.0))
     session.commit()
 
-    snapshot = client.get("/api/net-worth/?period=1d").json()["snapshots"][0]
+    snapshot = client.get("/api/v1/net-worth/?period=1d").json()["snapshots"][0]
     assert snapshot["btc_eur"] is None

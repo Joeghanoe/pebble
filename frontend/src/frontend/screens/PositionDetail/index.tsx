@@ -81,7 +81,7 @@ export function PositionDetail() {
   const { data: txData, isLoading: txLoading } = useQuery({
     queryKey: ["transactions", assetId],
     queryFn: () =>
-      TransactionsService.listTransactionsApiTransactionsAssetIdGet({
+      TransactionsService.listTransactions({
         assetId,
       }) as unknown as Promise<GetTransactionsResponse>,
   });
@@ -89,7 +89,7 @@ export function PositionDetail() {
   const { data: history } = useQuery({
     queryKey: ["position-history", assetId, timeframePeriod(timeframe)],
     queryFn: () =>
-      PositionsService.getPositionHistoryApiPositionsAssetIdHistoryGet({
+      PositionsService.getPositionHistory({
         assetId,
         period: timeframePeriod(timeframe),
       }) as unknown as Promise<GetPositionHistoryResponse>,
@@ -98,7 +98,7 @@ export function PositionDetail() {
   const { data: exchangesData } = useQuery({
     queryKey: ["exchanges"],
     queryFn: () =>
-      ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+      ExchangesService.listExchanges() as unknown as Promise<GetExchangesResponse>,
   });
 
   const deleteTx = useMutation({

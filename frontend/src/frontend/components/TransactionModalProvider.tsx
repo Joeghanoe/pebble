@@ -45,7 +45,7 @@ export function TransactionModalProvider({
   const { data } = useQuery({
     queryKey: ["exchanges"],
     queryFn: () =>
-      ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+      ExchangesService.listExchanges() as unknown as Promise<GetExchangesResponse>,
   });
 
   const value = React.useMemo<TransactionModalContext>(

@@ -55,7 +55,7 @@ export function Dashboard() {
   const { data: netWorth } = useQuery({
     queryKey: ["net-worth", timeframePeriod(timeframe)],
     queryFn: () =>
-      NetWorthService.getNetWorthApiNetWorthGet({
+      NetWorthService.getNetWorth({
         period: timeframePeriod(timeframe),
       }) as unknown as Promise<GetNetWorthResponse>,
   });
@@ -64,7 +64,7 @@ export function Dashboard() {
   const { data: monthly } = useQuery({
     queryKey: ["net-worth", "1m"],
     queryFn: () =>
-      NetWorthService.getNetWorthApiNetWorthGet({
+      NetWorthService.getNetWorth({
         period: "1m",
       }) as unknown as Promise<GetNetWorthResponse>,
   });

@@ -17,10 +17,10 @@ export const SIGN_OUT_URL = "/oauth2/sign_out";
 
 export const api = {
   getMe: (): Promise<{ email: string }> =>
-    MeService.getMeApiMeGet() as unknown as Promise<{ email: string }>,
+    MeService.getMe() as unknown as Promise<{ email: string }>,
 
   refreshPrices: (force = false): Promise<RefreshPricesResponse> =>
-    PricesService.refreshPricesApiPricesRefreshPost({
+    PricesService.refreshPrices({
       force,
     }) as unknown as Promise<RefreshPricesResponse>,
 
@@ -32,7 +32,7 @@ export const api = {
     eurAmount: number;
     notes?: string;
   }) =>
-    TransactionsService.createTransactionApiTransactionsPost({
+    TransactionsService.createTransaction({
       requestBody: {
         asset_id: body.assetId,
         date: body.date,
@@ -44,12 +44,12 @@ export const api = {
     }),
 
   deleteTransaction: (txId: number) =>
-    TransactionsService.deleteTransactionApiTransactionsTxIdDeleteDelete({
+    TransactionsService.deleteTransaction({
       txId,
     }),
 
   createExchange: (body: { name: string; type: string }) =>
-    ExchangesService.createExchangeApiExchangesPost({
+    ExchangesService.createExchange({
       requestBody: {
         name: body.name,
         type: body.type as "crypto" | "broker" | "manual",
@@ -57,7 +57,7 @@ export const api = {
     }),
 
   deleteExchange: (exchangeId: number) =>
-    ExchangesService.deleteExchangeApiExchangesExchangeIdDelete({ exchangeId }),
+    ExchangesService.deleteExchange({ exchangeId }),
 
   createAsset: (body: {
     symbol: string;
@@ -67,7 +67,7 @@ export const api = {
     yahooTicker?: string | null;
     coingeckoId?: string | null;
   }) =>
-    AssetsService.createAssetApiAssetsPost({
+    AssetsService.createAsset({
       requestBody: {
         symbol: body.symbol,
         name: body.name,
@@ -89,7 +89,7 @@ export const api = {
       coingeckoId?: string | null;
     },
   ) =>
-    AssetsService.updateAssetApiAssetsAssetIdPut({
+    AssetsService.updateAsset({
       assetId,
       requestBody: {
         symbol: body.symbol,
@@ -103,5 +103,5 @@ export const api = {
 
   /** Deletes the position outright, with its transactions, prices and snapshots. */
   deleteAsset: (assetId: number) =>
-    AssetsService.deleteAssetApiAssetsAssetIdDelete({ assetId }),
+    AssetsService.deleteAsset({ assetId }),
 };

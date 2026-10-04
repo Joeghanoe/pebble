@@ -2,7 +2,7 @@
 # Pebble
 # =============================================================================
 
-.PHONY: help setup up down db api web test test-api test-web lint migrate revision generate-client desktop desktop-build clean
+.PHONY: help setup up down db api web test test-api test-web lint migrate revision generate-client openapi openapi-check desktop-url desktop desktop-build clean
 
 PROJECT_ROOT := $(shell pwd)
 
@@ -85,18 +85,46 @@ revision:
 ##@ Code generation
 
 # Regenerate the TypeScript client from the API's OpenAPI schema.
-generate-client:
+generate-client: openapi
 	@./scripts/generate-client.sh
+
+# The committed copy of the API contract. Regenerate it with every change to a route or
+# model: CI fails when the app's schema and this file disagree, so a contract change is
+# always a visible diff in review rather than something the client finds out about.
+OPENAPI_SNAPSHOT := fastapi/openapi.snapshot.json
+OPENAPI_DUMP = cd fastapi && DATABASE_URL=$(DATABASE_URL) uv run python -c \
+	"import app.main, json; print(json.dumps(app.main.app.openapi(), indent=2, sort_keys=True))"
+
+openapi:
+	@$(OPENAPI_DUMP) > ../$(OPENAPI_SNAPSHOT)
+	@echo "==> Wrote $(OPENAPI_SNAPSHOT)"
+
+openapi-check:
+	@$(OPENAPI_DUMP) | diff -u ../$(OPENAPI_SNAPSHOT) - \
+		|| (echo "==> API contract changed: run 'make openapi' and commit the snapshot" && exit 1)
 
 ##@ Desktop shell
 
 # A thin client over the deployment: the window loads the hosted URL, there is no
-# local backend. Set the URL in tauri/tauri.conf.json first.
-desktop:
-	cd tauri && cargo tauri dev
+# local backend. PEBBLE_URL is your proxy domain, e.g.
+#   PEBBLE_URL=https://pebble.example.com make desktop
+#
+# Tauri merges --config as a JSON merge patch, which replaces arrays whole, so the patch
+# carries the committed window definition plus the URL rather than the URL alone.
+PEBBLE_URL ?=
+TAURI_URL_PATCH = python3 -c 'import json, os; \
+	w = json.load(open("tauri.conf.json"))["app"]["windows"][0]; \
+	w["url"] = os.environ["PEBBLE_URL"]; \
+	print(json.dumps({"app": {"windows": [w]}}))'
 
-desktop-build:
-	cd tauri && cargo tauri build
+desktop-url:
+	@test -n "$(PEBBLE_URL)" || (echo "==> Set PEBBLE_URL to your deployment, e.g. PEBBLE_URL=https://pebble.example.com" && exit 1)
+
+desktop: desktop-url
+	cd tauri && PEBBLE_URL=$(PEBBLE_URL) cargo tauri dev --config "$$($(TAURI_URL_PATCH))"
+
+desktop-build: desktop-url
+	cd tauri && PEBBLE_URL=$(PEBBLE_URL) cargo tauri build --config "$$($(TAURI_URL_PATCH))"
 
 ##@ Maintenance
 

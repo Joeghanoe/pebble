@@ -100,7 +100,7 @@ def test_endpoint_returns_the_year_oldest_first(client: TestClient, session: Ses
     _price(session, asset_id, today - timedelta(days=10), 2.0)
     session.commit()
 
-    closes = client.get("/api/prices/btc/daily").json()["closes"]
+    closes = client.get("/api/v1/prices/btc/daily").json()["closes"]
 
     assert closes == [
         {"date": (today - timedelta(days=10)).isoformat(), "price_eur": 2.0},
@@ -109,4 +109,4 @@ def test_endpoint_returns_the_year_oldest_first(client: TestClient, session: Ses
 
 
 def test_endpoint_is_empty_without_btc(client: TestClient) -> None:
-    assert client.get("/api/prices/btc/daily").json() == {"closes": []}
+    assert client.get("/api/v1/prices/btc/daily").json() == {"closes": []}

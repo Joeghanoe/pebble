@@ -73,13 +73,41 @@ All on the `api` service.
 | `REQUIRE_PROXY_IDENTITY` | `true` | Set `false` only for local development with no proxy in front. Never in a deployment. |
 | `MIGRATE_ON_STARTUP` | `true` | Run Alembic migrations on boot. The API is the only writer of the schema. |
 | `COINGECKO_API_KEY` | empty | Lifts CoinGecko's anonymous rate limit for crypto prices. Stooq, Yahoo and Frankfurter need no key; without it refreshes still work and are throttled harder. |
+| `PRICE_PROVIDERS` | `coingecko,stooq,yahoo` | Which upstreams to ask for prices. Stooq and Yahoo are unofficial endpoints with no published terms for this use — fine for a personal instance, worth dropping where that matters. A disabled source answers "no price", so its holdings show as stale or unavailable. An unknown name stops the API from starting. |
 | `PROXY_EMAIL_HEADER` | `X-Forwarded-Email` | The header identity is read from. Change only if the proxy is configured differently. |
 | `ENVIRONMENT` | `local` | `local` logs every SQL statement with timings. |
 
 `/` and `/api/health` are the only unauthenticated routes, because Railway probes them
 directly on the private network with no proxy in front.
 
-## Deploying
+## API
+
+Every business route lives under **`/api/v1`**; the health check and `/` stay unversioned
+because infrastructure probes them, not clients. The contract is committed as
+`fastapi/openapi.snapshot.json` and CI fails when the app disagrees with it, so a change
+to the API is always a visible diff. `make generate-client` refreshes the snapshot and
+regenerates the TypeScript client in `frontend/src/client/`. A breaking change gets a new
+version mounted next to the old one rather than an edit in place.
+
+## Self-hosting
+
+`docker-compose.prod.yml` runs the same four pieces on any Docker host, with any OIDC
+provider:
+
+```bash
+cp .env.example .env      # PEBBLE_URL, ALLOWED_EMAILS, provider credentials, ...
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Only `proxy` publishes a port (4180). Put TLS in front of it — the session cookie is
+`Secure` — and register `$PEBBLE_URL/oauth2/callback` as the redirect URI with your
+provider. For anything other than Google set `OAUTH2_PROXY_PROVIDER=oidc` and
+`OAUTH2_PROXY_OIDC_ISSUER_URL` (Keycloak, Zitadel, Authentik, Entra ID and so on).
+
+The api must stay unpublished: it trusts the identity header the proxy sets, so anything
+that can reach it directly can claim to be anyone. `SECURITY.md` has the full model.
+
+## Deploying on Railway
 
 `.railway/README.md` is the runbook. In short: `railway config apply` creates the four
 resources, then `proxy` gets the public domain and the Google client credentials.
@@ -173,12 +201,12 @@ one transaction, so a refusal leaves the hosted ledger untouched.
 FastAPI sidecar or a local SQLite database, so the mac and the phone read the same
 ledger — at the cost of no offline use.
 
-Set the URL in `tauri/tauri.conf.json` (`app.windows[0].url`, currently a placeholder),
-then:
+Point it at your deployment with `PEBBLE_URL`; the window URL is merged in at build time
+rather than committed:
 
 ```bash
-make desktop         # cargo tauri dev
-make desktop-build   # installers in tauri/target/release/bundle/
+PEBBLE_URL=https://pebble.example.com make desktop         # cargo tauri dev
+PEBBLE_URL=https://pebble.example.com make desktop-build   # installers in tauri/target/release/bundle/
 ```
 
 **Google may refuse to sign in inside the window.** Google blocks its OAuth flow in
@@ -211,6 +239,10 @@ list.
 **Dates** are stored as `YYYY-MM-DD` strings, not dates. Every comparison in the raw SQL
 relies on ISO dates sorting lexicographically, which is why `TransactionCreate.date` is
 pattern-checked rather than free-form.
+
+## Contributing
+
+See `CONTRIBUTING.md`. Security reports go through `SECURITY.md`, not issues.
 
 ## License
 

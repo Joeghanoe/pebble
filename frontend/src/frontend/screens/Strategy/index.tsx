@@ -91,7 +91,7 @@ export function Strategy() {
   const { data: btc, isLoading: btcLoading } = useQuery({
     queryKey: ["btc-daily"],
     queryFn: () =>
-      PricesService.getBtcDailyApiPricesBtcDailyGet() as unknown as Promise<GetBtcDailyResponse>,
+      PricesService.getBtcDaily() as unknown as Promise<GetBtcDailyResponse>,
   });
 
   const regime = React.useMemo<RegimeState | null>(() => {

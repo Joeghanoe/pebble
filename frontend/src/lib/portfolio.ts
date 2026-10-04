@@ -44,7 +44,7 @@ export function usePortfolio(): Portfolio {
   const { data, isLoading } = useQuery({
     queryKey: ["positions"],
     queryFn: () =>
-      PositionsService.getPositionsApiPositionsGet() as unknown as Promise<GetPositionsResponse>,
+      PositionsService.getPositions() as unknown as Promise<GetPositionsResponse>,
   });
 
   const raw = data?.positions ?? [];

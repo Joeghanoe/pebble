@@ -8,7 +8,6 @@ Known gaps, roughly in the order they would start to hurt.
 |---|---|
 | **Move the price-refresh cooldown into Postgres** | It is a module-level global in `api/routes/prices.py`, so the 15-minute throttle is per process. That pins the api service to one uvicorn worker and one replica. Until it moves, scaling up silently multiplies the rate at which Pebble hits CoinGecko and Yahoo. |
 | **Snapshot backfill on a schedule** | `services/snapshots.py` can build the net-worth history, but nothing calls it periodically, so the dashboard chart only has points for days something happened to run. A Railway cron hitting an authenticated endpoint would fill it. |
-| **Shorten the FastAPI operation ids** | They generate client methods like `deleteTransactionApiTransactionsTxIdDeleteDelete`. A `generate_unique_id_function` on the app would fix every name at once, at the cost of one large mechanical diff through the frontend. |
 | **Restrict sign-in to one address at the proxy** | `OAUTH2_PROXY_EMAIL_DOMAINS` is `*` because the only way to name specific addresses is `--authenticated-emails-file`, and a stock image has nowhere to read one from. Today the Google consent screen's test-user list and `ALLOWED_EMAILS` on the api are the two gates. A small image that bakes in the file would make the proxy itself exact. |
 
 ## Deliberately not done
@@ -28,10 +27,10 @@ the phone was the point; offline was the cost.
 
 - The transaction log's `Current Value` and `Profit/Loss` columns are hidden below 640px.
   A stacked card layout would show everything on a phone instead of dropping two columns.
-- `/api/export/` returns the whole ledger as JSON in one response. Fine at a personal
+- `/api/v1/export/` returns the whole ledger as JSON in one response. Fine at a personal
   scale; it would want streaming or pagination if the transaction count grew a lot.
 - `scripts/import_local_data.py` loads a desktop SQLite file into the hosted Postgres,
-  but nothing reads the JSON that `/api/export/` produces, so an export still cannot be
+  but nothing reads the JSON that `/api/v1/export/` produces, so an export still cannot be
   restored through the app. An import endpoint taking that JSON would close the loop and
   remove the need to expose Postgres on a public port at all.
 - No frontend unit tests. The delete paths were verified by driving Chromium by hand;

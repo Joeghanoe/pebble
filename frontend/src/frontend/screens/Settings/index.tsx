@@ -53,7 +53,7 @@ export function Settings() {
   const { data: exchangesData } = useQuery({
     queryKey: ["exchanges"],
     queryFn: () =>
-      ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+      ExchangesService.listExchanges() as unknown as Promise<GetExchangesResponse>,
   });
   const { data: me } = useQuery({
     queryKey: ["me"],
@@ -492,7 +492,7 @@ export function Settings() {
             >
               {/* A plain link: the response carries its own Content-Disposition,
                   and the browser handles the save without any script. */}
-              <a href={apiUrl("/api/export/")}>
+              <a href={apiUrl("/api/v1/export/")}>
                 <PbGhostButton>Export</PbGhostButton>
               </a>
             </Row>

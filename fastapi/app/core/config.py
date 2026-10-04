@@ -4,6 +4,9 @@ from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+KNOWN_PRICE_PROVIDERS = frozenset({"coingecko", "stooq", "yahoo"})
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -13,7 +16,11 @@ class Settings(BaseSettings):
 
     # App settings
     PROJECT_NAME: str = "Pebble"
-    API_V1_STR: str = "/api"
+    # Every business route lives under this prefix. Bump it (and keep the old router
+    # mounted) for a breaking change; `/api/health` and `/` stay unversioned because
+    # infrastructure probes them, not clients.
+    API_V1_STR: str = "/api/v1"
+    HEALTH_PATH: str = "/api/health"
     ENVIRONMENT: Literal["local", "development", "production"] = "local"
 
     # Postgres. Railway injects DATABASE_URL as a reference to the Postgres service; the
@@ -43,6 +50,23 @@ class Settings(BaseSettings):
     # Price data. On the desktop build this came from the OS keyring; hosted, it is an
     # environment variable like every other secret.
     COINGECKO_API_KEY: str = ""
+
+    # Which upstreams to ask for prices, comma-separated. Stooq and Yahoo are
+    # unofficial endpoints without published terms for this use: fine for a personal
+    # instance, worth switching off where that matters. A disabled source answers
+    # "no price", so its holdings report stale or unavailable instead of failing.
+    PRICE_PROVIDERS: str = "coingecko,stooq,yahoo"
+
+    @property
+    def price_providers(self) -> frozenset[str]:
+        names = frozenset(
+            part.strip().lower() for part in self.PRICE_PROVIDERS.split(",") if part.strip()
+        )
+        unknown = names - KNOWN_PRICE_PROVIDERS
+        if unknown:
+            # A typo here would silently turn a source off; refuse to start instead.
+            raise ValueError(f"Unknown PRICE_PROVIDERS: {', '.join(sorted(unknown))}")
+        return names
 
     @property
     def allowed_emails(self) -> frozenset[str]:

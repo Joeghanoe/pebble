@@ -11,7 +11,7 @@ export const settingsRoute = createRoute({
     void queryClient.prefetchQuery({
       queryKey: ["exchanges"],
       queryFn: () =>
-        ExchangesService.listExchangesApiExchangesGet() as unknown as Promise<GetExchangesResponse>,
+        ExchangesService.listExchanges() as unknown as Promise<GetExchangesResponse>,
     });
   },
   component: Settings,

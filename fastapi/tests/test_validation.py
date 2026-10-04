@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 def test_an_unknown_asset_type_is_rejected(client: TestClient) -> None:
     response = client.post(
-        "/api/assets/",
+        "/api/v1/assets/",
         json={
             "symbol": "BTC",
             "name": "Bitcoin",
@@ -24,7 +24,7 @@ def test_an_unknown_asset_type_is_rejected(client: TestClient) -> None:
 
 def test_an_unknown_exchange_type_is_rejected(client: TestClient) -> None:
     response = client.post(
-        "/api/exchanges/",
+        "/api/v1/exchanges/",
         json={"name": "Kraken", "type": "something-that-does-not-fit-in-twenty"},
     )
     assert response.status_code == 422
@@ -32,11 +32,11 @@ def test_an_unknown_exchange_type_is_rejected(client: TestClient) -> None:
 
 def test_an_unknown_transaction_type_is_rejected(client: TestClient) -> None:
     client.post(
-        "/api/assets/",
+        "/api/v1/assets/",
         json={"symbol": "BTC", "name": "Bitcoin", "type": "crypto", "exchange_id": 1},
     )
     response = client.post(
-        "/api/transactions/",
+        "/api/v1/transactions/",
         json={
             "asset_id": 1,
             "date": "2026-01-10",
@@ -51,11 +51,11 @@ def test_an_unknown_transaction_type_is_rejected(client: TestClient) -> None:
 def test_a_malformed_date_is_rejected(client: TestClient) -> None:
     """`date` is a 10 character column and the raw SQL sorts it as a string."""
     client.post(
-        "/api/assets/",
+        "/api/v1/assets/",
         json={"symbol": "BTC", "name": "Bitcoin", "type": "crypto", "exchange_id": 1},
     )
     response = client.post(
-        "/api/transactions/",
+        "/api/v1/transactions/",
         json={
             "asset_id": 1,
             "date": "10 January 2026",
@@ -69,7 +69,7 @@ def test_a_malformed_date_is_rejected(client: TestClient) -> None:
 
 def test_an_over_long_symbol_is_rejected(client: TestClient) -> None:
     response = client.post(
-        "/api/assets/",
+        "/api/v1/assets/",
         json={
             "symbol": "X" * 100,
             "name": "Bitcoin",
@@ -82,7 +82,7 @@ def test_an_over_long_symbol_is_rejected(client: TestClient) -> None:
 
 def test_valid_input_still_goes_through(client: TestClient) -> None:
     created = client.post(
-        "/api/assets/",
+        "/api/v1/assets/",
         json={
             "symbol": "BTC",
             "name": "Bitcoin",
@@ -94,7 +94,7 @@ def test_valid_input_still_goes_through(client: TestClient) -> None:
     assert created.status_code == 201, created.text
 
     tx = client.post(
-        "/api/transactions/",
+        "/api/v1/transactions/",
         json={
             "asset_id": created.json()["asset"]["id"],
             "date": "2026-01-10",
