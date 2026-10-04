@@ -1,7 +1,13 @@
 from typing import Annotated, Any, Literal, Optional, Union
 
+import sqlalchemy as sa
 from pydantic import StringConstraints
 from sqlmodel import Field, SQLModel
+
+# Money, units and rates are numeric(28, 10) in Postgres (migration 005): exact storage
+# and exact SQL sums. asdecimal=False keeps them floats in Python, where the FIFO and
+# valuation arithmetic lives; see app/core/db.py for the same rule on raw SQL.
+Amount = sa.Numeric(28, 10, asdecimal=False)
 
 
 # ============================================================================
@@ -36,8 +42,8 @@ class Transaction(SQLModel, table=True):
     asset_id: int = Field(foreign_key="asset.id")
     date: str = Field(max_length=10)  # YYYY-MM-DD
     type: str = Field(max_length=10)  # buy | sell
-    units: float
-    eur_amount: float
+    units: float = Field(sa_type=Amount)
+    eur_amount: float = Field(sa_type=Amount)
     notes: Optional[str] = Field(default=None)
     source: str = Field(default="manual", max_length=20)  # manual | imported
     external_id: Optional[str] = Field(default=None)
@@ -50,16 +56,16 @@ class PriceCache(SQLModel, table=True):
 
     asset_id: int = Field(foreign_key="asset.id", primary_key=True)
     date: str = Field(primary_key=True, max_length=10)
-    price_eur: float
-    exchange_rate: float
+    price_eur: float = Field(sa_type=Amount)
+    exchange_rate: float = Field(sa_type=Amount)
 
 
 class NetWorthSnapshot(SQLModel, table=True):
     __tablename__ = "net_worth_snapshot"  # type: ignore[assignment]
 
     date: str = Field(primary_key=True, max_length=10)
-    total_eur: float
-    invested_eur: float = Field(default=0.0)
+    total_eur: float = Field(sa_type=Amount)
+    invested_eur: float = Field(default=0.0, sa_type=Amount)
 
 
 class PositionSnapshot(SQLModel, table=True):
@@ -67,10 +73,10 @@ class PositionSnapshot(SQLModel, table=True):
 
     date: str = Field(primary_key=True, max_length=10)
     asset_id: int = Field(foreign_key="asset.id", primary_key=True)
-    units_held: float
-    price_eur: float
-    value_eur: float
-    invested_eur: float
+    units_held: float = Field(sa_type=Amount)
+    price_eur: float = Field(sa_type=Amount)
+    value_eur: float = Field(sa_type=Amount)
+    invested_eur: float = Field(sa_type=Amount)
 
 
 # ============================================================================
