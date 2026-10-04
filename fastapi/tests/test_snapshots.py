@@ -357,7 +357,7 @@ def test_gap_fill_writes_a_row_for_every_missed_day(
 
     assert written == 4, "every day since the first visit, except the one already there"
     stored = {
-        row.date for row in session.exec(text("SELECT date FROM net_worth_snapshot")).all()
+        row.date for row in session.exec(text("SELECT to_char(date, 'YYYY-MM-DD') AS date FROM net_worth_snapshot")).all()
     }
     assert stored == set(days)
 
@@ -440,7 +440,7 @@ def test_gap_fill_does_not_reach_back_before_the_first_transaction(
 
     asyncio.run(_gap_fill(session, window_days=90))
 
-    dates = [row.date for row in session.exec(text("SELECT date FROM net_worth_snapshot")).all()]
+    dates = [row.date for row in session.exec(text("SELECT to_char(date, 'YYYY-MM-DD') AS date FROM net_worth_snapshot")).all()]
     assert min(dates) == first
 
 
@@ -469,7 +469,7 @@ def test_gap_fill_leaves_days_it_already_has_alone(session: Session, monkeypatch
     asyncio.run(_gap_fill(session, window_days=30))
 
     kept = session.exec(
-        text("SELECT total_eur FROM net_worth_snapshot WHERE date = :d").bindparams(d=first)
+        text("SELECT total_eur FROM net_worth_snapshot WHERE date = CAST(:d AS date)").bindparams(d=first)
     ).one()
     assert kept[0] == 999.0
 
@@ -524,7 +524,7 @@ def test_gap_fill_will_not_stretch_one_price_across_weeks(
     written = asyncio.run(_gap_fill(session, window_days=90))
 
     assert written == 6, "the day itself plus the five it may carry into"
-    dates = [row.date for row in session.exec(text("SELECT date FROM net_worth_snapshot")).all()]
+    dates = [row.date for row in session.exec(text("SELECT to_char(date, 'YYYY-MM-DD') AS date FROM net_worth_snapshot")).all()]
     assert max(dates) == (date_cls.fromisoformat(first) + timedelta(days=5)).isoformat()
 
 

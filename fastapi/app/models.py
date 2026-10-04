@@ -4,6 +4,9 @@ import sqlalchemy as sa
 from pydantic import StringConstraints
 from sqlmodel import Field, SQLModel
 
+from app.core.types import IsoDate as IsoDateColumn
+from app.core.types import IsoTimestamp
+
 # Money, units and rates are numeric(28, 10) in Postgres (migration 005): exact storage
 # and exact SQL sums. asdecimal=False keeps them floats in Python, where the FIFO and
 # valuation arithmetic lives; see app/core/db.py for the same rule on raw SQL.
@@ -40,22 +43,22 @@ class Transaction(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     asset_id: int = Field(foreign_key="asset.id")
-    date: str = Field(max_length=10)  # YYYY-MM-DD
+    date: str = Field(sa_type=IsoDateColumn)  # a `date`, read as YYYY-MM-DD
     type: str = Field(max_length=10)  # buy | sell
     units: float = Field(sa_type=Amount)
     eur_amount: float = Field(sa_type=Amount)
     notes: Optional[str] = Field(default=None)
     source: str = Field(default="manual", max_length=20)  # manual | imported
     external_id: Optional[str] = Field(default=None)
-    # ISO 8601 UTC, whole seconds. 40 rather than 30: see migration 003.
-    deleted_at: Optional[str] = Field(default=None, max_length=40)
+    # A timestamptz, read as ISO 8601 in UTC (migration 006).
+    deleted_at: Optional[str] = Field(default=None, sa_type=IsoTimestamp)
 
 
 class PriceCache(SQLModel, table=True):
     __tablename__ = "price_cache"  # type: ignore[assignment]
 
     asset_id: int = Field(foreign_key="asset.id", primary_key=True)
-    date: str = Field(primary_key=True, max_length=10)
+    date: str = Field(primary_key=True, sa_type=IsoDateColumn)
     price_eur: float = Field(sa_type=Amount)
     exchange_rate: float = Field(sa_type=Amount)
 
@@ -63,7 +66,7 @@ class PriceCache(SQLModel, table=True):
 class NetWorthSnapshot(SQLModel, table=True):
     __tablename__ = "net_worth_snapshot"  # type: ignore[assignment]
 
-    date: str = Field(primary_key=True, max_length=10)
+    date: str = Field(primary_key=True, sa_type=IsoDateColumn)
     total_eur: float = Field(sa_type=Amount)
     invested_eur: float = Field(default=0.0, sa_type=Amount)
 
@@ -71,7 +74,7 @@ class NetWorthSnapshot(SQLModel, table=True):
 class PositionSnapshot(SQLModel, table=True):
     __tablename__ = "position_snapshot"  # type: ignore[assignment]
 
-    date: str = Field(primary_key=True, max_length=10)
+    date: str = Field(primary_key=True, sa_type=IsoDateColumn)
     asset_id: int = Field(foreign_key="asset.id", primary_key=True)
     units_held: float = Field(sa_type=Amount)
     price_eur: float = Field(sa_type=Amount)

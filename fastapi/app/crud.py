@@ -184,8 +184,7 @@ def update_transaction(session: Session, tx: Transaction, tx_in: TransactionUpda
 
 
 def soft_delete_transaction(session: Session, tx: Transaction) -> None:
-    # Whole seconds: microsecond precision is meaningless for a manual delete and pushed
-    # the ISO string to 32 characters, over the column's width (see migration 003).
+    # Whole seconds: microsecond precision is meaningless for a manual delete.
     tx.deleted_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     session.add(tx)
     session.commit()
@@ -299,7 +298,7 @@ def upsert_price(session: Session, asset_id: int, date: str, price_eur: float, e
 
 
 def get_max_price_date(session: Session) -> str | None:
-    result = session.exec(text("SELECT MAX(date) FROM price_cache")).one()
+    result = session.exec(text("SELECT to_char(MAX(date), 'YYYY-MM-DD') FROM price_cache")).one()
     return result[0] if result else None
 
 
@@ -329,11 +328,11 @@ def get_cash_balance_by_date(session: Session, dates: list[str]) -> dict[str, fl
     rows = session.exec(
         text(
             """
-            SELECT d.date,
+            SELECT to_char(d.date, 'YYYY-MM-DD'),
                    COALESCE(SUM(
                      CASE WHEN t.type = 'buy' THEN t.units ELSE -t.units END
                    ), 0)
-            FROM unnest(CAST(:dates AS text[])) AS d(date)
+            FROM unnest(CAST(:dates AS date[])) AS d(date)
             LEFT JOIN "transaction" t
               ON t.date <= d.date
              AND t.deleted_at IS NULL
@@ -388,8 +387,8 @@ def get_btc_eur_by_date(session: Session, dates: list[str]) -> dict[str, float]:
     rows = session.exec(
         text(
             """
-            SELECT d.date, p.price_eur
-            FROM unnest(CAST(:dates AS text[])) AS d(date)
+            SELECT to_char(d.date, 'YYYY-MM-DD'), p.price_eur
+            FROM unnest(CAST(:dates AS date[])) AS d(date)
             LEFT JOIN LATERAL (
               SELECT price_eur FROM price_cache
               WHERE asset_id = :asset_id AND date <= d.date
@@ -404,21 +403,23 @@ def get_btc_eur_by_date(session: Session, dates: list[str]) -> dict[str, float]:
 def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSnapshot]:
     """Last 60 points of net worth: daily, or the last snapshot in each week/month.
 
-    `date` is stored as a 'YYYY-MM-DD' string, so lexicographic ordering is already
-    chronological and the month bucket is a plain prefix. The week bucket needs a real
-    date, hence the cast. This used SQLite's strftime('%Y-%W') before the move to
-    Postgres; ISO weeks differ from %W in the first days of January, which shifts at
+    `date` is a real date (migration 006), bucketed by ISO week or calendar month and
+    handed back as 'YYYY-MM-DD'. This used SQLite's strftime('%Y-%W') before the move
+    to Postgres; ISO weeks differ from %W in the first days of January, which shifts at
     most one bucket boundary a year on a chart of the last 60 weeks.
     """
     if period == "1d":
         rows = session.exec(
-            text("SELECT date, total_eur, invested_eur FROM net_worth_snapshot ORDER BY date DESC LIMIT 60")
+            text(
+                "SELECT to_char(date, 'YYYY-MM-DD'), total_eur, invested_eur "
+                "FROM net_worth_snapshot ORDER BY date DESC LIMIT 60"
+            )
         ).all()
         return [NetWorthSnapshot(date=r[0], total_eur=r[1], invested_eur=r[2]) for r in reversed(rows)]
 
-    bucket = "to_char(date::date, 'IYYY-IW')" if period == "1w" else "substr(date, 1, 7)"
+    bucket = "to_char(date, 'IYYY-IW')" if period == "1w" else "to_char(date, 'YYYY-MM')"
     sql = text(f"""
-        SELECT s.date, s.total_eur, s.invested_eur
+        SELECT to_char(s.date, 'YYYY-MM-DD'), s.total_eur, s.invested_eur
         FROM net_worth_snapshot s
         JOIN (
           SELECT MAX(date) AS max_date
@@ -438,23 +439,23 @@ def list_position_snapshots_aggregated(
 ) -> list[PositionSnapshot]:
     """`list_snapshots_aggregated`, scoped to one asset.
 
-    Same buckets, same 60-point ceiling, same lexicographic-date assumptions. The
+    Same buckets, same 60-point ceiling. The
     grouping subquery has to filter by asset before taking MAX(date): without that,
     a bucket whose latest net-worth snapshot predates this asset's would drop out.
     """
     if period == "1d":
         rows = session.exec(
             text(
-                "SELECT date, units_held, price_eur, value_eur, invested_eur "
+                "SELECT to_char(date, 'YYYY-MM-DD'), units_held, price_eur, value_eur, invested_eur "
                 "FROM position_snapshot WHERE asset_id = :asset_id "
                 "ORDER BY date DESC LIMIT 60"
             ).bindparams(asset_id=asset_id)
         ).all()
         rows = list(reversed(rows))
     else:
-        bucket = "to_char(date::date, 'IYYY-IW')" if period == "1w" else "substr(date, 1, 7)"
+        bucket = "to_char(date, 'IYYY-IW')" if period == "1w" else "to_char(date, 'YYYY-MM')"
         sql = text(f"""
-            SELECT s.date, s.units_held, s.price_eur, s.value_eur, s.invested_eur
+            SELECT to_char(s.date, 'YYYY-MM-DD'), s.units_held, s.price_eur, s.value_eur, s.invested_eur
             FROM position_snapshot s
             JOIN (
               SELECT MAX(date) AS max_date
@@ -522,7 +523,7 @@ def upsert_position_snapshot(
 
 def get_earliest_transaction_date(session: Session) -> str | None:
     result = session.exec(
-        text("SELECT MIN(date) FROM \"transaction\" WHERE deleted_at IS NULL")
+        text("""SELECT to_char(MIN(date), 'YYYY-MM-DD') FROM "transaction" WHERE deleted_at IS NULL""")
     ).one()
     return result[0] if result else None
 
@@ -534,7 +535,7 @@ def get_units_held_on_date(session: Session, asset_id: int, date: str) -> float:
             SELECT COALESCE(
               SUM(CASE WHEN type = 'buy' THEN units ELSE -units END), 0
             ) FROM "transaction"
-            WHERE asset_id = :asset_id AND date <= :date AND deleted_at IS NULL
+            WHERE asset_id = :asset_id AND date <= CAST(:date AS date) AND deleted_at IS NULL
             """
         ).bindparams(asset_id=asset_id, date=date)
     ).one()
@@ -550,7 +551,7 @@ def get_invested_eur_on_date(session: Session, date: str, asset_id: int | None =
     statement = text(
         f"""
         SELECT COALESCE(SUM(CASE WHEN type = 'buy' THEN eur_amount ELSE -eur_amount END), 0)
-        FROM "transaction" WHERE date <= :date AND deleted_at IS NULL {scope}
+        FROM "transaction" WHERE date <= CAST(:date AS date) AND deleted_at IS NULL {scope}
         """
     )
     statement = (
@@ -571,6 +572,8 @@ def has_position_snapshots_on_date(session: Session, date: str) -> bool:
     of the rows behind it.
     """
     result = session.exec(
-        text("SELECT 1 FROM position_snapshot WHERE date = :date LIMIT 1").bindparams(date=date)
+        text(
+            "SELECT 1 FROM position_snapshot WHERE date = CAST(:date AS date) LIMIT 1"
+        ).bindparams(date=date)
     ).first()
     return result is not None
