@@ -305,94 +305,92 @@ function TotalWorthCard({
 
 /* ── Allocation ──────────────────────────────────────────────────────────── */
 
+/**
+ * Venues have no identity colour of their own, so they take the chrome range in
+ * order. Orange stays out of it: it is BTC's and the action colour's.
+ */
+const VENUE_COLORS = [
+  "#8B5CF6",
+  "#6D9BF6",
+  "#C084FC",
+  "#A78BFA",
+  "#6F6885",
+  "#3F3A55",
+];
+
 function AllocationCard({
   portfolio,
 }: {
   readonly portfolio: ReturnType<typeof usePortfolio>;
 }) {
+  const [view, setView] = React.useState<"Class" | "Venue">("Class");
+  const rows =
+    view === "Class"
+      ? portfolio.allocation.map((entry) => ({
+          key: entry.klass,
+          label: entry.klass,
+          caption: null as string | null,
+          color: CLASS_COLORS[entry.klass],
+          fraction: entry.fraction,
+        }))
+      : portfolio.venues.map((slice, index) => ({
+          key: slice.venue ?? "",
+          label: slice.venue ?? "Unassigned",
+          caption: slice.symbols.join(" · "),
+          color: VENUE_COLORS[index % VENUE_COLORS.length],
+          fraction: slice.fraction,
+        }));
+
   return (
     <PbCard className="flex flex-col gap-3.5 p-[18px]">
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="text-[12.5px] font-semibold">Allocation</h2>
-        <span className="font-number text-[10.5px] text-pb-faint">
-          by asset class
-        </span>
+        <PbSegmented
+          mono={false}
+          options={["Class", "Venue"] as const}
+          value={view}
+          onChange={setView}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-[18px]">
         <PbDonut
-          segments={portfolio.allocation.map((entry) => ({
-            label: entry.klass,
-            color: CLASS_COLORS[entry.klass],
-            fraction: entry.fraction,
+          segments={rows.map((row) => ({
+            label: row.label,
+            color: row.color,
+            fraction: row.fraction,
           }))}
-          centerValue={portfolio.positions.length}
-          centerLabel="Assets"
+          centerValue={
+            view === "Class" ? portfolio.positions.length : rows.length
+          }
+          centerLabel={view === "Class" ? "Assets" : "Venues"}
         />
         <div className="flex min-w-[140px] flex-1 flex-col gap-2.5">
-          {portfolio.allocation.map((entry) => (
-            <div key={entry.klass}>
+          {rows.map((row) => (
+            <div key={row.key}>
               <div className="flex items-center gap-2">
                 <span
                   className="size-[7px] shrink-0 rounded-[2px]"
-                  style={{ background: CLASS_COLORS[entry.klass] }}
+                  style={{ background: row.color }}
                 />
-                <span className="flex-1 text-[12px] text-pb-text-2">
-                  {entry.klass}
+                <span className="min-w-0 flex-1 truncate text-[12px] text-pb-text-2">
+                  {row.label}
+                  {row.caption && (
+                    <span className="ml-1.5 font-number text-[10px] text-pb-faint">
+                      {row.caption}
+                    </span>
+                  )}
                 </span>
                 <span className="font-number text-[11.5px] text-pb-text-3 tabular-nums">
-                  {(entry.fraction * 100).toFixed(1).replace(".", ",")}%
+                  {(row.fraction * 100).toFixed(1).replace(".", ",")}%
                 </span>
               </div>
-              <PbBar
-                percent={entry.fraction * 100}
-                color={CLASS_COLORS[entry.klass]}
-              />
+              <PbBar percent={row.fraction * 100} color={row.color} />
             </div>
           ))}
         </div>
       </div>
-
-      <div className="mt-auto grid grid-cols-2 gap-2">
-        <ExtremeTile label="Best" holding={portfolio.best} />
-        <ExtremeTile label="Worst" holding={portfolio.worst} />
-      </div>
     </PbCard>
-  );
-}
-
-function ExtremeTile({
-  label,
-  holding,
-}: {
-  readonly label: string;
-  readonly holding: HoldingRow | null;
-}) {
-  return (
-    <div className="rounded-[10px] border border-[#201C2D] bg-pb-raised px-2.5 py-2.5">
-      <span className="block font-number text-[9.5px] tracking-[0.1em] text-pb-muted uppercase">
-        {label}
-      </span>
-      {holding ? (
-        <span className="mt-0.5 flex items-baseline justify-between gap-2">
-          <span className="truncate font-number text-[12.5px]">
-            {holding.asset.symbol}
-          </span>
-          <span
-            className={cn(
-              "font-number text-[12px] tabular-nums",
-              pnlClass(holding.pnl_pct),
-            )}
-          >
-            {formatPct(holding.pnl_pct)}
-          </span>
-        </span>
-      ) : (
-        <span className="mt-0.5 block font-number text-[12.5px] text-pb-faint">
-          —
-        </span>
-      )}
-    </div>
   );
 }
 

@@ -103,7 +103,7 @@ def find_or_create_instrument(
     """The instrument with this feed identity, created if there is none.
 
     Identity is the type plus the feed ids, the ticker compared case-insensitively,
-    exactly as migration 007 grouped existing holdings. A holding with no feed id
+    exactly as migration 009 grouped existing holdings. A holding with no feed id
     always gets an instrument of its own: two manual "ABC" entries are not assumed to
     be the same thing. Does not commit; the caller's write does.
     """
@@ -255,6 +255,8 @@ def list_transactions_by_asset(session: Session, asset_id: int) -> list[dict[str
             "eur_amount": row.eur_amount,
             "realized_pnl": realized_pnl,
             "notes": row.notes,
+            "venue": row.venue,
+            "to_venue": row.to_venue,
             "source": row.source,
             "external_id": row.external_id,
             "deleted_at": row.deleted_at,
@@ -274,6 +276,8 @@ def create_transaction(session: Session, tx_in: TransactionCreate) -> Transactio
         units=abs(tx_in.units),
         eur_amount=abs(tx_in.eur_amount),
         notes=tx_in.notes,
+        venue=tx_in.venue,
+        to_venue=tx_in.to_venue,
     )
     session.add(tx)
     session.commit()
@@ -299,6 +303,84 @@ def soft_delete_transaction(session: Session, tx: Transaction) -> None:
     tx.deleted_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     session.add(tx)
     session.commit()
+
+
+# ============================================================================
+# Venues
+# ============================================================================
+
+# Every transaction's effect on the units held at each venue: a buy adds at its
+# venue, a sell removes, and a move removes at `venue` and adds at `to_venue`.
+# The one definition both per-position holdings and the venue list read from.
+_VENUE_DELTAS = """
+    SELECT asset_id, venue, CASE type WHEN 'buy' THEN units ELSE -units END AS units
+    FROM "transaction" WHERE deleted_at IS NULL
+    UNION ALL
+    SELECT asset_id, to_venue AS venue, units
+    FROM "transaction" WHERE deleted_at IS NULL AND type = 'move'
+"""
+
+
+def get_venue_holdings(session: Session) -> dict[int, list[tuple[str | None, float]]]:
+    """Units held per venue for every asset, largest first.
+
+    Venues that net to zero are left out: a wallet emptied by a move is no
+    longer somewhere the position is held.
+    """
+    rows = session.exec(
+        text(
+            f"""
+            SELECT asset_id, venue, SUM(units) AS units
+            FROM ({_VENUE_DELTAS}) d
+            GROUP BY asset_id, venue
+            HAVING ABS(SUM(units)) > 1e-9
+            ORDER BY asset_id, SUM(units) DESC
+            """
+        )
+    ).all()
+    holdings: dict[int, list[tuple[str | None, float]]] = {}
+    for asset_id, venue, units in rows:
+        # Rounded well past any displayed precision: 0.12 − 0.05 summed in
+        # floating point is 0.06999999999999999, which is noise, not a holding.
+        holdings.setdefault(asset_id, []).append((venue, round(float(units), 10)))
+    return holdings
+
+
+def list_venues(session: Session) -> list[tuple[str, int]]:
+    """Every venue named on a live transaction, with how many transactions name it."""
+    rows = session.exec(
+        text(
+            """
+            SELECT name, COUNT(*) FROM (
+              SELECT venue AS name FROM "transaction" WHERE deleted_at IS NULL
+              UNION ALL
+              SELECT to_venue FROM "transaction" WHERE deleted_at IS NULL
+            ) v
+            WHERE name IS NOT NULL
+            GROUP BY name
+            ORDER BY name
+            """
+        )
+    ).all()
+    return [(row[0], int(row[1])) for row in rows]
+
+
+def rename_venue(session: Session, from_name: str, to_name: str) -> int:
+    """Renames a venue on every transaction, and returns how many rows changed.
+
+    Renaming onto a name already in use merges the two, which is how a typo is
+    folded into the venue it meant.
+    """
+    changed = 0
+    for column in ("venue", "to_venue"):
+        result = session.exec(  # type: ignore[call-overload]
+            text(
+                f'UPDATE "transaction" SET {column} = :to_name WHERE {column} = :from_name'
+            ).bindparams(from_name=from_name, to_name=to_name)
+        )
+        changed += result.rowcount or 0
+    session.commit()
+    return changed
 
 
 def get_buy_lots_for_asset(session: Session, asset_id: int) -> list[dict[str, Any]]:
@@ -447,7 +529,7 @@ def get_cash_balance_by_date(session: Session, dates: list[str]) -> dict[str, fl
             """
             SELECT to_char(d.date, 'YYYY-MM-DD'),
                    COALESCE(SUM(
-                     CASE WHEN t.type = 'buy' THEN t.units ELSE -t.units END
+                     CASE t.type WHEN 'buy' THEN t.units WHEN 'sell' THEN -t.units ELSE 0 END
                    ), 0)
             FROM unnest(CAST(:dates AS date[])) AS d(date)
             LEFT JOIN "transaction" t
@@ -524,7 +606,7 @@ def get_btc_eur_by_date(session: Session, dates: list[str]) -> dict[str, float]:
 def list_snapshots_aggregated(session: Session, period: str) -> list[NetWorthSnapshot]:
     """Last 60 points of net worth: daily, or the last snapshot in each week/month.
 
-    `date` is a real date (migration 006), bucketed by ISO week or calendar month and
+    `date` is a real date (migration 008), bucketed by ISO week or calendar month and
     handed back as 'YYYY-MM-DD'. This used SQLite's strftime('%Y-%W') before the move
     to Postgres; ISO weeks differ from %W in the first days of January, which shifts at
     most one bucket boundary a year on a chart of the last 60 weeks.
@@ -654,7 +736,7 @@ def get_units_held_on_date(session: Session, asset_id: int, date: str) -> float:
         text(
             """
             SELECT COALESCE(
-              SUM(CASE WHEN type = 'buy' THEN units ELSE -units END), 0
+              SUM(CASE type WHEN 'buy' THEN units WHEN 'sell' THEN -units ELSE 0 END), 0
             ) FROM "transaction"
             WHERE asset_id = :asset_id AND date <= CAST(:date AS date) AND deleted_at IS NULL
             """
@@ -671,7 +753,7 @@ def get_invested_eur_on_date(session: Session, date: str, asset_id: int | None =
     scope = "" if asset_id is None else "AND asset_id = :asset_id"
     statement = text(
         f"""
-        SELECT COALESCE(SUM(CASE WHEN type = 'buy' THEN eur_amount ELSE -eur_amount END), 0)
+        SELECT COALESCE(SUM(CASE type WHEN 'buy' THEN eur_amount WHEN 'sell' THEN -eur_amount ELSE 0 END), 0)
         FROM "transaction" WHERE date <= CAST(:date AS date) AND deleted_at IS NULL {scope}
         """
     )

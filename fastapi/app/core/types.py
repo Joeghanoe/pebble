@@ -1,7 +1,7 @@
 """Column types that keep Postgres typed and Python on the strings it already uses.
 
 The ledger's services, the API and the generated client all pass dates around as
-'YYYY-MM-DD' strings. Storing them as `date` (migration 006) is about the database
+'YYYY-MM-DD' strings. Storing them as `date` (migration 008) is about the database
 validating and comparing them properly, not about changing every caller, so the
 conversion happens here, once, at the column.
 """

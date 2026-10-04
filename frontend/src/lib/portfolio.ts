@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PositionsService } from "@/client";
 import type { GetPositionsResponse, Position } from "@/types/api";
 import { assetClass, assetColor, type AssetClass } from "@/lib/asset-identity";
+import { venueBreakdown, type VenueSlice } from "@/lib/venues";
 
 export interface HoldingRow extends Position {
   color: string;
@@ -26,8 +27,8 @@ export interface Portfolio {
   totalBtc: number | null;
   btcEurPrice: number | null;
   allocation: { klass: AssetClass; value: number; fraction: number }[];
-  best: HoldingRow | null;
-  worst: HoldingRow | null;
+  /** The same total split by where it is held, largest first. */
+  venues: VenueSlice[];
   lastUpdated: string | null;
   isLoading: boolean;
 }
@@ -85,12 +86,6 @@ export function usePortfolio(): Portfolio {
     return { klass, value, fraction: totalValue > 0 ? value / totalValue : 0 };
   }).filter((entry) => entry.value > 0);
 
-  // Best and worst are about performance, so positions the feed cannot price are
-  // not candidates — their P&L is stale, not good or bad.
-  const ranked = positions
-    .filter((p) => p.unitPrice !== null && p.total_invested_eur > 0)
-    .sort((a, b) => b.pnl_pct - a.pnl_pct);
-
   return {
     positions,
     totalValue,
@@ -103,8 +98,7 @@ export function usePortfolio(): Portfolio {
     totalBtc: btcEurPrice && btcEurPrice > 0 ? totalValue / btcEurPrice : null,
     btcEurPrice,
     allocation,
-    best: ranked[0] ?? null,
-    worst: ranked.length > 1 ? ranked[ranked.length - 1] : null,
+    venues: venueBreakdown(raw),
     lastUpdated: data?.last_updated ?? null,
     isLoading,
   };

@@ -26,7 +26,7 @@ def test_amounts_are_numeric() -> None:
 
 
 def test_sums_are_exact(session: Session) -> None:
-    """The point of migration 005: 0.1 + 0.2 is 0.3 in a ledger, not 0.30000000000000004."""
+    """The point of migration 007: 0.1 + 0.2 is 0.3 in a ledger, not 0.30000000000000004."""
     asset_id = make_asset(session, "EUR", type="cash", exchange_id=2)
     for amount in (0.1, 0.2):
         session.add(

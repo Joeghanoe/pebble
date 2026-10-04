@@ -24,7 +24,7 @@ engine = create_engine(
 def _numeric_as_float(dbapi_connection, connection_record):  # noqa: ARG001
     """Read `numeric` as float on every connection, raw SQL included.
 
-    Amounts are numeric in Postgres for exact storage and sums (migration 005), but the
+    Amounts are numeric in Postgres for exact storage and sums (migration 007), but the
     valuation code is float arithmetic, and a Decimal from a `text()` query mixed with a
     float raises TypeError. The ORM columns already say asdecimal=False; this makes the
     hand-written queries in crud.py follow the same rule without a cast in each one.

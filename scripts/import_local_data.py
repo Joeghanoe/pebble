@@ -27,7 +27,7 @@ Two things this handles that a naive INSERT loop gets wrong:
    next position you add in the app collides on the primary key — the same fault
    migration 002 exists to repair. Every sequence is realigned at the end.
 
-3. The desktop file predates migration 007: its `asset` rows carry the instrument
+3. The desktop file predates migration 009: its `asset` rows carry the instrument
    (type and feed ids) and its prices are per asset. Each asset is resolved to an
    instrument by the same rule the migration uses -- holdings naming the same feed
    share one, feedless holdings get their own -- and prices move to the instrument.
@@ -163,7 +163,7 @@ def check(data: dict[str, list[dict]]) -> list[str]:
 def _instrument_for(cur: psycopg.Cursor, asset: dict) -> int:
     """The instrument a desktop asset belongs to, created if Postgres has none.
 
-    Same identity as migration 007: type plus feed ids, case-insensitive ticker, and
+    Same identity as migration 009: type plus feed ids, case-insensitive ticker, and
     an instrument of its own for a holding with no feed. A re-run keeps the
     instrument the asset already points at rather than minting a second one.
     """

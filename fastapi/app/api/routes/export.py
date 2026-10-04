@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 
 from app import crud
 from app.core.db import get_session
-from app.models import Exchange, Instrument, NetWorthSnapshot, Transaction
+from app.models import Exchange, Instrument, NetWorthSnapshot, Setting, Transaction
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -23,7 +23,7 @@ def export_db(session: Session = Depends(get_session)) -> JSONResponse:
         "exported_at": date_cls.today().isoformat(),
         "exchanges": [e.model_dump() for e in session.exec(select(Exchange)).all()],
         # Holdings flattened with their instrument, the shape `assets` had before
-        # migration 007, so older exports and newer ones read the same way.
+        # migration 009, so older exports and newer ones read the same way.
         "instruments": [i.model_dump() for i in session.exec(select(Instrument)).all()],
         "assets": [a.model_dump() for a in crud.list_assets(session)],
         "transactions": [
@@ -34,6 +34,7 @@ def export_db(session: Session = Depends(get_session)) -> JSONResponse:
             s.model_dump()
             for s in session.exec(select(NetWorthSnapshot).order_by(NetWorthSnapshot.date)).all()  # type: ignore[arg-type]
         ],
+        "settings": {s.name: s.value for s in session.exec(select(Setting)).all()},
     }
     filename = f"pebble-{date_cls.today().isoformat()}.json"
     return JSONResponse(

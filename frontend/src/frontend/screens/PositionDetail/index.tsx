@@ -3,13 +3,8 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import {
-  PositionsService,
-  TransactionsService,
-  ExchangesService,
-} from "@/client";
+import { PositionsService, TransactionsService } from "@/client";
 import type {
-  GetExchangesResponse,
   GetPositionHistoryResponse,
   GetTransactionsResponse,
 } from "@/types/api";
@@ -60,7 +55,7 @@ import {
 
 /** Header and rows share one template. */
 const COLUMNS =
-  "110px 70px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 90px 28px";
+  "110px 70px minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 90px 28px";
 
 /**
  * One position: what it is worth now, what it cost, and every transaction that
@@ -93,12 +88,6 @@ export function PositionDetail() {
         assetId,
         period: timeframePeriod(timeframe),
       }) as unknown as Promise<GetPositionHistoryResponse>,
-  });
-
-  const { data: exchangesData } = useQuery({
-    queryKey: ["exchanges"],
-    queryFn: () =>
-      ExchangesService.listExchanges() as unknown as Promise<GetExchangesResponse>,
   });
 
   const deleteTx = useMutation({
@@ -175,12 +164,7 @@ export function PositionDetail() {
   return (
     <>
       <SiteHeader name={symbol} onBack>
-        {position && (
-          <EditPositionModal
-            asset={position.asset}
-            exchanges={exchangesData?.exchanges ?? []}
-          />
-        )}
+        {position && <EditPositionModal asset={position.asset} />}
         <ConfirmButton
           title={`Delete ${symbol}?`}
           description="The position goes, and so do its transactions and snapshots. This cannot be undone."
@@ -346,13 +330,14 @@ export function PositionDetail() {
           </PbCardHeader>
 
           <div className="overflow-x-auto">
-            <div className="min-w-[820px]">
+            <div className="min-w-[940px]">
               <div
                 className="grid gap-2.5 px-[18px] py-2 font-number text-[9.5px] tracking-[0.1em] text-pb-faint uppercase"
                 style={{ gridTemplateColumns: COLUMNS }}
               >
                 <span>Date</span>
                 <span>Type</span>
+                <span>Where</span>
                 <span className="text-right">Amount</span>
                 <span className="text-right">Unit price</span>
                 <span className="text-right">Paid</span>
@@ -370,6 +355,7 @@ export function PositionDetail() {
               {[...enriched].reverse().map((tx) => {
                 const paidPerUnit = tx.units > 0 ? tx.eur_amount / tx.units : 0;
                 const isSell = tx.type === "sell";
+                const isMove = tx.type === "move";
                 return (
                   <div
                     key={tx.id}
@@ -386,23 +372,34 @@ export function PositionDetail() {
                       <span
                         className="inline-block rounded-[5px] px-[7px] py-0.5 font-number text-[9.5px]"
                         style={{
-                          background: isSell
-                            ? "rgba(248,113,113,.1)"
-                            : "rgba(52,211,153,.1)",
-                          color: isSell ? "#F87171" : "#34D399",
+                          background: isMove
+                            ? "rgba(139,92,246,.14)"
+                            : isSell
+                              ? "rgba(248,113,113,.1)"
+                              : "rgba(52,211,153,.1)",
+                          color: isMove
+                            ? "#C084FC"
+                            : isSell
+                              ? "#F87171"
+                              : "#34D399",
                         }}
                       >
-                        {isSell ? "SELL" : "BUY"}
+                        {isMove ? "MOVE" : isSell ? "SELL" : "BUY"}
                       </span>
+                    </span>
+                    <span className="truncate text-[11.5px] text-pb-text-2">
+                      {isMove
+                        ? `${tx.venue ?? "Unassigned"} → ${tx.to_venue ?? "?"}`
+                        : (tx.venue ?? "—")}
                     </span>
                     <span className="text-right font-number text-[11.5px] tabular-nums">
                       {formatUnits(tx.units, prefs.fullPrecision)}
                     </span>
                     <span className="text-right font-number text-[11.5px] text-pb-text-3 tabular-nums">
-                      {formatEurPrice(paidPerUnit)}
+                      {isMove ? "—" : formatEurPrice(paidPerUnit)}
                     </span>
                     <span className="text-right font-number text-[11.5px] tabular-nums">
-                      {formatEur(tx.eur_amount)}
+                      {isMove ? "—" : formatEur(tx.eur_amount)}
                     </span>
                     <span className="text-right font-number text-[11.5px] tabular-nums">
                       {tx.currentVal === null ? "—" : formatEur(tx.currentVal)}

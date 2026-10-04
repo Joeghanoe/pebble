@@ -1,7 +1,7 @@
 """Split the market instrument out of the holding
 
-Revision ID: 007
-Revises: 006
+Revision ID: 009
+Revises: 008
 Create Date: 2026-10-04
 
 `asset` mixed two things: a holding (this position, on this exchange, with this
@@ -36,8 +36,8 @@ back to every holding of its instrument.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "007"
-down_revision = "006"
+revision = "009"
+down_revision = "008"
 branch_labels = None
 depends_on = None
 

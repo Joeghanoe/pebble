@@ -10,6 +10,7 @@ from app.models import (
     PriceResultOk,
     PriceResultStale,
     PriceResultUnavailable,
+    VenueHolding,
 )
 
 
@@ -19,10 +20,14 @@ def build_positions(session: Session) -> GetPositionsResponse:
     latest_rate = crud.get_latest_exchange_rate(session)
     positions: list[PositionRow] = []
 
+    venue_holdings = crud.get_venue_holdings(session)
+
     for asset in assets:
-        exchange = session.get(Exchange, asset.exchange_id)
-        if not exchange:
-            continue
+        exchange = session.get(Exchange, asset.exchange_id) if asset.exchange_id else None
+        venues = [
+            VenueHolding(venue=venue, units=units)
+            for venue, units in venue_holdings.get(asset.id, [])  # type: ignore[arg-type]
+        ]
 
         summary = crud.get_transaction_summary(session, asset.id)  # type: ignore[arg-type]
         units_bought = summary["units_bought"]
@@ -47,6 +52,7 @@ def build_positions(session: Session) -> GetPositionsResponse:
             positions.append(PositionRow(
                 asset=asset,
                 exchange=exchange,
+                venues=venues,
                 units_held=units_held,
                 total_invested_eur=total_invested,
                 current_value_eur=current_value_eur,
@@ -80,6 +86,7 @@ def build_positions(session: Session) -> GetPositionsResponse:
         positions.append(PositionRow(
             asset=asset,
             exchange=exchange,
+            venues=venues,
             units_held=units_held,
             total_invested_eur=total_invested,
             current_value_eur=current_value_eur,

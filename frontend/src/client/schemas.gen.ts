@@ -20,7 +20,14 @@ export const AssetCreateSchema = {
       title: "Type",
     },
     exchange_id: {
-      type: "integer",
+      anyOf: [
+        {
+          type: "integer",
+        },
+        {
+          type: "null",
+        },
+      ],
       title: "Exchange Id",
     },
     yahoo_ticker: {
@@ -49,7 +56,7 @@ export const AssetCreateSchema = {
     },
   },
   type: "object",
-  required: ["symbol", "name", "type", "exchange_id"],
+  required: ["symbol", "name", "type"],
   title: "AssetCreate",
 } as const;
 
@@ -166,6 +173,37 @@ export const HTTPValidationErrorSchema = {
   title: "HTTPValidationError",
 } as const;
 
+export const SettingsResponseSchema = {
+  properties: {
+    preferences: {
+      anyOf: [
+        {
+          additionalProperties: true,
+          type: "object",
+        },
+        {
+          type: "null",
+        },
+      ],
+      title: "Preferences",
+    },
+    strategy: {
+      anyOf: [
+        {
+          additionalProperties: true,
+          type: "object",
+        },
+        {
+          type: "null",
+        },
+      ],
+      title: "Strategy",
+    },
+  },
+  type: "object",
+  title: "SettingsResponse",
+} as const;
+
 export const TransactionCreateSchema = {
   properties: {
     asset_id: {
@@ -179,7 +217,7 @@ export const TransactionCreateSchema = {
     },
     type: {
       type: "string",
-      enum: ["buy", "sell"],
+      enum: ["buy", "sell", "move"],
       title: "Type",
     },
     units: {
@@ -200,6 +238,32 @@ export const TransactionCreateSchema = {
         },
       ],
       title: "Notes",
+    },
+    venue: {
+      anyOf: [
+        {
+          type: "string",
+          maxLength: 100,
+          minLength: 1,
+        },
+        {
+          type: "null",
+        },
+      ],
+      title: "Venue",
+    },
+    to_venue: {
+      anyOf: [
+        {
+          type: "string",
+          maxLength: 100,
+          minLength: 1,
+        },
+        {
+          type: "null",
+        },
+      ],
+      title: "To Venue",
     },
   },
   type: "object",
@@ -225,7 +289,7 @@ export const TransactionUpdateSchema = {
       anyOf: [
         {
           type: "string",
-          enum: ["buy", "sell"],
+          enum: ["buy", "sell", "move"],
         },
         {
           type: "null",
@@ -265,6 +329,32 @@ export const TransactionUpdateSchema = {
         },
       ],
       title: "Notes",
+    },
+    venue: {
+      anyOf: [
+        {
+          type: "string",
+          maxLength: 100,
+          minLength: 1,
+        },
+        {
+          type: "null",
+        },
+      ],
+      title: "Venue",
+    },
+    to_venue: {
+      anyOf: [
+        {
+          type: "string",
+          maxLength: 100,
+          minLength: 1,
+        },
+        {
+          type: "null",
+        },
+      ],
+      title: "To Venue",
     },
   },
   type: "object",
@@ -299,4 +389,24 @@ export const ValidationErrorSchema = {
   type: "object",
   required: ["loc", "msg", "type"],
   title: "ValidationError",
+} as const;
+
+export const VenueRenameSchema = {
+  properties: {
+    from_name: {
+      type: "string",
+      maxLength: 100,
+      minLength: 1,
+      title: "From Name",
+    },
+    to_name: {
+      type: "string",
+      maxLength: 100,
+      minLength: 1,
+      title: "To Name",
+    },
+  },
+  type: "object",
+  required: ["from_name", "to_name"],
+  title: "VenueRename",
 } as const;

@@ -1,7 +1,7 @@
 """Store dates as date and the soft-delete stamp as timestamptz
 
-Revision ID: 006
-Revises: 005
+Revision ID: 008
+Revises: 007
 Create Date: 2026-10-04
 
 Dates were 'YYYY-MM-DD' strings, inherited from SQLite. Every comparison in the raw SQL
@@ -21,8 +21,8 @@ boundary, so services, the API and the generated client are unchanged.
 
 from alembic import op
 
-revision = "006"
-down_revision = "005"
+revision = "008"
+down_revision = "007"
 branch_labels = None
 depends_on = None
 

@@ -185,7 +185,7 @@ Two things it does that a hand-rolled insert loop tends to miss:
   primary key before it reaches your own rows. Rows are upserted by id, and the local
   file wins.
 - **The desktop file predates instruments.** Each of its assets is resolved to an
-  instrument by the same rule migration 007 uses, and its prices move to the instrument.
+  instrument by the same rule migration 009 uses, and its prices move to the instrument.
 - **Explicit ids do not advance a Postgres sequence.** Import ids 1–9 and leave it
   there, and the next position you add in the app is handed id 1 again — a duplicate
   key error, and the same fault migration 002 exists to repair. Every sequence is

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import type { Exchange, Asset } from "@/types/db";
+import type { Asset } from "@/types/db";
 import { PbGhostButton, PbSegmented } from "./pebble/primitives";
 
 type AssetType = Asset["type"];
@@ -28,17 +28,6 @@ const TYPE_VALUES: Record<(typeof TYPES)[number], AssetType> = {
   Cash: "cash",
 };
 
-/** Crypto lives on an exchange; everything else on a broker or a manual book. */
-function eligibleExchanges(type: AssetType, exchanges: Exchange[]): Exchange[] {
-  if (type === "crypto") {
-    return exchanges.filter((e) => e.type === "crypto");
-  }
-  const filtered = exchanges.filter(
-    (e) => e.type === "broker" || e.type === "manual",
-  );
-  return filtered.length > 0 ? filtered : exchanges;
-}
-
 const PLACEHOLDERS: Record<AssetType, { symbol: string; name: string }> = {
   crypto: { symbol: "BTC", name: "Bitcoin" },
   etf: { symbol: "VUAA", name: "Vanguard S&P 500 UCITS ETF" },
@@ -56,12 +45,10 @@ const PLACEHOLDERS: Record<AssetType, { symbol: string; name: string }> = {
 export function AddPositionModal({
   open,
   onOpenChange,
-  exchanges,
   prefill,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
-  readonly exchanges: Exchange[];
   readonly prefill?: PositionPrefill;
 }) {
   return (
@@ -79,11 +66,7 @@ export function AddPositionModal({
           {/* Radix unmounts the content while closed, so the quick pick seeds
               the form through its initial state rather than an effect that has
               to undo the last entry. */}
-          <PositionForm
-            exchanges={exchanges}
-            prefill={prefill}
-            onClose={() => onOpenChange(false)}
-          />
+          <PositionForm prefill={prefill} onClose={() => onOpenChange(false)} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -91,11 +74,9 @@ export function AddPositionModal({
 }
 
 function PositionForm({
-  exchanges,
   prefill,
   onClose,
 }: {
-  readonly exchanges: Exchange[];
   readonly prefill?: PositionPrefill;
   readonly onClose: () => void;
 }) {
@@ -111,14 +92,9 @@ function PositionForm({
   const [feedId, setFeedId] = React.useState(
     prefill?.coingeckoId ?? prefill?.yahooTicker ?? "",
   );
-  const [exchangeId, setExchangeId] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   const assetType = TYPE_VALUES[type];
-  const available = eligibleExchanges(assetType, exchanges);
-
-  // Follows the type until the user picks one, then stays put.
-  const selectedExchange = exchangeId ?? available[0]?.id ?? null;
 
   const createPosition = useMutation({
     mutationFn: (body: Parameters<typeof api.createAsset>[0]) =>
@@ -138,18 +114,11 @@ function PositionForm({
       setError("A symbol and a name are required.");
       return;
     }
-    if (selectedExchange === null) {
-      setError(
-        `No ${assetType === "crypto" ? "crypto exchange" : "broker"} to file this under. Add one in Settings first.`,
-      );
-      return;
-    }
     setError(null);
     createPosition.mutate({
       symbol: symbol.trim().toUpperCase(),
       name: name.trim(),
       type: assetType,
-      exchangeId: selectedExchange,
       coingeckoId:
         assetType === "crypto" ? feedId.trim() || undefined : undefined,
       yahooTicker:
@@ -187,7 +156,6 @@ function PositionForm({
           value={type}
           onChange={(next) => {
             setType(next);
-            setExchangeId(null);
             setFeedId("");
           }}
           itemClassName="py-1.5 text-[12px] font-semibold"
@@ -204,31 +172,15 @@ function PositionForm({
             />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className={label}>Held at</span>
-            <select
-              value={selectedExchange ?? ""}
-              onChange={(event) => setExchangeId(Number(event.target.value))}
-              className={cn(input, "cursor-pointer")}
-            >
-              {available.length === 0 && <option value="">None yet</option>}
-              {available.map((exchange) => (
-                <option key={exchange.id} value={exchange.id}>
-                  {exchange.name}
-                </option>
-              ))}
-            </select>
+            <span className={label}>Name</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder={PLACEHOLDERS[assetType].name}
+              className={input}
+            />
           </label>
         </div>
-
-        <label className="flex flex-col gap-1.5">
-          <span className={label}>Name</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder={PLACEHOLDERS[assetType].name}
-            className={input}
-          />
-        </label>
 
         {assetType !== "cash" && (
           <label className="flex flex-col gap-1.5">

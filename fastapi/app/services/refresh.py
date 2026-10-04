@@ -3,7 +3,7 @@
 Both the API route (someone opened the app or pressed the button) and the scheduled
 job (`python -m app.jobs.refresh`) call `run_refresh`. Neither keeps any state in the
 process: the cooldown and the in-flight marker live in `refresh_state` (migration
-004), so any number of workers and replicas share one throttle on the upstreams.
+006), so any number of workers and replicas share one throttle on the upstreams.
 """
 
 from dataclasses import dataclass

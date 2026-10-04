@@ -16,8 +16,15 @@
             "title": "Coingecko Id"
           },
           "exchange_id": {
-            "title": "Exchange Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exchange Id"
           },
           "name": {
             "maxLength": 255,
@@ -57,8 +64,7 @@
         "required": [
           "symbol",
           "name",
-          "type",
-          "exchange_id"
+          "type"
         ],
         "title": "AssetCreate",
         "type": "object"
@@ -185,6 +191,36 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "SettingsResponse": {
+        "properties": {
+          "preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferences"
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy"
+          }
+        },
+        "title": "SettingsResponse",
+        "type": "object"
+      },
       "TransactionCreate": {
         "properties": {
           "asset_id": {
@@ -211,10 +247,24 @@
             ],
             "title": "Notes"
           },
+          "to_venue": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Venue"
+          },
           "type": {
             "enum": [
               "buy",
-              "sell"
+              "sell",
+              "move"
             ],
             "title": "Type",
             "type": "string"
@@ -222,6 +272,19 @@
           "units": {
             "title": "Units",
             "type": "number"
+          },
+          "venue": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue"
           }
         },
         "required": [
@@ -270,12 +333,26 @@
             ],
             "title": "Notes"
           },
+          "to_venue": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Venue"
+          },
           "type": {
             "anyOf": [
               {
                 "enum": [
                   "buy",
-                  "sell"
+                  "sell",
+                  "move"
                 ],
                 "type": "string"
               },
@@ -295,6 +372,19 @@
               }
             ],
             "title": "Units"
+          },
+          "venue": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue"
           }
         },
         "title": "TransactionUpdate",
@@ -331,6 +421,28 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VenueRename": {
+        "properties": {
+          "from_name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "From Name",
+            "type": "string"
+          },
+          "to_name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "To Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_name",
+          "to_name"
+        ],
+        "title": "VenueRename",
         "type": "object"
       }
     }
@@ -925,6 +1037,88 @@
         ]
       }
     },
+    "/api/v1/settings/": {
+      "get": {
+        "operationId": "settings-get_settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/{name}": {
+      "put": {
+        "description": "Replace one settings document whole. Last write wins: there is one owner.",
+        "operationId": "settings-put_setting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "enum": [
+                "preferences",
+                "strategy"
+              ],
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Value",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Settings-Put Setting",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Setting",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/v1/transactions/": {
       "post": {
         "operationId": "transactions-create_transaction",
@@ -1107,6 +1301,74 @@
         "summary": "Update Transaction",
         "tags": [
           "transactions"
+        ]
+      }
+    },
+    "/api/v1/venues/": {
+      "get": {
+        "description": "Every venue a transaction names. There is no venue table: a venue exists\nfor as long as something happened there, and is created by typing its name.",
+        "operationId": "venues-list_venues",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Venues-List Venues",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Venues",
+        "tags": [
+          "venues"
+        ]
+      }
+    },
+    "/api/v1/venues/rename": {
+      "post": {
+        "description": "Rename a venue everywhere it is used; onto an existing name, the two merge.",
+        "operationId": "venues-rename_venue",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VenueRename"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Venues-Rename Venue",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Venue",
+        "tags": [
+          "venues"
         ]
       }
     }

@@ -1,6 +1,6 @@
 """Building holdings and prices the way the app does, for tests that seed the DB directly.
 
-A holding is an `asset` row pointing at an `instrument` (migration 007), and prices
+A holding is an `asset` row pointing at an `instrument` (migration 009), and prices
 are cached per instrument, so these go through the same find-or-create the API uses
 rather than each test assembling rows by hand.
 """

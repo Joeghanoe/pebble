@@ -41,7 +41,7 @@ def _schema() -> None:
 
 @pytest.fixture(autouse=True)
 def _reset_refresh_cooldown() -> None:
-    """Clear the refresh lease and cooldown (migration 004's singleton row).
+    """Clear the refresh lease and cooldown (migration 006's singleton row).
 
     Without this the first test to refresh throttles every later one, which does
     not fail loudly -- it just makes the endpoint a no-op and leaves assertions
@@ -65,7 +65,7 @@ def _clean_tables() -> None:
         conn.execute(
             text(
                 'TRUNCATE "transaction", price_cache, position_snapshot, '
-                "net_worth_snapshot, asset, instrument, exchange RESTART IDENTITY CASCADE"
+                "net_worth_snapshot, asset, instrument, exchange, setting RESTART IDENTITY CASCADE"
             )
         )
         conn.execute(

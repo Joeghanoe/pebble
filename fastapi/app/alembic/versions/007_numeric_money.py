@@ -1,7 +1,7 @@
 """Store money, units and rates as numeric instead of double precision
 
-Revision ID: 005
-Revises: 004
+Revision ID: 007
+Revises: 006
 Create Date: 2026-10-04
 
 Every amount was a binary float. Sums over a ledger drift (`0.1 + 0.2` is
@@ -22,8 +22,8 @@ aggregates are exact. Moving the Python side to Decimal is a separate change.
 
 from alembic import op
 
-revision = "005"
-down_revision = "004"
+revision = "007"
+down_revision = "006"
 branch_labels = None
 depends_on = None
 

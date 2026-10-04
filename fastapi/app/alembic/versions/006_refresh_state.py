@@ -1,7 +1,7 @@
 """Price-refresh lease in Postgres
 
-Revision ID: 004
-Revises: 003
+Revision ID: 006
+Revises: 005
 Create Date: 2026-10-04
 
 The refresh cooldown used to be two module globals in `api/routes/prices.py`: the time
@@ -25,8 +25,8 @@ deploys is never throttled, which matches a fresh process under the old code.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "004"
-down_revision = "003"
+revision = "006"
+down_revision = "005"
 branch_labels = None
 depends_on = None
 

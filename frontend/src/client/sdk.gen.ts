@@ -30,6 +30,9 @@ import type {
   PricesRefreshPricesData,
   PricesRefreshPricesResponse,
   PricesGetBtcDailyResponse,
+  SettingsGetSettingsResponse,
+  SettingsPutSettingData,
+  SettingsPutSettingResponse,
   TransactionsCreateTransactionData,
   TransactionsCreateTransactionResponse,
   TransactionsListTransactionsData,
@@ -38,6 +41,9 @@ import type {
   TransactionsUpdateTransactionResponse,
   TransactionsDeleteTransactionData,
   TransactionsDeleteTransactionResponse,
+  VenuesListVenuesResponse,
+  VenuesRenameVenueData,
+  VenuesRenameVenueResponse,
 } from "./types.gen";
 
 export class AssetsService {
@@ -380,6 +386,46 @@ export class PricesService {
   }
 }
 
+export class SettingsService {
+  /**
+   * Get Settings
+   * @returns SettingsResponse Successful Response
+   * @throws ApiError
+   */
+  public static getSettings(): CancelablePromise<SettingsGetSettingsResponse> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/v1/settings/",
+    });
+  }
+
+  /**
+   * Put Setting
+   * Replace one settings document whole. Last write wins: there is one owner.
+   * @param data The data for the request.
+   * @param data.name
+   * @param data.requestBody
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static putSetting(
+    data: SettingsPutSettingData,
+  ): CancelablePromise<SettingsPutSettingResponse> {
+    return __request(OpenAPI, {
+      method: "PUT",
+      url: "/api/v1/settings/{name}",
+      path: {
+        name: data.name,
+      },
+      body: data.requestBody,
+      mediaType: "application/json",
+      errors: {
+        422: "Validation Error",
+      },
+    });
+  }
+}
+
 export class TransactionsService {
   /**
    * Create Transaction
@@ -465,6 +511,44 @@ export class TransactionsService {
       path: {
         tx_id: data.txId,
       },
+      errors: {
+        422: "Validation Error",
+      },
+    });
+  }
+}
+
+export class VenuesService {
+  /**
+   * List Venues
+   * Every venue a transaction names. There is no venue table: a venue exists
+   * for as long as something happened there, and is created by typing its name.
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static listVenues(): CancelablePromise<VenuesListVenuesResponse> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/v1/venues/",
+    });
+  }
+
+  /**
+   * Rename Venue
+   * Rename a venue everywhere it is used; onto an existing name, the two merge.
+   * @param data The data for the request.
+   * @param data.requestBody
+   * @returns unknown Successful Response
+   * @throws ApiError
+   */
+  public static renameVenue(
+    data: VenuesRenameVenueData,
+  ): CancelablePromise<VenuesRenameVenueResponse> {
+    return __request(OpenAPI, {
+      method: "POST",
+      url: "/api/v1/venues/rename",
+      body: data.requestBody,
+      mediaType: "application/json",
       errors: {
         422: "Validation Error",
       },

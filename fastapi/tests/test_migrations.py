@@ -1,4 +1,4 @@
-"""Every migration since the single-tenant baseline can be undone and redone, with data.
+"""The groundwork migrations (006 onwards) can be undone and redone, with data.
 
 The ledger is live financial data, so a round trip has to bring the rows back, not
 merely the tables.
@@ -22,7 +22,7 @@ def _config() -> Config:
     return cfg
 
 
-def test_downgrade_to_003_and_back_keeps_the_ledger(client: TestClient) -> None:
+def test_downgrade_to_005_and_back_keeps_the_ledger(client: TestClient) -> None:
     asset = client.post(
         "/api/v1/assets/",
         json={"symbol": "BTC", "name": "Bitcoin", "type": "crypto", "exchange_id": 1,
@@ -37,17 +37,19 @@ def test_downgrade_to_003_and_back_keeps_the_ledger(client: TestClient) -> None:
     before_txs = client.get(f"/api/v1/transactions/{asset['id']}").json()
 
     cfg = _config()
-    command.downgrade(cfg, "003")
+    # 005, not further: 004 backfills `venue` from the exchange on the way up, which is
+    # its job, so a round trip through it is not expected to be an identity.
+    command.downgrade(cfg, "005")
     command.upgrade(cfg, "head")
 
     assert client.get("/api/v1/assets/").json() == before_assets
     assert client.get(f"/api/v1/transactions/{asset['id']}").json() == before_txs
 
 
-def test_007_groups_existing_holdings_by_feed() -> None:
-    """Legacy rows as they stood at 006: identity on the asset, prices per asset."""
+def test_009_groups_existing_holdings_by_feed() -> None:
+    """Legacy rows as they stood at 008: identity on the asset, prices per asset."""
     cfg = _config()
-    command.downgrade(cfg, "006")
+    command.downgrade(cfg, "008")
     try:
         with engine.begin() as conn:
             conn.execute(text(

@@ -4,7 +4,7 @@ export type AssetCreate = {
   symbol: string;
   name: string;
   type: "crypto" | "etf" | "cash" | "stock";
-  exchange_id: number;
+  exchange_id?: number | null;
   yahoo_ticker?: string | null;
   coingecko_id?: string | null;
 };
@@ -31,29 +31,47 @@ export type HTTPValidationError = {
   detail?: Array<ValidationError>;
 };
 
+export type SettingsResponse = {
+  preferences?: {
+    [key: string]: unknown;
+  } | null;
+  strategy?: {
+    [key: string]: unknown;
+  } | null;
+};
+
 export type TransactionCreate = {
   asset_id: number;
   date: string;
-  type: "buy" | "sell";
+  type: "buy" | "sell" | "move";
   units: number;
   eur_amount: number;
   notes?: string | null;
+  venue?: string | null;
+  to_venue?: string | null;
 };
 
-export type type3 = "buy" | "sell";
+export type type3 = "buy" | "sell" | "move";
 
 export type TransactionUpdate = {
   date?: string | null;
-  type?: "buy" | "sell" | null;
+  type?: "buy" | "sell" | "move" | null;
   units?: number | null;
   eur_amount?: number | null;
   notes?: string | null;
+  venue?: string | null;
+  to_venue?: string | null;
 };
 
 export type ValidationError = {
   loc: Array<string | number>;
   msg: string;
   type: string;
+};
+
+export type VenueRename = {
+  from_name: string;
+  to_name: string;
 };
 
 export type AssetsListAssetsResponse = {
@@ -159,6 +177,19 @@ export type PricesGetBtcDailyResponse = {
   [key: string]: unknown;
 };
 
+export type SettingsGetSettingsResponse = SettingsResponse;
+
+export type SettingsPutSettingData = {
+  name: "preferences" | "strategy";
+  requestBody: {
+    [key: string]: unknown;
+  };
+};
+
+export type SettingsPutSettingResponse = {
+  [key: string]: unknown;
+};
+
 export type TransactionsCreateTransactionData = {
   requestBody: TransactionCreate;
 };
@@ -189,5 +220,17 @@ export type TransactionsDeleteTransactionData = {
 };
 
 export type TransactionsDeleteTransactionResponse = {
+  [key: string]: unknown;
+};
+
+export type VenuesListVenuesResponse = {
+  [key: string]: unknown;
+};
+
+export type VenuesRenameVenueData = {
+  requestBody: VenueRename;
+};
+
+export type VenuesRenameVenueResponse = {
   [key: string]: unknown;
 };
