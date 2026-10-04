@@ -40,7 +40,7 @@ def get_btc_daily(session: Session = Depends(get_session)) -> dict:
     if not btc:
         return GetBtcDailyResponse(closes=[]).model_dump()
     start = btc_history_start(date.today())
-    rows = crud.list_prices_since(session, btc.id, start)  # type: ignore[arg-type]
+    rows = crud.list_prices_since(session, btc.instrument_id, start)
     return GetBtcDailyResponse(
         closes=[BtcDailyClose(date=r.date, price_eur=r.price_eur) for r in rows]
     ).model_dump()

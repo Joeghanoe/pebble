@@ -183,7 +183,7 @@ export function PositionDetail() {
         )}
         <ConfirmButton
           title={`Delete ${symbol}?`}
-          description="The position goes, and so do its transactions, cached prices and snapshots. This cannot be undone."
+          description="The position goes, and so do its transactions and snapshots. This cannot be undone."
           confirmLabel="Delete position"
           onConfirm={() => deletePosition.mutateAsync()}
         >

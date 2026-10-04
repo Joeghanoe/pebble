@@ -123,7 +123,9 @@ export class AssetsService {
 
   /**
    * Delete Asset
-   * Delete a position outright, with its transactions, cached prices and snapshots.
+   * Delete a position outright, with its transactions and snapshots.
+   *
+   * Cached prices stay with the instrument, which other positions may share.
    * @param data The data for the request.
    * @param data.assetId
    * @returns unknown Successful Response

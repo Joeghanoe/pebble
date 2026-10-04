@@ -26,16 +26,33 @@ class Exchange(SQLModel, table=True):
     type: str = Field(max_length=20)  # crypto | broker | manual
 
 
+class Instrument(SQLModel, table=True):
+    """What is held and where its price comes from. Global: no owner (migration 007).
+
+    Holdings that name the same feed share one instrument, so a price is fetched
+    and cached once however many positions -- and later, portfolios -- hold it.
+    """
+
+    __tablename__ = "instrument"  # type: ignore[assignment]
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    type: str = Field(max_length=20)  # crypto | etf | cash | stock
+    symbol: str = Field(max_length=50)
+    name: str = Field(max_length=255)
+    yahoo_ticker: Optional[str] = Field(default=None, max_length=50)
+    coingecko_id: Optional[str] = Field(default=None, max_length=100)
+
+
 class Asset(SQLModel, table=True):
+    """A holding: one instrument, on one exchange, under the label its owner gave it."""
+
     __tablename__ = "asset"  # type: ignore[assignment]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     symbol: str = Field(max_length=50)
     name: str = Field(max_length=255)
-    type: str = Field(max_length=20)  # crypto | etf | cash | stock
     exchange_id: int = Field(foreign_key="exchange.id")
-    yahoo_ticker: Optional[str] = Field(default=None, max_length=50)
-    coingecko_id: Optional[str] = Field(default=None, max_length=100)
+    instrument_id: int = Field(foreign_key="instrument.id")
 
 
 class Transaction(SQLModel, table=True):
@@ -57,7 +74,7 @@ class Transaction(SQLModel, table=True):
 class PriceCache(SQLModel, table=True):
     __tablename__ = "price_cache"  # type: ignore[assignment]
 
-    asset_id: int = Field(foreign_key="asset.id", primary_key=True)
+    instrument_id: int = Field(foreign_key="instrument.id", primary_key=True)
     date: str = Field(primary_key=True, sa_type=IsoDateColumn)
     price_eur: float = Field(sa_type=Amount)
     exchange_rate: float = Field(sa_type=Amount)
@@ -144,6 +161,24 @@ class TransactionUpdate(SQLModel):
 # ============================================================================
 
 
+class AssetPublic(SQLModel):
+    """A holding as the API presents it: its label plus its instrument, flattened.
+
+    The shape `asset` had before migration 007 split the instrument out, plus
+    `instrument_id`, so the client did not have to change. It is also what the price,
+    snapshot and position services take: everything they need in one object.
+    """
+
+    id: int
+    symbol: str
+    name: str
+    type: str
+    exchange_id: int
+    yahoo_ticker: Optional[str] = None
+    coingecko_id: Optional[str] = None
+    instrument_id: int
+
+
 class PriceResultOk(SQLModel):
     status: Literal["ok"] = "ok"
     price_eur: float
@@ -166,7 +201,7 @@ PriceResult = Union[PriceResultOk, PriceResultStale, PriceResultUnavailable]
 
 
 class PositionRow(SQLModel):
-    asset: Asset
+    asset: AssetPublic
     exchange: Exchange
     units_held: float
     total_invested_eur: float

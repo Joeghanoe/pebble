@@ -11,13 +11,13 @@ from sqlalchemy import text
 from sqlmodel import Session
 
 from app.models import (
-    Asset,
     Exchange,
     NetWorthSnapshot,
     PositionSnapshot,
     PriceCache,
     Transaction,
 )
+from tests.factories import cache_price, make_asset
 
 
 def _seed(session: Session, *dates: str) -> None:
@@ -32,10 +32,7 @@ def _asset(session: Session, symbol: str = "BTC") -> int:
     exchange = Exchange(name=f"Venue {symbol}", type="crypto")
     session.add(exchange)
     session.commit()
-    asset = Asset(symbol=symbol, name=symbol, type="crypto", exchange_id=exchange.id)
-    session.add(asset)
-    session.commit()
-    return asset.id
+    return make_asset(session, symbol, exchange_id=exchange.id)  # type: ignore[arg-type]
 
 
 def test_daily_returns_every_snapshot_oldest_first(
@@ -170,7 +167,7 @@ def test_a_refresh_writes_the_position_rows_behind_the_total(
     session.add(
         Transaction(asset_id=asset, date="2026-01-05", type="buy", units=2.0, eur_amount=100.0)
     )
-    session.add(PriceCache(asset_id=asset, date="2026-01-05", price_eur=80.0, exchange_rate=1.1))
+    cache_price(session, asset, "2026-01-05", 80.0)
     session.commit()
 
     assert client.post("/api/v1/prices/refresh").status_code == 200
@@ -195,7 +192,7 @@ def test_the_backfill_builds_position_rows_for_imported_months(
     session.add(
         Transaction(asset_id=asset, date="2026-01-05", type="buy", units=2.0, eur_amount=100.0)
     )
-    session.add(PriceCache(asset_id=asset, date="2026-01-05", price_eur=80.0, exchange_rate=1.1))
+    cache_price(session, asset, "2026-01-05", 80.0)
     # The imported total, with no rows behind it.
     session.add(NetWorthSnapshot(date="2026-01-31", total_eur=160.0, invested_eur=100.0))
     session.commit()
@@ -217,7 +214,7 @@ def test_a_position_held_later_gets_no_row_for_earlier_months(
     session.add(
         Transaction(asset_id=asset, date="2026-03-05", type="buy", units=1.0, eur_amount=50.0)
     )
-    session.add(PriceCache(asset_id=asset, date="2026-01-01", price_eur=40.0, exchange_rate=1.1))
+    cache_price(session, asset, "2026-01-01", 40.0)
     session.commit()
 
     assert client.post("/api/v1/prices/refresh").status_code == 200
@@ -233,14 +230,12 @@ def _cash_asset(session: Session, units: float, date: str) -> int:
     exchange = Exchange(name="Bank", type="bank")
     session.add(exchange)
     session.commit()
-    asset = Asset(symbol="EUR", name="Euro", type="cash", exchange_id=exchange.id)
-    session.add(asset)
-    session.commit()
+    asset_id = make_asset(session, "EUR", name="Euro", type="cash", exchange_id=exchange.id)  # type: ignore[arg-type]
     session.add(
-        Transaction(asset_id=asset.id, date=date, type="buy", units=units, eur_amount=units)
+        Transaction(asset_id=asset_id, date=date, type="buy", units=units, eur_amount=units)
     )
     session.commit()
-    return asset.id
+    return asset_id
 
 
 def test_cash_counts_towards_the_charted_total(client: TestClient, session: Session) -> None:
@@ -252,7 +247,7 @@ def test_cash_counts_towards_the_charted_total(client: TestClient, session: Sess
     session.add(
         Transaction(asset_id=asset, date="2026-01-05", type="buy", units=2.0, eur_amount=100.0)
     )
-    session.add(PriceCache(asset_id=asset, date="2026-01-05", price_eur=60.0, exchange_rate=1.1))
+    cache_price(session, asset, "2026-01-05", 60.0)
     session.commit()
     _cash_asset(session, units=500.0, date="2026-01-05")
 
@@ -311,7 +306,9 @@ class _FakePriceService:
         for date, price in self.prices.items():
             if start <= date <= end:
                 session.add(
-                    PriceCache(asset_id=asset.id, date=date, price_eur=price, exchange_rate=1.1)
+                    PriceCache(
+                        instrument_id=asset.instrument_id, date=date, price_eur=price, exchange_rate=1.1
+                    )
                 )
         session.commit()
         return len(self.prices)
@@ -541,8 +538,8 @@ def test_snapshots_carry_the_btc_price_of_each_day(
     session.add(
         Transaction(asset_id=btc, date="2026-01-05", type="buy", units=1.0, eur_amount=50000.0)
     )
-    session.add(PriceCache(asset_id=btc, date="2026-01-31", price_eur=60000.0, exchange_rate=1.1))
-    session.add(PriceCache(asset_id=btc, date="2026-02-28", price_eur=80000.0, exchange_rate=1.1))
+    cache_price(session, btc, "2026-01-31", 60000.0)
+    cache_price(session, btc, "2026-02-28", 80000.0)
     session.add(NetWorthSnapshot(date="2026-01-31", total_eur=60000.0, invested_eur=50000.0))
     session.add(NetWorthSnapshot(date="2026-02-28", total_eur=80000.0, invested_eur=50000.0))
     session.commit()
@@ -564,7 +561,7 @@ def test_the_btc_price_carries_forward_to_a_day_without_one(
     session.add(
         Transaction(asset_id=btc, date="2026-01-05", type="buy", units=1.0, eur_amount=50000.0)
     )
-    session.add(PriceCache(asset_id=btc, date="2026-01-31", price_eur=60000.0, exchange_rate=1.1))
+    cache_price(session, btc, "2026-01-31", 60000.0)
     session.add(NetWorthSnapshot(date="2026-02-28", total_eur=60000.0, invested_eur=50000.0))
     session.commit()
 
@@ -577,7 +574,7 @@ def test_a_day_before_any_btc_price_has_none(client: TestClient, session: Sessio
     dividing by a price that did not exist yet.
     """
     btc = _asset(session, "BTC")
-    session.add(PriceCache(asset_id=btc, date="2026-02-28", price_eur=60000.0, exchange_rate=1.1))
+    cache_price(session, btc, "2026-02-28", 60000.0)
     session.add(NetWorthSnapshot(date="2026-01-31", total_eur=1000.0, invested_eur=1000.0))
     session.commit()
 
@@ -590,7 +587,7 @@ def test_a_portfolio_without_btc_reports_no_btc_price(
 ) -> None:
     """No BTC holding, no BTC view — better an unavailable toggle than a made-up rate."""
     eth = _asset(session, "ETH")
-    session.add(PriceCache(asset_id=eth, date="2026-01-31", price_eur=3000.0, exchange_rate=1.1))
+    cache_price(session, eth, "2026-01-31", 3000.0)
     session.add(NetWorthSnapshot(date="2026-01-31", total_eur=3000.0, invested_eur=2000.0))
     session.commit()
 

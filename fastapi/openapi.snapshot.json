@@ -441,7 +441,7 @@
     },
     "/api/v1/assets/{asset_id}": {
       "delete": {
-        "description": "Delete a position outright, with its transactions, cached prices and snapshots.",
+        "description": "Delete a position outright, with its transactions and snapshots.\n\nCached prices stay with the instrument, which other positions may share.",
         "operationId": "assets-delete_asset",
         "parameters": [
           {

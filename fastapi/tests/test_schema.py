@@ -4,7 +4,8 @@ from sqlalchemy import text
 from sqlmodel import Session
 
 from app.core.db import engine
-from app.models import Asset, Transaction
+from app.models import Transaction
+from tests.factories import make_asset
 
 
 def _column_type(table: str, column: str) -> str:
@@ -26,12 +27,10 @@ def test_amounts_are_numeric() -> None:
 
 def test_sums_are_exact(session: Session) -> None:
     """The point of migration 005: 0.1 + 0.2 is 0.3 in a ledger, not 0.30000000000000004."""
-    asset = Asset(symbol="EUR", name="Euro", type="cash", exchange_id=2)
-    session.add(asset)
-    session.commit()
+    asset_id = make_asset(session, "EUR", type="cash", exchange_id=2)
     for amount in (0.1, 0.2):
         session.add(
-            Transaction(asset_id=asset.id, date="2026-01-05", type="buy", units=amount, eur_amount=amount)
+            Transaction(asset_id=asset_id, date="2026-01-05", type="buy", units=amount, eur_amount=amount)
         )
     session.commit()
 
@@ -47,10 +46,8 @@ def test_dates_are_dates_but_read_as_iso_strings(session: Session) -> None:
     assert _column_type("net_worth_snapshot", "date") == "date"
     assert _column_type("transaction", "deleted_at") == "timestamp with time zone"
 
-    asset = Asset(symbol="EUR", name="Euro", type="cash", exchange_id=2)
-    session.add(asset)
-    session.commit()
-    tx = Transaction(asset_id=asset.id, date="2026-01-05", type="buy", units=1, eur_amount=1)
+    asset_id = make_asset(session, "EUR", type="cash", exchange_id=2)
+    tx = Transaction(asset_id=asset_id, date="2026-01-05", type="buy", units=1, eur_amount=1)
     session.add(tx)
     session.commit()
     session.refresh(tx)

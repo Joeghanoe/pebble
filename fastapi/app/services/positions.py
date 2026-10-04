@@ -4,7 +4,6 @@ from sqlmodel import Session
 
 from app import crud
 from app.models import (
-    Asset,
     Exchange,
     GetPositionsResponse,
     PositionRow,
@@ -57,7 +56,7 @@ def build_positions(session: Session) -> GetPositionsResponse:
             ))
             continue
 
-        latest_price = crud.get_latest_price(session, asset.id)  # type: ignore[arg-type]
+        latest_price = crud.get_latest_price(session, asset.instrument_id)
 
         if not latest_price:
             price_result = PriceResultUnavailable()

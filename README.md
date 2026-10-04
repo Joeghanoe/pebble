@@ -184,6 +184,8 @@ Two things it does that a hand-rolled insert loop tends to miss:
   and `Manual` (id 2) into every Pebble database, so a plain `INSERT` collides on the
   primary key before it reaches your own rows. Rows are upserted by id, and the local
   file wins.
+- **The desktop file predates instruments.** Each of its assets is resolved to an
+  instrument by the same rule migration 007 uses, and its prices move to the instrument.
 - **Explicit ids do not advance a Postgres sequence.** Import ids 1–9 and leave it
   there, and the next position you add in the app is handed id 1 again — a duplicate
   key error, and the same fault migration 002 exists to repair. Every sequence is
@@ -218,8 +220,8 @@ the webview's user agent is possible but is deliberately not configured here.
 ## Architecture notes
 
 **Prices.** `services/prices.py` fans out to CoinGecko (crypto), Stooq and Yahoo
-(equities and ETFs) and Frankfurter (USD→EUR), and caches each answer per asset per day in
-`price_cache`. A position whose price has never been fetched reports `unavailable` rather
+(equities and ETFs) and Frankfurter (USD→EUR), and caches each answer per **instrument**
+per day in `price_cache`. A position whose price has never been fetched reports `unavailable` rather
 than guessing; a stale one reports `stale` with the date it is from. A routine refresh
 (opening the app) runs at most every six hours, a forced one (the button) at most every
 minute.
@@ -234,13 +236,24 @@ once. A lease that outlives a crashed process expires after 15 minutes.
 
 **Deleted transactions** are soft-deleted — `deleted_at` is set and every query filters on
 it — so a mistaken delete is recoverable in the database. Deleting a *position* is not
-soft: it takes the asset's transactions, cached prices and snapshots with it, because
-orphaned rows would keep counting towards net worth while the position was gone from the
-list.
+soft: it takes the position's transactions and snapshots with it, because orphaned rows
+would keep counting towards net worth while the position was gone from the list. Its
+cached prices stay with the instrument.
 
-**Dates** are stored as `YYYY-MM-DD` strings, not dates. Every comparison in the raw SQL
-relies on ISO dates sorting lexicographically, which is why `TransactionCreate.date` is
-pattern-checked rather than free-form.
+**Holdings and instruments.** An `asset` is a holding: a label, an exchange and an
+`instrument_id`. The `instrument` is the market identity — type plus `coingecko_id` /
+`yahoo_ticker` — and has no owner. Holdings naming the same feed share one instrument, so
+BTC on two exchanges is fetched and cached once; holdings with no feed id (cash, manual
+entries) each get their own. Changing a holding's type or feed id points it at another
+instrument rather than editing a shared one. The API flattens the two back into the
+`asset` shape it always had, plus `instrument_id`.
+
+**Types.** Amounts, units and rates are `numeric(28, 10)` — exact storage and exact SQL
+sums — and are read as floats in Python (`app/core/db.py`). Dates are `date` and the
+soft-delete stamp is `timestamptz`; `app/core/types.py` converts them to and from the
+`YYYY-MM-DD` / ISO 8601 strings the services and the API use. Raw SQL casts its date
+parameters explicitly (`CAST(:date AS date)`), because SQLAlchemy binds strings as
+`VARCHAR`, which does not compare with `date`.
 
 ## Contributing
 

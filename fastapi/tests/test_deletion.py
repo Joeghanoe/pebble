@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.models import Asset, PositionSnapshot, PriceCache, Transaction
+from tests.factories import cache_price
 
 
 def _make_asset(client: TestClient, symbol: str = "BTC", exchange_id: int = 1) -> int:
@@ -156,10 +157,15 @@ def test_deleting_a_position_removes_it(client: TestClient) -> None:
 def test_deleting_a_position_takes_its_history_with_it(
     client: TestClient, session: Session
 ) -> None:
-    """Orphaned transactions and cached prices would keep skewing the snapshots."""
+    """Orphaned transactions and snapshots would keep skewing net worth.
+
+    Cached prices are not the holding's: they belong to the instrument, which another
+    holding may share, so they stay.
+    """
     asset_id = _make_asset(client)
+    instrument_id = session.get(Asset, asset_id).instrument_id  # type: ignore[union-attr]
     _make_tx(client, asset_id)
-    session.add(PriceCache(asset_id=asset_id, date="2026-01-10", price_eur=40000, exchange_rate=1.1))
+    cache_price(session, asset_id, "2026-01-10", 40000)
     session.add(
         PositionSnapshot(
             date="2026-01-10", asset_id=asset_id, units_held=0.5,
@@ -172,7 +178,7 @@ def test_deleting_a_position_takes_its_history_with_it(
 
     session.expire_all()
     assert session.exec(select(Transaction).where(Transaction.asset_id == asset_id)).all() == []
-    assert session.exec(select(PriceCache).where(PriceCache.asset_id == asset_id)).all() == []
+    assert len(session.exec(select(PriceCache).where(PriceCache.instrument_id == instrument_id)).all()) == 1
     assert session.exec(select(PositionSnapshot).where(PositionSnapshot.asset_id == asset_id)).all() == []
     assert session.get(Asset, asset_id) is None
 

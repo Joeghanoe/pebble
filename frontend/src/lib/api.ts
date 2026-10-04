@@ -101,6 +101,6 @@ export const api = {
       },
     }),
 
-  /** Deletes the position outright, with its transactions, prices and snapshots. */
+  /** Deletes the position outright, with its transactions and snapshots. Prices stay with the instrument. */
   deleteAsset: (assetId: number) => AssetsService.deleteAsset({ assetId }),
 };

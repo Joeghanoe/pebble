@@ -9,8 +9,10 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 import app
+from app.core.db import engine
 
 
 def _config() -> Config:
@@ -40,3 +42,44 @@ def test_downgrade_to_003_and_back_keeps_the_ledger(client: TestClient) -> None:
 
     assert client.get("/api/v1/assets/").json() == before_assets
     assert client.get(f"/api/v1/transactions/{asset['id']}").json() == before_txs
+
+
+def test_007_groups_existing_holdings_by_feed() -> None:
+    """Legacy rows as they stood at 006: identity on the asset, prices per asset."""
+    cfg = _config()
+    command.downgrade(cfg, "006")
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                """
+                INSERT INTO asset (id, symbol, name, type, exchange_id, yahoo_ticker, coingecko_id) VALUES
+                  (1, 'BTC', 'Bitcoin', 'crypto', 1, NULL, 'bitcoin'),
+                  (2, 'XBT', 'Cold', 'crypto', 2, '', 'bitcoin'),
+                  (3, 'EUR', 'Euro', 'cash', 2, '', ''),
+                  (4, 'EUR', 'Euro', 'cash', 1, NULL, NULL)
+                """
+            ))
+            conn.execute(text(
+                """
+                INSERT INTO price_cache (asset_id, date, price_eur, exchange_rate) VALUES
+                  (1, '2026-01-10', 40000, 1.1),
+                  (2, '2026-01-10', 40001, 1.1),
+                  (2, '2026-01-11', 41000, 1.1)
+                """
+            ))
+    finally:
+        command.upgrade(cfg, "head")
+
+    with engine.connect() as conn:
+        instrument_of = dict(conn.execute(text("SELECT id, instrument_id FROM asset")).all())
+        prices = conn.execute(
+            text("SELECT instrument_id, to_char(date, 'YYYY-MM-DD'), price_eur FROM price_cache ORDER BY date")
+        ).all()
+        labels = conn.execute(text("SELECT symbol, name FROM asset WHERE id = 2")).one()
+
+    # '' and NULL both mean "no feed id": the two bitcoins share, the two cash rows don't.
+    assert instrument_of[1] == instrument_of[2]
+    assert len({instrument_of[1], instrument_of[3], instrument_of[4]}) == 3
+    assert tuple(labels) == ("XBT", "Cold")
+    # The duplicate day collapses to the oldest asset's row; the other day survives.
+    assert [(p[1], p[2]) for p in prices] == [("2026-01-10", 40000.0), ("2026-01-11", 41000.0)]

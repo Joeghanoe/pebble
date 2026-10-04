@@ -2,14 +2,17 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import delete, func, text
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.models import (
     Asset,
     AssetCreate,
+    AssetPublic,
     AssetUpdate,
     Exchange,
     ExchangeCreate,
+    Instrument,
     NetWorthSnapshot,
     PriceCache,
     PositionSnapshot,
@@ -53,52 +56,160 @@ def delete_exchange(session: Session, exchange: Exchange) -> None:
 # ============================================================================
 
 
-def list_assets(session: Session) -> list[Asset]:
-    return list(session.exec(select(Asset).order_by(Asset.symbol)).all())
+def _holdings():  # noqa: ANN202
+    return select(Asset, Instrument).join(Instrument, Asset.instrument_id == Instrument.id)  # type: ignore[arg-type]
 
 
-def list_assets_by_exchange(session: Session, exchange_id: int) -> list[Asset]:
-    return list(
-        session.exec(
-            select(Asset).where(Asset.exchange_id == exchange_id).order_by(Asset.symbol)
-        ).all()
+def _public(asset: Asset, instrument: Instrument) -> AssetPublic:
+    return AssetPublic(
+        id=asset.id,  # type: ignore[arg-type]
+        symbol=asset.symbol,
+        name=asset.name,
+        type=instrument.type,
+        exchange_id=asset.exchange_id,
+        yahoo_ticker=instrument.yahoo_ticker,
+        coingecko_id=instrument.coingecko_id,
+        instrument_id=instrument.id,  # type: ignore[arg-type]
     )
 
 
-def get_asset(session: Session, asset_id: int) -> Asset | None:
-    return session.get(Asset, asset_id)
+def list_assets(session: Session) -> list[AssetPublic]:
+    return [_public(a, i) for a, i in session.exec(_holdings().order_by(Asset.symbol)).all()]
 
 
-def create_asset(session: Session, asset_in: AssetCreate) -> Asset:
-    asset = Asset.model_validate(asset_in)
-    session.add(asset)
-    session.commit()
-    session.refresh(asset)
-    return asset
+def list_assets_by_exchange(session: Session, exchange_id: int) -> list[AssetPublic]:
+    return [
+        _public(a, i)
+        for a, i in session.exec(
+            _holdings().where(Asset.exchange_id == exchange_id).order_by(Asset.symbol)
+        ).all()
+    ]
 
 
-def update_asset(session: Session, asset: Asset, asset_in: AssetUpdate) -> Asset:
-    data = asset_in.model_dump(exclude_unset=True)
-    asset.sqlmodel_update(data)
-    session.add(asset)
-    session.commit()
-    session.refresh(asset)
-    return asset
+def get_asset(session: Session, asset_id: int) -> AssetPublic | None:
+    row = session.exec(_holdings().where(Asset.id == asset_id)).first()
+    return _public(*row) if row else None
 
 
-def delete_asset(session: Session, asset: Asset) -> None:
-    """Delete an asset and everything hanging off it, in one transaction.
+def find_or_create_instrument(
+    session: Session,
+    *,
+    type: str,  # noqa: A002
+    symbol: str,
+    name: str,
+    yahoo_ticker: str | None,
+    coingecko_id: str | None,
+) -> Instrument:
+    """The instrument with this feed identity, created if there is none.
 
-    Transactions are soft-deleted elsewhere so a mistaken row can come back, but an
-    asset carries its whole history: leaving orphaned transactions and cached prices
-    behind would keep the position out of `/positions` while still counting towards
-    the net-worth snapshots. Nothing references an asset except these three tables.
+    Identity is the type plus the feed ids, the ticker compared case-insensitively,
+    exactly as migration 007 grouped existing holdings. A holding with no feed id
+    always gets an instrument of its own: two manual "ABC" entries are not assumed to
+    be the same thing. Does not commit; the caller's write does.
     """
-    asset_id = asset.id
-    for table in (Transaction, PriceCache, PositionSnapshot):
+    yahoo_ticker = yahoo_ticker or None
+    coingecko_id = coingecko_id or None
+    has_feed = bool(yahoo_ticker or coingecko_id)
+
+    def existing() -> Instrument | None:
+        return session.exec(
+            select(Instrument)
+            .where(Instrument.type == type)
+            .where(func.coalesce(Instrument.coingecko_id, "") == (coingecko_id or ""))
+            .where(
+                func.coalesce(func.lower(Instrument.yahoo_ticker), "")
+                == (yahoo_ticker or "").lower()
+            )
+        ).first()
+
+    if has_feed and (found := existing()):
+        return found
+    instrument = Instrument(
+        type=type, symbol=symbol, name=name, yahoo_ticker=yahoo_ticker, coingecko_id=coingecko_id
+    )
+    try:
+        # A savepoint, so losing a race on `instrument_feed_identity` to a concurrent
+        # request costs this one only the insert, not the caller's whole transaction.
+        with session.begin_nested():
+            session.add(instrument)
+    except IntegrityError:
+        if has_feed and (found := existing()):
+            return found
+        raise
+    return instrument
+
+
+def create_asset(session: Session, asset_in: AssetCreate) -> AssetPublic:
+    instrument = find_or_create_instrument(
+        session,
+        type=asset_in.type,
+        symbol=asset_in.symbol,
+        name=asset_in.name,
+        yahoo_ticker=asset_in.yahoo_ticker,
+        coingecko_id=asset_in.coingecko_id,
+    )
+    asset = Asset(
+        symbol=asset_in.symbol,
+        name=asset_in.name,
+        exchange_id=asset_in.exchange_id,
+        instrument_id=instrument.id,  # type: ignore[arg-type]
+    )
+    session.add(asset)
+    session.commit()
+    return get_asset(session, asset.id)  # type: ignore[arg-type, return-value]
+
+
+_IDENTITY_FIELDS = ("type", "yahoo_ticker", "coingecko_id")
+
+
+def update_asset(session: Session, asset_id: int, asset_in: AssetUpdate) -> AssetPublic | None:
+    """Relabel or move a holding, or change what it holds.
+
+    Label and exchange are the holding's own. A change of type or feed id never edits
+    the instrument in place -- other holdings may share it -- it points this holding
+    at the instrument with the new identity instead, so a corrected ticker also stops
+    reading the wrong ticker's cached prices.
+    """
+    row = session.exec(_holdings().where(Asset.id == asset_id)).first()
+    if not row:
+        return None
+    asset, instrument = row
+    data = asset_in.model_dump(exclude_unset=True)
+
+    for field in ("symbol", "name", "exchange_id"):
+        if data.get(field) is not None:
+            setattr(asset, field, data[field])
+
+    identity = {f: getattr(instrument, f) for f in _IDENTITY_FIELDS}
+    for field in _IDENTITY_FIELDS:
+        if field in data and not (field == "type" and data[field] is None):
+            identity[field] = data[field] or None
+    if identity != {f: getattr(instrument, f) for f in _IDENTITY_FIELDS}:
+        target = find_or_create_instrument(session, symbol=asset.symbol, name=asset.name, **identity)
+        asset.instrument_id = target.id  # type: ignore[assignment]
+
+    session.add(asset)
+    session.commit()
+    return get_asset(session, asset_id)
+
+
+def delete_asset(session: Session, asset_id: int) -> bool:
+    """Delete a holding and everything hanging off it, in one transaction.
+
+    Transactions are soft-deleted elsewhere so a mistaken row can come back, but a
+    holding carries its whole history: leaving orphaned transactions or position
+    snapshots behind would keep counting towards net worth after the position is gone.
+    Cached prices stay: they belong to the instrument, which other holdings may share
+    and which costs an upstream request to fill again.
+    """
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        return False
+    for table in (Transaction, PositionSnapshot):
         session.exec(delete(table).where(table.asset_id == asset_id))  # type: ignore[call-overload, arg-type]
     session.delete(asset)
     session.commit()
+    return True
 
 
 # ============================================================================
@@ -256,10 +367,10 @@ def compute_realized_pnl(session: Session, asset_id: int) -> float:
 # ============================================================================
 
 
-def get_latest_price(session: Session, asset_id: int) -> PriceCache | None:
+def get_latest_price(session: Session, instrument_id: int) -> PriceCache | None:
     return session.exec(
         select(PriceCache)
-        .where(PriceCache.asset_id == asset_id)
+        .where(PriceCache.instrument_id == instrument_id)
         .order_by(PriceCache.date.desc())  # type: ignore[union-attr]
         .limit(1)
     ).first()
@@ -272,20 +383,22 @@ def get_latest_exchange_rate(session: Session) -> float | None:
     return row.exchange_rate if row else None
 
 
-def get_price_on_or_before(session: Session, asset_id: int, date: str) -> PriceCache | None:
+def get_price_on_or_before(session: Session, instrument_id: int, date: str) -> PriceCache | None:
     return session.exec(
         select(PriceCache)
-        .where(PriceCache.asset_id == asset_id)
+        .where(PriceCache.instrument_id == instrument_id)
         .where(PriceCache.date <= date)
         .order_by(PriceCache.date.desc())  # type: ignore[union-attr]
         .limit(1)
     ).first()
 
 
-def upsert_price(session: Session, asset_id: int, date: str, price_eur: float, exchange_rate: float) -> None:
+def upsert_price(
+    session: Session, instrument_id: int, date: str, price_eur: float, exchange_rate: float
+) -> None:
     existing = session.exec(
         select(PriceCache)
-        .where(PriceCache.asset_id == asset_id)
+        .where(PriceCache.instrument_id == instrument_id)
         .where(PriceCache.date == date)
     ).first()
     if existing:
@@ -293,7 +406,11 @@ def upsert_price(session: Session, asset_id: int, date: str, price_eur: float, e
         existing.exchange_rate = exchange_rate
         session.add(existing)
     else:
-        session.add(PriceCache(asset_id=asset_id, date=date, price_eur=price_eur, exchange_rate=exchange_rate))
+        session.add(
+            PriceCache(
+                instrument_id=instrument_id, date=date, price_eur=price_eur, exchange_rate=exchange_rate
+            )
+        )
     session.commit()
 
 
@@ -336,7 +453,10 @@ def get_cash_balance_by_date(session: Session, dates: list[str]) -> dict[str, fl
             LEFT JOIN "transaction" t
               ON t.date <= d.date
              AND t.deleted_at IS NULL
-             AND t.asset_id IN (SELECT id FROM asset WHERE type = 'cash')
+             AND t.asset_id IN (
+               SELECT a.id FROM asset a JOIN instrument i ON i.id = a.instrument_id
+               WHERE i.type = 'cash'
+             )
             GROUP BY d.date
             """
         ).bindparams(dates=dates)
@@ -344,23 +464,24 @@ def get_cash_balance_by_date(session: Session, dates: list[str]) -> dict[str, fl
     return {row[0]: float(row[1]) for row in rows}
 
 
-def get_btc_asset(session: Session) -> Asset | None:
-    """The one asset that is Bitcoin, by the same rule every BTC feature uses."""
-    return session.exec(
-        select(Asset)
+def get_btc_asset(session: Session) -> AssetPublic | None:
+    """The one holding that is Bitcoin, by the same rule every BTC feature uses."""
+    row = session.exec(
+        _holdings()
         .where(func.upper(Asset.symbol) == "BTC")
-        .where(Asset.type == "crypto")
+        .where(Instrument.type == "crypto")
         .order_by(Asset.id)  # type: ignore[arg-type]
         .limit(1)
     ).first()
+    return _public(*row) if row else None
 
 
-def list_prices_since(session: Session, asset_id: int, since: str) -> list[PriceCache]:
-    """Every cached price for an asset on or after `since`, oldest first."""
+def list_prices_since(session: Session, instrument_id: int, since: str) -> list[PriceCache]:
+    """Every cached price for an instrument on or after `since`, oldest first."""
     return list(
         session.exec(
             select(PriceCache)
-            .where(PriceCache.asset_id == asset_id)
+            .where(PriceCache.instrument_id == instrument_id)
             .where(PriceCache.date >= since)
             .order_by(PriceCache.date)  # type: ignore[arg-type]
         ).all()
@@ -391,11 +512,11 @@ def get_btc_eur_by_date(session: Session, dates: list[str]) -> dict[str, float]:
             FROM unnest(CAST(:dates AS date[])) AS d(date)
             LEFT JOIN LATERAL (
               SELECT price_eur FROM price_cache
-              WHERE asset_id = :asset_id AND date <= d.date
+              WHERE instrument_id = :instrument_id AND date <= d.date
               ORDER BY date DESC LIMIT 1
             ) p ON TRUE
             """
-        ).bindparams(dates=dates, asset_id=btc.id)
+        ).bindparams(dates=dates, instrument_id=btc.instrument_id)
     ).all()
     return {row[0]: float(row[1]) for row in rows if row[1] is not None}
 
