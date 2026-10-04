@@ -879,6 +879,7 @@
     },
     "/api/v1/prices/refresh": {
       "post": {
+        "description": "Pull live quotes unless another process did so recently or is doing so now.\n\nThe throttle is shared through Postgres (see app/services/refresh.py), so it\nholds across workers, replicas and the scheduled job.",
         "operationId": "prices-refresh_prices",
         "parameters": [
           {

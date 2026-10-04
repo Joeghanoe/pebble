@@ -102,6 +102,5 @@ export const api = {
     }),
 
   /** Deletes the position outright, with its transactions, prices and snapshots. */
-  deleteAsset: (assetId: number) =>
-    AssetsService.deleteAsset({ assetId }),
+  deleteAsset: (assetId: number) => AssetsService.deleteAsset({ assetId }),
 };

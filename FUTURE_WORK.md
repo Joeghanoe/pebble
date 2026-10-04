@@ -6,8 +6,6 @@ Known gaps, roughly in the order they would start to hurt.
 
 | Task | Why |
 |---|---|
-| **Move the price-refresh cooldown into Postgres** | It is a module-level global in `api/routes/prices.py`, so the 15-minute throttle is per process. That pins the api service to one uvicorn worker and one replica. Until it moves, scaling up silently multiplies the rate at which Pebble hits CoinGecko and Yahoo. |
-| **Snapshot backfill on a schedule** | `services/snapshots.py` can build the net-worth history, but nothing calls it periodically, so the dashboard chart only has points for days something happened to run. A Railway cron hitting an authenticated endpoint would fill it. |
 | **Restrict sign-in to one address at the proxy** | `OAUTH2_PROXY_EMAIL_DOMAINS` is `*` because the only way to name specific addresses is `--authenticated-emails-file`, and a stock image has nowhere to read one from. Today the Google consent screen's test-user list and `ALLOWED_EMAILS` on the api are the two gates. A small image that bakes in the file would make the proxy itself exact. |
 
 ## Deliberately not done

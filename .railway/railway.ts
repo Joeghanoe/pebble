@@ -1,7 +1,8 @@
 // Pebble's Railway project, as code.
 //
-// Four resources: `proxy` (oauth2-proxy, the only one with a public domain), `web`
-// (nginx serving the SPA), `api` (FastAPI) and `postgres`. Applied by a human with
+// Five resources: `proxy` (oauth2-proxy, the only one with a public domain), `web`
+// (nginx serving the SPA), `api` (FastAPI), `jobs` (the daily price refresh, a cron on
+// the api image) and `postgres`. Applied by a human with
 // `railway config plan` / `apply`; nothing here is read at deploy time.
 // `.railway/README.md` is the runbook.
 //
@@ -85,6 +86,26 @@ export default defineRailway(() => {
     },
   });
 
+  // The daily price refresh: the api image, a different start command, a cron schedule.
+  // Railway starts it on schedule and expects it to exit, so it has no healthcheck, no
+  // domain and never restarts. It reads Postgres directly instead of calling the API —
+  // the API trusts only the proxy's identity header, and a job forging one would be the
+  // very hole the proxy closes. Shares the refresh lease with `api` (refresh_state), so
+  // it is a no-op if someone refreshed recently. Cron times are UTC: 04:00 is 06:00 in
+  // Amsterdam in summer, 05:00 in winter.
+  const jobs = service("jobs", {
+    source: github(SOURCE.repo, { branch: SOURCE.branch, checkSuites: false }),
+    build: { builder: "DOCKERFILE", dockerfilePath: "infra/api.Dockerfile", watchPatterns: WATCH.api },
+    start: "python -m app.jobs.refresh",
+    deploy: { cronSchedule: "0 4 * * *", restartPolicyType: "NEVER", ...limits(1, 1) },
+    replicas: REGION,
+    env: {
+      // No MIGRATE_ON_STARTUP: the job never runs migrations; the API owns the schema.
+      DATABASE_URL: db.env.DATABASE_URL,
+      ...preserveAll("COINGECKO_API_KEY"),
+    },
+  });
+
   // oauth2-proxy in front of everything. Google OIDC; forwards `X-Forwarded-Email`
   // upstream. `/api/*` goes to the API, everything else to the SPA. Give THIS service
   // the public domain and put that domain in OAUTH2_PROXY_REDIRECT_URL
@@ -132,5 +153,5 @@ export default defineRailway(() => {
     },
   });
 
-  return project("Pebble", { resources: [db, web, api, proxy] });
+  return project("Pebble", { resources: [db, web, api, jobs, proxy] });
 });

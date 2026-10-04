@@ -336,6 +336,10 @@ export class PositionsService {
 export class PricesService {
   /**
    * Refresh Prices
+   * Pull live quotes unless another process did so recently or is doing so now.
+   *
+   * The throttle is shared through Postgres (see app/services/refresh.py), so it
+   * holds across workers, replicas and the scheduled job.
    * @param data The data for the request.
    * @param data.force Bypass the routine cooldown. For an explicit user-initiated refresh.
    * @returns unknown Successful Response

@@ -42,7 +42,8 @@ EXPOSE 8080
 # IPv6 — and `--host ::` answered only the first, so deploys ran fine and failed their
 # healthcheck anyway. See app/serve.py.
 #
-# One process on purpose: the price-refresh cooldown in routes/prices.py is a
-# module-level global, so a second worker would keep its own and the throttle would not
-# hold. $PORT is read by app.serve, defaulting to 8080.
+# One process per container; scale with replicas. Nothing lives in the process -- the
+# refresh throttle is a row in Postgres (app/services/refresh.py) -- so replicas are
+# safe. The `jobs` cron runs this image with `python -m app.jobs.refresh` instead.
+# $PORT is read by app.serve, defaulting to 8080.
 CMD ["python", "-m", "app.serve"]

@@ -32,6 +32,10 @@ The four resources were created with the MCP rather than `railway config apply`,
 run `railway config plan` before your first apply and reconcile any drift — the file is
 written to match what is deployed, but only a plan will prove it.
 
+`jobs` exists only in the file so far. Expect the next `railway config plan` to show it
+as the one addition (and check it renders `cronSchedule` as the service's cron schedule)
+before applying.
+
 `api` and `web` currently build from the branch `claude/pebble-mobile-port-deletion-pwem9w`,
 because the Dockerfiles and `infra/` do not exist on `main` until PR #2 merges. **Point
 both services back at `main` after merging** (`SOURCE.branch` here, and the service
@@ -139,9 +143,15 @@ just to trigger a build (push a matching commit or use `railway redeploy` instea
   rebuild on it.
 - Bumping oauth2-proxy → change the image tag here; `railway config apply` rolls it.
 
-## One thing to know about `api`
+## Scaling `api`, and the `jobs` cron
 
-It runs a single uvicorn worker on purpose. The price-refresh cooldown in
-`fastapi/app/api/routes/prices.py` is a module-level global, so a second worker or a
-second replica would each keep their own and the 15-minute throttle would not hold. Scale
-this service up only after that moves into Postgres.
+`api` keeps no state in the process: the price-refresh cooldown and the "a refresh is
+running" marker are one row in Postgres (`refresh_state`, see
+`fastapi/app/services/refresh.py`). Raise its replica count freely; every replica shares
+one throttle on the upstreams.
+
+`jobs` is the same image with `python -m app.jobs.refresh` as its start command and a
+cron schedule (04:00 UTC daily). It writes the day's net-worth point whether or not
+anyone opened the app, talks to Postgres directly rather than through the proxy, exits
+when done, and has no domain. It shares the lease with `api`, so it is a no-op if a
+refresh ran recently.

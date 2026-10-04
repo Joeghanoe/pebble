@@ -109,7 +109,7 @@ that can reach it directly can claim to be anyone. `SECURITY.md` has the full mo
 
 ## Deploying on Railway
 
-`.railway/README.md` is the runbook. In short: `railway config apply` creates the four
+`.railway/README.md` is the runbook. In short: `railway config apply` creates the five
 resources, then `proxy` gets the public domain and the Google client credentials.
 
 Postgres is Railway's **managed** Postgres, which is what gives the service a **Data** tab
@@ -220,12 +220,14 @@ the webview's user agent is possible but is deliberately not configured here.
 **Prices.** `services/prices.py` fans out to CoinGecko (crypto), Stooq and Yahoo
 (equities and ETFs) and Frankfurter (USD→EUR), and caches each answer per asset per day in
 `price_cache`. A position whose price has never been fetched reports `unavailable` rather
-than guessing; a stale one reports `stale` with the date it is from. Refresh is throttled
-to once every 15 minutes.
+than guessing; a stale one reports `stale` with the date it is from. A routine refresh
+(opening the app) runs at most every six hours, a forced one (the button) at most every
+minute.
 
-That throttle is a module-level global in `api/routes/prices.py`, which is why the api
-service runs a single uvicorn worker and one replica. Scale it up only after the cooldown
-moves into Postgres.
+The throttle lives in Postgres, not the process: `services/refresh.py` claims a lease on
+the `refresh_state` row with one conditional `UPDATE`, so any number of api replicas, and
+the daily `jobs` cron (`python -m app.jobs.refresh`), share it and never refresh twice at
+once. A lease that outlives a crashed process expires after 15 minutes.
 
 **Cost basis.** Realized P&L is FIFO: sells consume the oldest buy lots first
 (`crud.compute_realized_pnl`). Buy rows whose units have all been sold show as `Closed`.

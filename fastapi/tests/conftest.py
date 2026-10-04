@@ -41,16 +41,16 @@ def _schema() -> None:
 
 @pytest.fixture(autouse=True)
 def _reset_refresh_cooldown() -> None:
-    """The price refresh keeps its cooldown in a module global.
+    """Clear the refresh lease and cooldown (migration 004's singleton row).
 
     Without this the first test to refresh throttles every later one, which does
     not fail loudly -- it just makes the endpoint a no-op and leaves assertions
     passing over empty lists.
     """
-    from app.api.routes import prices
-
-    prices._last_refresh_at = 0
-    prices._active_refresh = None
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE refresh_state SET last_success_at = NULL, running_until = NULL")
+        )
 
 
 @pytest.fixture(autouse=True)
