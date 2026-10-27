@@ -26,6 +26,12 @@ export const SETTINGS_SECTIONS = [
       "BTC measured against its moving average decides how each contribution splits.",
   },
   {
+    id: "crash",
+    label: "Crash cash",
+    description:
+      "Sideline cash that only goes in when BTC falls well below its average.",
+  },
+  {
     id: "profit",
     label: "Profit taking",
     description:

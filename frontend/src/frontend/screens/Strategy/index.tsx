@@ -7,10 +7,12 @@ import { SiteHeader } from "@/components/site-header";
 import { cn } from "@/lib/utils";
 import { usePortfolio } from "@/lib/portfolio";
 import {
+  markCrash,
   setStrategySetting,
   TARGET_AGE,
   useStrategySettings,
 } from "@/lib/strategy-settings";
+import { crashPlan, type CrashPlan } from "@/lib/deployment";
 import {
   addMonths,
   birthdayAt,
@@ -94,17 +96,20 @@ export function Strategy() {
       PricesService.getBtcDaily() as unknown as Promise<GetBtcDailyResponse>,
   });
 
-  const regime = React.useMemo<RegimeState | null>(() => {
-    if (!btc) {
-      return null;
-    }
-    return detectRegime(
-      contiguousDailyCloses(
-        btc.closes.map((c) => ({ date: c.date, price: c.price_eur })),
-      ),
-      { average, window: span, confirmDays },
-    );
-  }, [btc, average, span, confirmDays]);
+  const closes = React.useMemo(
+    () =>
+      btc
+        ? contiguousDailyCloses(
+            btc.closes.map((c) => ({ date: c.date, price: c.price_eur })),
+          )
+        : null,
+    [btc],
+  );
+  const regime = React.useMemo<RegimeState | null>(
+    () =>
+      closes && detectRegime(closes, { average, window: span, confirmDays }),
+    [closes, average, span, confirmDays],
+  );
 
   const today = localToday();
   // The profit rule is about Bitcoin itself, not every coin in the crypto bucket.
@@ -126,6 +131,17 @@ export function Strategy() {
   // The projection needs a split even when there is no regime to follow yet.
   // Defensive is the cautious one, so it is the one assumed.
   const split: Split = settings.splits[active.regime ?? "defensive"];
+
+  const distancePct =
+    regime !== null && regime.status !== "insufficient"
+      ? regime.reading.distancePct
+      : null;
+  const crash = crashPlan({
+    monthly: settings.monthlyContribution,
+    rule: settings.crashRule,
+    cashLeft: settings.crashCash - settings.crashProgress.cashUsed,
+    distancePct,
+  });
 
   const loading = portfolio.isLoading || btcLoading;
 
@@ -156,6 +172,15 @@ export function Strategy() {
             includeCash={settings.includeCash}
           />
         </div>
+
+        {settings.crashCash > 0 && (
+          <CrashCard
+            plan={crash}
+            average={settings.rule.average}
+            markedMonth={settings.crashProgress.markedMonth}
+            today={today}
+          />
+        )}
 
         <ProfitCard
           signal={profitTakingSignal({
@@ -394,6 +419,85 @@ function MonthSplit({
         {formatEurWhole(contribution)}
       </span>
     </div>
+  );
+}
+
+/* ── Crash cash ──────────────────────────────────────────────────────────── */
+
+function CrashCard({
+  plan,
+  average,
+  markedMonth,
+  today,
+}: {
+  readonly plan: CrashPlan;
+  readonly average: AverageKind;
+  readonly markedMonth: string | null;
+  readonly today: string;
+}) {
+  const month = today.slice(0, 7);
+  const done = markedMonth === month;
+  const due = plan.tranches > 0 && !done;
+
+  return (
+    <PbCard wash={due ? "orange" : undefined} className="p-[18px]">
+      <PbCardHeader
+        className="mb-3 p-0"
+        title="Crash cash"
+        note={`BTC vs ${average.toUpperCase()} · ${formatEurWhole(plan.trancheEur)} a tranche`}
+      >
+        {due && (
+          <PbGhostButton onClick={() => markCrash(plan.amount, month)}>
+            Mark as invested
+          </PbGhostButton>
+        )}
+      </PbCardHeader>
+
+      {plan.distancePct === null ? (
+        <p className="text-[11.5px] text-pb-muted">
+          Needs the same BTC history as the regime rule.
+        </p>
+      ) : plan.step === null ? (
+        <p className="text-[11.5px] text-pb-muted">
+          BTC is {formatPct(plan.distancePct)} against its average. No crash
+          yet, so the cash waits.
+        </p>
+      ) : (
+        <div
+          className={cn(
+            "rounded-[11px] border px-3.5 py-3",
+            due
+              ? "border-[rgba(247,147,26,.35)] bg-[rgba(247,147,26,.06)]"
+              : "border-pb-line bg-pb-raised",
+          )}
+        >
+          <span className="block text-[12.5px] font-semibold">
+            {done
+              ? "Marked invested this month"
+              : plan.tranches === 0
+                ? "The cash is spent"
+                : `Invest ${formatEurWhole(plan.amount)} of BTC from the cash`}
+          </span>
+          <span className="mt-1 block font-number text-[11.5px] text-pb-text-3">
+            BTC is {formatPct(plan.distancePct)} against its average ·{" "}
+            {plan.step.tranches} tranches asked for
+            {plan.limitedByCash && !done
+              ? `, the cash pays ${plan.tranches}`
+              : ""}
+          </span>
+        </div>
+      )}
+
+      <div className="mt-3.5">
+        <Stat
+          eyebrow="Cash left"
+          value={formatEurWhole(plan.cashLeft)}
+          caption={
+            done || plan.amount === 0 ? "held for a crash" : "after this month"
+          }
+        />
+      </div>
+    </PbCard>
   );
 }
 

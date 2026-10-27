@@ -4,6 +4,7 @@ import { Link, useSearch } from "@tanstack/react-router";
 import {
   ArrowLeftRight,
   HandCoins,
+  Layers,
   MapPin,
   Palette,
   SlidersHorizontal,
@@ -26,6 +27,9 @@ import {
 import { useSettingsSyncStatus } from "@/lib/settings-sync";
 import {
   resetStrategySettings,
+  restartCrash,
+  setCrashStep,
+  setTranchesPerMonth,
   setProfitRule,
   setRegimeCryptoShare,
   setRule,
@@ -57,6 +61,7 @@ const SECTION_ICONS: Record<SettingsSection, LucideIcon> = {
   appearance: Palette,
   strategy: Target,
   dca: ArrowLeftRight,
+  crash: Layers,
   profit: HandCoins,
   venues: MapPin,
   account: UserRound,
@@ -99,6 +104,7 @@ export function Settings() {
           {active.id === "appearance" && <AppearanceSection />}
           {active.id === "strategy" && <StrategySection />}
           {active.id === "dca" && <DcaSection />}
+          {active.id === "crash" && <CrashSection />}
           {active.id === "profit" && <ProfitSection />}
           {active.id === "venues" && <VenuesSection />}
           {active.id === "account" && <AccountSection />}
@@ -460,6 +466,79 @@ function DcaSection() {
         })}
       </Group>
     </>
+  );
+}
+
+function CrashSection() {
+  const strategy = useStrategySettings();
+  const { tranchesPerMonth, steps } = strategy.crashRule;
+  const tranche = strategy.monthlyContribution / tranchesPerMonth;
+  return (
+    <Group>
+      <Row
+        label="Sideline cash"
+        description="Held back; only a BTC crash puts it to work"
+      >
+        <NumberField
+          label="Sideline cash"
+          prefix="€"
+          width="w-[120px]"
+          value={strategy.crashCash}
+          min={0}
+          onCommit={(next) => {
+            setStrategySetting("crashCash", next);
+            restartCrash();
+          }}
+        />
+      </Row>
+      <Row
+        label="Tranches per month"
+        description={`One tranche is the monthly contribution divided by this, ${formatEurWhole(tranche)} now`}
+      >
+        <NumberField
+          label="Tranches per month"
+          width="w-[92px]"
+          integer
+          value={tranchesPerMonth}
+          min={1}
+          max={24}
+          onCommit={setTranchesPerMonth}
+        />
+      </Row>
+      {steps.map((step, i) => (
+        <Row
+          key={i}
+          label="BTC below its average by"
+          description="Invest this many tranches from the cash"
+        >
+          <div className="flex gap-2">
+            <NumberField
+              label="Percent below the average"
+              suffix="%"
+              width="w-[92px]"
+              value={step.belowPct}
+              min={1}
+              onCommit={(next) => setCrashStep(i, "belowPct", next)}
+            />
+            <NumberField
+              label="Tranches to invest"
+              width="w-[92px]"
+              integer
+              value={step.tranches}
+              min={0}
+              max={24}
+              onCommit={(next) => setCrashStep(i, "tranches", next)}
+            />
+          </div>
+        </Row>
+      ))}
+      <Row
+        label="Start over"
+        description="Gives the sideline cash back what has been marked as drawn"
+      >
+        <PbGhostButton onClick={restartCrash}>Restart</PbGhostButton>
+      </Row>
+    </Group>
   );
 }
 

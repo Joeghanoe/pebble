@@ -6,6 +6,13 @@ import {
 } from "@/lib/synced-document";
 import { pushSetting, reportSyncError } from "@/lib/settings-api";
 import {
+  DEFAULT_CRASH_RULE,
+  NO_PROGRESS,
+  type CrashProgress,
+  type CrashRule,
+  type CrashStep,
+} from "@/lib/deployment";
+import {
   DEFAULT_PROFIT_RULE,
   DEFAULT_RULE,
   REGIME_SPLIT,
@@ -48,6 +55,11 @@ export interface StrategySettings {
   profitRule: ProfitRule;
   /** The day a profit-taking sale was marked done; it covers that run above the average. */
   profitTakenOn: string | null;
+  /** Euros of sideline cash held back for a BTC crash. */
+  crashCash: number;
+  crashRule: CrashRule;
+  /** What has been drawn from the cash so far; marked by hand. */
+  crashProgress: CrashProgress;
 }
 
 /** The target is due on this birthday. */
@@ -68,6 +80,9 @@ export const DEFAULT_STRATEGY: StrategySettings = {
   regimeMode: "auto",
   profitRule: DEFAULT_PROFIT_RULE,
   profitTakenOn: null,
+  crashCash: 0,
+  crashRule: DEFAULT_CRASH_RULE,
+  crashProgress: NO_PROGRESS,
 };
 
 /**
@@ -89,6 +104,11 @@ export function normalizeStrategy(raw: unknown): StrategySettings {
     },
     rule: { ...DEFAULT_STRATEGY.rule, ...stored.rule },
     profitRule: { ...DEFAULT_STRATEGY.profitRule, ...stored.profitRule },
+    crashRule: { ...DEFAULT_STRATEGY.crashRule, ...stored.crashRule },
+    crashProgress: {
+      ...DEFAULT_STRATEGY.crashProgress,
+      ...stored.crashProgress,
+    },
     splits: {
       defensive: {
         ...DEFAULT_STRATEGY.splits.defensive,
@@ -153,6 +173,39 @@ export function setRule<K extends keyof RegimeRule>(
 export function setProfitRule(key: keyof ProfitRule, value: number): void {
   const settings = current();
   write({ ...settings, profitRule: { ...settings.profitRule, [key]: value } });
+}
+
+export function setTranchesPerMonth(tranchesPerMonth: number): void {
+  const { crashRule } = current();
+  setStrategySetting("crashRule", { ...crashRule, tranchesPerMonth });
+}
+
+export function setCrashStep(
+  index: number,
+  key: keyof CrashStep,
+  value: number,
+): void {
+  const { crashRule } = current();
+  setStrategySetting("crashRule", {
+    ...crashRule,
+    steps: crashRule.steps.map((step, i) =>
+      i === index ? { ...step, [key]: value } : step,
+    ),
+  });
+}
+
+/** Marks this month's crash money as paid in: `amount` euros out of the cash. */
+export function markCrash(amount: number, month: string): void {
+  const { crashProgress } = current();
+  setStrategySetting("crashProgress", {
+    cashUsed: crashProgress.cashUsed + amount,
+    markedMonth: month,
+  });
+}
+
+/** Puts the cash back to what was entered and clears the month marked. */
+export function restartCrash(): void {
+  setStrategySetting("crashProgress", NO_PROGRESS);
 }
 
 /** Sets a regime's crypto share; equity takes the rest, so the two always sum to one. */
